@@ -2267,9 +2267,13 @@ async function loadShare(append = false) {
     const r = share.tab === 'rank'
       ? await central(`/api/models/ranking?month=${$('#sMonth').value}`)
       : await central(`/api/models?sort=${share.tab === 'likes' ? 'likes' : 'new'}&page=${share.page}${share.tab === 'mine' ? '&mine=1' : ''}`);
+    // no likes yet this month: the ranking would look as if posted models had vanished, so show the newest instead
+    if (share.tab === 'rank' && !r.models.length && !append && $('#sMonth').selectedIndex === 0) { share.fromRank = true; return setTab('new'); }
     for (const m of r.models) $('#sGrid').appendChild(shareCard(m));
     $('#sMore').hidden = !r.more;
-    sNote(r.models.length || append ? '' : share.tab === 'rank' ? 'この月のイイネはまだありません。' : 'まだ機体がありません。');
+    const fell = share.fromRank && share.tab === 'new'; share.fromRank = false;
+    sNote(fell ? '今月はまだイイネがないので、新着を表示しています（ランキングにはイイネが付いた機体だけが並びます）。'
+      : r.models.length || append ? '' : share.tab === 'rank' ? 'この月のイイネはまだありません（ランキングにはイイネが付いた機体だけが並びます。投稿した機体は「新着」「自分の機体」にあります）。' : 'まだ機体がありません。');
   } catch (e) { sNote(e.message === '見つかりません。' ? 'みんなの機体は準備中です（サーバーがまだ対応していません）。' : e.message); }
 }
 $('#sMore').onclick = () => { share.page++; loadShare(true); };
