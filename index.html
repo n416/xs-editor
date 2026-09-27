@@ -12,10 +12,31 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font: 13px/1.4 system-ui, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; }
-#app { display: flex; height: 100%; }
-#side { width: 340px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
+#app { display: flex; height: 100%; position: relative; }
+#side { width: 250px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
   overflow-y: auto; padding: 12px; }
+#inspector { width: 340px; flex: none; background: var(--panel); border-left: 1px solid var(--line);
+  overflow-y: auto; padding: 0 12px 12px; display: none; }
+body.has-sel #inspector { display: block; }
 #view { flex: 1; position: relative; min-width: 0; }
+.sidehead { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 6px; }
+.sidehead h2 { margin: 0; }
+.pop { position: absolute; z-index: 5; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.5); padding: 4px 12px 12px; overflow-y: auto; }
+.pop[hidden] { display: none; }
+#palette { left: 12px; top: 84px; width: 300px; max-height: calc(100% - 100px); }
+#steps { left: 262px; top: 52px; width: 320px; max-height: calc(100% - 90px); }
+.pophead { display: flex; align-items: center; justify-content: space-between; }
+.pophead button { padding: 2px 8px; }
+.menu { position: relative; }
+#menuPop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 6; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 190px; box-shadow: 0 8px 28px rgba(0,0,0,.5); }
+#menuPop[hidden] { display: none; }
+#menuPop button { text-align: left; background: var(--panel2); }
+#menuPop hr { border: none; border-top: 1px solid var(--line); margin: 2px 0; width: 100%; }
+#viewOpts { display: contents; }
+#menuPop #viewOpts { display: flex; flex-direction: column; gap: 4px; }
+#tabs, #qa { display: none; }
 #view canvas { display: block; }
 h1 { font-size: 15px; margin: 0 0 10px; letter-spacing: .04em; }
 h2 { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; margin: 14px 0 6px; font-weight: 600; }
@@ -92,8 +113,24 @@ input[type=text] { width: 100%; background: var(--panel2); color: var(--text); b
 button.liked { border-color: #ff7a9a; color: #ff9ab2; }
 .shidden { color: var(--sub); }
 @media (max-width: 760px) {
-  #app { flex-direction: column-reverse; }
-  #side { width: 100%; height: 50%; border-right: none; border-top: 1px solid var(--line); }
+  /* phone: full-screen view, one bottom sheet at a time chosen by the tab bar (body[data-sheet]) */
+  #app { flex-direction: column; }
+  #view { order: 0; min-height: 0; overflow: hidden; }
+  #stat { left: 12px; right: auto; }
+  #menuPop .posesel { white-space: nowrap; }
+  #side, #inspector, #palette, #steps { display: none; position: static; order: 1; width: 100%; height: 46%; max-height: none;
+    flex: none; border: none; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; padding: 0 12px 12px; }
+  body.has-sel:not([data-sheet=props]) #inspector { display: none; }
+  body[data-sheet=list] #side, body[data-sheet=props] #inspector,
+  body[data-sheet=add] #palette, body[data-sheet=steps] #steps { display: block; }
+  #side h1, .sidehead button, .pophead button { display: none; }
+  #tabs { display: flex; order: 2; flex: none; height: 52px; background: var(--panel); border-top: 1px solid var(--line); }
+  #tabs button { flex: 1; border: none; border-radius: 0; background: none; color: var(--dim); font-size: 13px; }
+  #tabs button.on { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+  body.has-sel #qa { display: flex; position: absolute; right: 10px; bottom: 10px; gap: 6px; }
+  #qa button { padding: 10px 12px; background: rgba(29,33,40,.92); }
+  #help, #bSteps, .kb { display: none; }
+  #toolbar button, #toolbar .posesel { padding: 8px 10px; }
 }
 </style>
 <script type="importmap">
@@ -109,7 +146,18 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
 <div id="app">
   <aside id="side">
     <h1>XS部品エディタ</h1>
-    <h2>作り方</h2>
+    <div class="sidehead"><h2>部品一覧</h2><button id="bAddMenu" class="on">＋ 部品</button></div>
+    <p class="hint">引く部品は、一覧でそれより上にある部品だけを削ります。</p>
+    <ul id="list"></ul>
+  </aside>
+  <div id="palette" class="pop" hidden>
+    <div class="pophead"><h2>足す部品</h2><button id="palClose">×</button></div>
+    <div class="grid" id="addButtons"></div>
+    <h2>引く部品（穴・溝）</h2>
+    <div class="grid" id="subButtons"></div>
+  </div>
+  <div id="steps" class="pop" hidden>
+    <div class="pophead"><h2>作り方</h2><button id="stepsClose">×</button></div>
     <div class="flow">
       <div class="step"><b>1</b>あたり（大まかな形）を置く<span class="hint">「あたり箱」か、部品の「あたり」にチェック</span></div>
       <div class="step"><b>2</b>関節を置く<span class="hint">肩・ひじ・股関節・ひざ・首・腹に回転体を置き、「回転の中心」にする。回る側との境目は軸まわりの丸い形に</span></div>
@@ -119,36 +167,43 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
       <div class="step"><b>6</b><button id="bJoint">関節チェック</button><span class="hint">ゲームの姿勢で外れ・めり込みを調べる</span></div>
       <div id="checkResult"></div>
     </div>
-    <h2>足す部品</h2>
-    <div class="grid" id="addButtons"></div>
-    <h2>引く部品（穴・溝）</h2>
-    <div class="grid" id="subButtons"></div>
-    <h2>部品一覧</h2>
-    <p class="hint">引く部品は、一覧でそれより上にある部品だけを削ります。</p>
-    <ul id="list"></ul>
-    <div id="props"></div>
-  </aside>
+  </div>
   <main id="view">
     <div id="toolbar">
-      <button data-mode="translate" class="on">移動 W</button>
-      <button data-mode="rotate">回転 E</button>
-      <button data-mode="scale">拡大 R</button>
-      <button id="bUndo" title="Ctrl+Z">↶ 元に戻す</button>
-      <button id="bRedo" title="Ctrl+Y / Ctrl+Shift+Z">↷ やり直し</button>
+      <button data-mode="translate" class="on">移動<span class="kb"> W</span></button>
+      <button data-mode="rotate">回転<span class="kb"> E</span></button>
+      <button data-mode="scale">拡大<span class="kb"> R</span></button>
+      <button id="bUndo" title="元に戻す Ctrl+Z">↶<span class="kb"> 元に戻す</span></button>
+      <button id="bRedo" title="やり直し Ctrl+Y / Ctrl+Shift+Z">↷<span class="kb"> やり直し</span></button>
       <span class="sp"></span>
-      <button id="tEdges" class="on">輪郭線</button>
-      <button id="tGhost">引く部品を表示</button>
-      <button id="tBlock" class="on">あたりを表示</button>
-      <label class="posesel">姿勢 <select id="poseSel"></select><input type="range" id="poseFrame" min="0" max="15" step="1" value="0" style="width: 90px; display: none" title="フレーム"></label>
-      <button id="bExport">GLB書き出し</button>
-      <button id="bGame" title="docs/models.md の仕様（骨・向き・描画回数・陣営色・LOD）で書き出す">ゲーム用に書き出す</button>
-      <button id="bSample">サンプル集</button>
-      <button id="bShare">みんなの機体</button>
-      <button id="bClear">全消去</button>
+      <button id="bSteps">手順</button>
+      <div id="viewOpts">
+        <button id="tEdges" class="on">輪郭線</button>
+        <button id="tGhost">引く部品を表示</button>
+        <button id="tBlock" class="on">あたりを表示</button>
+        <label class="posesel">姿勢 <select id="poseSel"></select><input type="range" id="poseFrame" min="0" max="15" step="1" value="0" style="width: 90px; display: none" title="フレーム"></label>
+      </div>
+      <div class="menu">
+        <button id="bMenu" title="メニュー">≡</button>
+        <div id="menuPop" hidden>
+          <button id="bSample">サンプル集</button>
+          <button id="bShare">みんなの機体</button>
+          <hr>
+          <button id="bExport">GLB書き出し</button>
+          <button id="bGame" title="docs/models.md の仕様（骨・向き・描画回数・陣営色・LOD）で書き出す">ゲーム用に書き出す</button>
+          <hr>
+          <button id="bClear">全消去</button>
+        </div>
+      </div>
     </div>
+    <div id="qa"><button id="qDup">複製</button><button id="qDel">削除</button><button id="qDesel">選択解除</button></div>
     <div id="help">クリックで選択 ・ ドラッグで回転 ・ 右ドラッグで平行移動 ・ Ctrl+D 複製 ・ Delete 削除</div>
     <div id="stat"></div>
   </main>
+  <aside id="inspector"><div id="props"></div></aside>
+  <nav id="tabs">
+    <button data-sheet="add">＋部品</button><button data-sheet="list">一覧</button><button data-sheet="props">形</button><button data-sheet="steps">手順</button>
+  </nav>
 </div>
 <div id="gallery" hidden>
   <div class="gbox">
@@ -557,8 +612,53 @@ function select(id) {
   selectedId = id;
   const p = getPart(id);
   if (p) gizmo.attach(p.proxy); else gizmo.detach();
+  document.body.classList.toggle('has-sel', !!p);
+  if (phone.matches) {
+    const s = document.body.dataset.sheet ?? '';
+    if (p && (s === '' || s === 'add')) showSheet('props');
+    else if (!p && s === 'props') showSheet('');
+  }
   renderList(); renderProps(); scheduleRebuild();
 }
+
+// ---------- layout: list on the left, inspector on the right while a part is selected, palette/steps pop-ups;
+// on a phone the view is full screen and the tab bar opens one of them as a bottom sheet ----------
+const phone = matchMedia('(max-width: 760px)');
+function showSheet(s) {
+  document.body.dataset.sheet = s;
+  document.querySelectorAll('#tabs [data-sheet]').forEach(b => b.classList.toggle('on', b.dataset.sheet === s));
+}
+document.querySelectorAll('#tabs [data-sheet]').forEach(b => b.onclick = () =>
+  showSheet(document.body.dataset.sheet === b.dataset.sheet ? '' : b.dataset.sheet));
+// the steps pop-up sits just under the toolbar, which wraps to more rows on a narrow window
+const placeSteps = () => { $('#steps').style.top = phone.matches ? '' : $('#toolbar').offsetHeight + 18 + 'px'; };
+function openSteps() { if (phone.matches) showSheet('steps'); else { placeSteps(); $('#steps').hidden = false; } }
+$('#bAddMenu').onclick = () => { $('#palette').hidden = !$('#palette').hidden; };
+$('#palClose').onclick = () => { $('#palette').hidden = true; };
+$('#bSteps').onclick = () => { placeSteps(); $('#steps').hidden = !$('#steps').hidden; };
+$('#stepsClose').onclick = () => { $('#steps').hidden = true; };
+$('#bMenu').onclick = () => { $('#menuPop').hidden = !$('#menuPop').hidden; };
+// actions close the menu; the view toggles moved into it on a phone keep it open
+$('#menuPop').addEventListener('click', e => { if (e.target.closest('button') && !e.target.closest('#viewOpts')) $('#menuPop').hidden = true; });
+document.addEventListener('pointerdown', e => {
+  if (!e.target.closest('.menu')) $('#menuPop').hidden = true;
+  if (!phone.matches && !e.target.closest('#palette, #bAddMenu')) $('#palette').hidden = true;
+});
+// check results land in the steps panel: show it when something is written there
+new MutationObserver(() => { if ($('#checkResult').childNodes.length) openSteps(); })
+  .observe($('#checkResult'), { childList: true });
+$('#qDup').onclick = () => selectedId && duplicatePart(selectedId);
+$('#qDel').onclick = () => selectedId && deletePart(selectedId);
+$('#qDesel').onclick = () => select(null);
+function placeForDevice() {
+  const opts = $('#viewOpts');
+  if (phone.matches) { $('#menuPop').prepend(opts, document.createElement('hr')); showSheet(document.body.dataset.sheet ?? ''); }
+  else if (opts.parentElement !== $('#toolbar')) { opts.nextElementSibling?.tagName === 'HR' && opts.nextElementSibling.remove(); $('#toolbar .menu').before(opts); }
+  gizmo.setSize(phone.matches ? 1.2 : 0.8);
+}
+phone.addEventListener('change', placeForDevice);
+placeForDevice();
+setTimeout(() => { if (!parts.length) openSteps(); });
 
 document.querySelectorAll('#toolbar [data-mode]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 function setMode(m) {
@@ -609,6 +709,7 @@ function buildPresetButtons() {
     b.onclick = () => {
       const t = orbit.target;
       addPart({ ...pr, pos: [t.x, t.y, t.z] });
+      $('#palette').hidden = true;
     };
     (pr.op === 'sub' ? $('#subButtons') : $('#addButtons')).appendChild(b);
   }
@@ -627,7 +728,7 @@ function renderList() {
     li.onclick = () => select(p.id);
     ul.appendChild(li);
   }
-  if (!parts.length) ul.innerHTML = '<li class="hint">上のボタンで部品を追加</li>';
+  if (!parts.length) ul.innerHTML = '<li class="hint">「＋ 部品」で部品を追加</li>';
   const nb = parts.filter(p => p.blockout).length;
   $('#blockCount').textContent = nb ? `あたり ${nb} 個` : 'あたりなし';
   $('#bDelBlock').disabled = !nb;
