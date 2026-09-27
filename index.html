@@ -449,7 +449,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '30cfec0';
+const BUILD = 'd7bae0b';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -1850,7 +1850,7 @@ function buildGameModel() {
 
 $('#bGame').onclick = () => {
   if (!parts.some(p => p.op === 'add' && !p.blockout)) { ask('書き出す部品がありません。', { cancel: null }); return; }
-  const id = prompt('機体id（public/models/<機体id>.glb のファイル名）\n例: a_raid / a_heavy / a_support / b_raid / b_heavy / b_support', 'a_raid');
+  const id = prompt('機体id（public/models/<機体id>.glb のファイル名）\n例: a_raid / a_heavy / a_support / a_sniper / a_artillery / b_raid / b_heavy / b_support / b_sniper / b_artillery', 'a_raid');
   if (id === null) return;
   const name = (id.trim() || 'xs_model').replace(/[^\w.-]/g, '_');
   const { root, report } = buildGameModel();
