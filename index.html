@@ -174,6 +174,7 @@ textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1
 #aPeek select { width: auto; font-size: 14px; }
 #aiBox .seg[hidden], #aiBox .seg button[hidden] { display: none; }
 #aiBox .askip { justify-content: flex-end; }
+#aReopen a { color: var(--accent); }
 #aiBox .askip button { flex: none; font-size: 13px; padding: 6px 14px; }
 #aWhich { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 8px 0; }
 #aWhich .stcard { align-items: center; text-align: center; justify-content: center; min-height: 72px; }
@@ -393,7 +394,8 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
       <textarea id="aJson" rows="8" placeholder="AI の答えをまるごと貼り付けてください"></textarea>
       <div class="seg"><button id="aLoad" class="on">読み込む</button></div>
       <div id="aMsg" class="hint"></div>
-      <div class="seg"><button id="aErrCopy" hidden>直してもらう文章をコピー</button><button id="aErrOn" hidden>このまま次へ</button></div>
+      <p class="hint" id="aReopen" hidden>AI のタブを閉じてしまったときは： <a target="_blank" rel="noopener"></a></p>
+      <div class="seg"><button id="aErrOpen" class="on" hidden></button><button id="aErrOn" hidden>このまま次へ</button></div>
     </section>
     <section class="astep" hidden>
       <h2>6. チラ見 ― AI が作った機体を見てみる</h2>
@@ -406,7 +408,7 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
       <p class="hint">まだ読み込んではいません。確かめてから、この機体にするかを決めます。</p>
       <div class="seg"><button id="aCheck" class="on">確かめる</button></div>
       <div id="aCheckMsg" class="hint"></div>
-      <div class="seg" id="aUseRow" hidden><button id="aFixCopy">直してもらう文章をコピー</button><button id="aUse" class="on">この機体にする</button></div>
+      <div class="seg" id="aUseRow" hidden><button id="aAttach" hidden>離れている部品をくっつける</button><button id="aFixOpen" hidden></button><button id="aUse" class="on">この機体にする</button></div>
     </section>
   </div>
 </div>
@@ -443,7 +445,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '117c6ec';
+const BUILD = '927177f';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -1319,6 +1321,58 @@ function showConnectionReport() {
     li.onclick = () => { select(f.members[0].id); setTimeout(showConnectionReport, 80); }; // after select's rebuild, so the red stays
     ul.appendChild(li);
   }
+  const fix = document.createElement('button');
+  fix.textContent = '離れている部品を自動でくっつける';
+  fix.onclick = () => {
+    box.innerHTML = '<span class="hint">くっつけています…</span>';
+    setTimeout(() => { const n = attachFloating(); save(); showConnectionReport(); box.insertAdjacentHTML('afterbegin', `<div class="hint">${n} 個の部品を動かしました（元に戻すで戻せます）。</div>`); }, 30);
+  };
+  box.appendChild(fix);
+}
+
+// Moves each group of floating parts, as it is, the shortest way onto the body (a little into it, so they touch).
+// One group at a time and then counted again: moving a mirrored part moves its other side too.
+function attachFloating(rounds = 16) {
+  const moved = new Set(), v = new THREE.Vector3(), hit = { point: new THREE.Vector3() };
+  for (let r = 0; r < rounds; r++) {
+    rebuild();
+    const list = resultGroup.children.filter(o => o.isMesh).map(m => ({ m, g: m.geometry, id: m.userData.partId }));
+    const { floating } = connectivity(list);
+    if (!floating.length) break;
+    const off = new Set(floating.flatMap(f => f.members.map(it => it.m)));
+    const f = floating[0], group = f.members;
+    const gbox = new THREE.Box3(); for (const it of group) gbox.union(it.g.boundingBox);
+    const body = list.filter(it => !off.has(it.m)).map(it => ({ ...it, bvh: new MeshBVH(it.g) }));
+    let best = { d: Infinity };
+    const sample = (from, onto, flip) => {
+      const pos = from.g.attributes.position, step = Math.max(1, Math.floor(pos.count / 1500));
+      for (let i = 0; i < pos.count; i += step) {
+        v.fromBufferAttribute(pos, i);
+        if (onto.g.boundingBox.distanceToPoint(v) > best.d) continue;
+        const h = onto.bvh.closestPointToPoint(v, hit, 0, best.d);
+        if (h && h.distance < best.d) best = { d: h.distance, from: flip ? h.point.clone() : v.clone(), to: flip ? v.clone() : h.point.clone() };
+      }
+    };
+    for (const it of group) for (const b of body) sample(it, b, false);   // group vertices onto the body
+    for (const b of body) if (b.g.boundingBox.distanceToPoint(gbox.getCenter(new THREE.Vector3())) < best.d + gbox.getSize(new THREE.Vector3()).length())
+      for (const it of group) sample(b, it, true);                       // and body vertices onto the group
+    if (!(best.d < Infinity)) break;
+    const delta = best.to.clone().sub(best.from);
+    const len = delta.length();
+    if (len > 1e-9) delta.multiplyScalar((len + TOUCH * 2) / len);
+    const done = new Set();
+    for (const it of group) {
+      const p = getPart(it.id);
+      if (!p || done.has(p.id)) continue;
+      done.add(p.id); moved.add(p.id);
+      // the mirrored copy sits on the other side of x = 0 from the part itself
+      const cx = (it.g.boundingBox.min.x + it.g.boundingBox.max.x) / 2;
+      const copy = p.mirror && cx * p.proxy.position.x < 0;
+      p.proxy.position.add(new THREE.Vector3(copy ? -delta.x : delta.x, delta.y, delta.z));
+      p.pos = p.proxy.position.toArray();
+    }
+  }
+  return moved.size;
 }
 
 $('#tGhost').onclick = e => { showGhosts = !showGhosts; e.target.classList.toggle('on', showGhosts); scheduleRebuild(); };
@@ -2659,11 +2713,6 @@ function demoDone() {
 // answered" appears once that button has been used. Going on to 5 clears the previous answer.
 let sendImage = false;
 function showHandoff(kind, note) {
-  if (aiPasteOnly) {   // no sending step here: the fix request goes to the AI by hand and its answer comes back to 1
-    clearAnswer(); aiCandidate = null; aiReached = 5; showStep(5);
-    say('#aMsg', 'AI に直してもらう文章をコピーしました。AI に貼って送り、返ってきた答えをここに貼り直してください。', 'ok');
-    return;
-  }
   sendImage = kind === 'ask' && byImage();
   const [name, url] = AI_SERVICES[aiService] ?? AI_SERVICES.other;
   const other = aiService === 'other' || !(aiService in AI_SERVICES);
@@ -2675,7 +2724,7 @@ function showHandoff(kind, note) {
   $('#aGo5').hidden = true;
   a.onclick = () => { $('#aGo5').hidden = false; };
   say('#aSendNote', note, 'ok');
-  if (kind === 'ask') aiCandidate = null;
+  if (kind === 'ask') { aiCandidate = null; aiFixing = false; }
   aiReached = 4;
   showStep(4);
   playDemo(sendImage);
@@ -2683,7 +2732,7 @@ function showHandoff(kind, note) {
 $('#aSend .areplay').onclick = () => playDemo(sendImage);
 $('#aSkip').onclick = demoDone;
 $('#aGo5').onclick = () => {
-  $('#aJson').value = ''; $('#aMsg').textContent = ''; $('#aErrCopy').hidden = $('#aErrOn').hidden = true;
+  $('#aJson').value = ''; $('#aMsg').textContent = ''; $('#aErrOpen').hidden = $('#aErrOn').hidden = true;
   showStep(5); $('#aJson').focus();
 };
 
@@ -2932,42 +2981,81 @@ function checkAiParts(list) {
   return { ok, errors, unknown: [...unknown] };
 }
 let importErrors = '';
-// 5: the answer becomes the candidate (nothing is loaded yet) and 6 shows it
-$('#aLoad').onclick = () => {
+// Fixing is one click and one paste: the fix request is copied, to be pasted into the same conversation with the
+// AI (opening the AI's page again would start a new one that knows nothing of the model); 5 waits for the answer,
+// and pasting it loads it and goes straight to the check (no example, no チラ見 on the way).
+let aiFixing = false;
+// copy while the click is still being handled
+function copyNow(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch { /* not allowed */ }
+  ta.remove();
+  navigator.clipboard?.writeText(text).catch(() => {});
+  return ok;
+}
+// a button that copies `text()` and waits in 5 for the fixed answer; a link opens the AI again only in case its
+// tab was closed
+function fixButton(btn, text) {
+  const [name, url] = AI_SERVICES[aiService] ?? AI_SERVICES.other;
+  const other = aiService === 'other' || !(aiService in AI_SERVICES);
+  btn.textContent = '直してもらう文章をコピー';
+  btn.onclick = () => {
+    if (!copyNow(text())) { say(aiStep === 5 ? '#aMsg' : '#aCheckMsg', copied(false), 'ng'); return; }
+    aiFixing = true;
+    clearAnswer(); showStep(5);
+    say('#aMsg', `コピーしました。さっきの${other ? ' AI ' : ` ${name} `}の会話に戻って、そのまま貼り付けて送ってください。\n`
+      + '返ってきた答えをまるごとコピーして、下の欄に貼り付けると、自動で確かめます。', 'ok');
+    const a = $('#aReopen a');
+    $('#aReopen').hidden = other;
+    if (!other) { a.href = url; a.textContent = `${name} を開く（新しい会話になります）`; }
+    $('#aJson').focus();
+  };
+}
+// 5: the answer becomes the candidate (nothing is loaded yet) and 6 shows it; a pasted answer is read at once
+function loadAnswer() {
   let model;
-  $('#aErrOn').hidden = true;
+  $('#aErrOn').hidden = true; $('#aErrOpen').hidden = true;
   try { model = parseAiText($('#aJson').value); } catch (e) {
     const forAi = e instanceof AiTextError && !e.message.startsWith('貼り付けたのは');
     importErrors = forAi ? e.message : '';
-    $('#aErrCopy').hidden = !forAi;
+    if (forAi) { fixButton($('#aErrOpen'), () => `${fixHead()}\n\n【読み込めなかった理由】\n${importErrors}`); $('#aErrOpen').hidden = false; }
     // a broken JSON is for the AI to fix: the parser's wording goes into the copied text, not on screen
-    say('#aMsg', e.message.startsWith('JSON の書き方') ? 'AI の答えをうまく読めませんでした。下のボタンでコピーして AI に貼ると、出し直してくれます。' : e.message, 'ng');
+    say('#aMsg', e.message.startsWith('JSON の書き方') ? 'AI の答えをうまく読めませんでした。下のボタンで AI に出し直してもらえます。' : e.message, 'ng');
     return;
   }
   const { ok, errors } = checkAiParts(model.parts.slice(0, 400));
   if (model.parts.length > 400) errors.push(`部品が ${model.parts.length} 個あります。400 個までしか読み込めません。`);
   importErrors = errors.join('\n');
-  $('#aErrCopy').hidden = !importErrors;
-  if (!ok.length) { say('#aMsg', '使える部品がありません。下のボタンでコピーして AI に貼ると、直した答えを出してくれます。', 'ng'); return; }
+  if (importErrors) { fixButton($('#aErrOpen'), () => `${fixHead()}\n\n【読み込めなかった理由】\n${importErrors}`); $('#aErrOpen').hidden = false; }
+  if (!ok.length) { say('#aMsg', '使える部品がありません。下のボタンで AI に直してもらえます。', 'ng'); return; }
   // the AI names itself in the JSON ("ai"); the name can be corrected when posting
   aiCandidate = { list: ok, ai: String(model.ai ?? '').trim().slice(0, 40) };
   aiReached = 5;
   $('#aCheckMsg').textContent = ''; $('#aUseRow').hidden = true;
-  if (!errors.length) { $('#aMsg').textContent = ''; showStep(6); return; }
-  say('#aMsg', `部品 ${ok.length} 個を使えます。${errors.length} 個の部品は使えませんでした。\n下のボタンでコピーして AI に直してもらうか、このまま次へ進んでください。`, 'ng');
-  $('#aErrOn').hidden = false;
-};
-$('#aErrOn').onclick = () => showStep(6);
+  if (errors.length) {
+    say('#aMsg', `部品 ${ok.length} 個を使えます。${errors.length} 個の部品は使えませんでした。\n下のボタンで AI に直してもらうか、このまま次へ進んでください。`, 'ng');
+    $('#aErrOn').hidden = false;
+    return;
+  }
+  $('#aMsg').textContent = '';
+  goOn();
+}
+// after a fix the check comes right away; a first answer is looked at first
+function goOn() {
+  if (!aiFixing) { showStep(6); return; }
+  aiFixing = false; aiReached = 7;
+  showStep(7); runCheck();
+}
+$('#aLoad').onclick = loadAnswer;
+$('#aJson').addEventListener('paste', () => setTimeout(loadAnswer, 0));
+$('#aErrOn').onclick = goOn;
 const fixHead = () => `XS部品エディタで確かめた結果です。指摘された部品の位置や大きさを直して、機体全体の JSON をもう一度出力してください（差分ではなく全体）。\n仕様: ${SPEC_URL}\n座標は 1 単位 = 6 m、+Y が上、+Z が正面、+X が機体の左です。`;
-const fixSent = 'AI に直してもらう文章をコピーしました。チャット AI では、次のように操作します。';
-$('#aErrCopy').onclick = async () => {
-  if (await copyText(`${fixHead()}\n\n【読み込めなかった理由】\n${importErrors}`)) showHandoff('fix', fixSent);
-  else say('#aMsg', copied(false), 'ng');
-};
 // 7: checks whether the parts are connected and the joints bend cleanly, on the candidate; the report itself is
 // only copied for the AI when something needs fixing. この機体にする is the one place the model is loaded.
-let fixText = '';
-$('#aCheck').onclick = () => {
+let fixText = '', attachNote = '';
+function runCheck() {
   $('#aUseRow').hidden = true;
   if (!parts.some(p => p.op === 'add' && !p.blockout)) { say('#aCheckMsg', '確かめる部品がありません。', 'ng'); return; }
   say('#aCheckMsg', '確かめています…（少しかかります）');
@@ -2976,15 +3064,27 @@ $('#aCheck').onclick = () => {
     showJointReport(); const joint = $('#checkResult').innerText.trim();
     const good = checksPassed();
     fixText = `${fixHead()}\n\n【つながりチェック】\n${conn}\n\n【関節チェック】\n${joint}`;
-    say('#aCheckMsg', good ? '問題ありません。この機体にしますか？'
-      : '離れている部品や、動かすとぶつかる所が見つかりました。\nAI に直してもらうか、このままこの機体にするかを選んでください。', good ? 'ok' : 'ng');
-    $('#aFixCopy').hidden = good;
+    say('#aCheckMsg', attachNote + (good ? '問題ありません。この機体にしますか？'
+      : '離れている部品や、動かすとぶつかる所が見つかりました。\nAI に直してもらうか、このままこの機体にするかを選んでください。'), good ? 'ok' : 'ng');
+    attachNote = '';
+    $('#aFixOpen').hidden = good;
+    $('#aAttach').hidden = checkStatus().conn !== 'ng';
+    if (!good) fixButton($('#aFixOpen'), () => fixText);
     $('#aUse').textContent = good ? 'この機体にする' : 'このままこの機体にする';
     $('#aUseRow').hidden = false;
   }, 30);
-};
-$('#aFixCopy').onclick = async () => {
-  if (await copyText(fixText)) showHandoff('fix', fixSent); else say('#aCheckMsg', copied(false), 'ng');
+}
+$('#aCheck').onclick = runCheck;
+// floating parts are moved onto the body here, without asking the AI; the candidate keeps the moved parts
+$('#aAttach').onclick = () => {
+  $('#aUseRow').hidden = true;
+  say('#aCheckMsg', 'くっつけています…');
+  setTimeout(() => {
+    const n = attachFloating();
+    aiCandidate.list = parts.map(serialize);
+    attachNote = `${n} 個の部品を動かしてくっつけました。\n`;
+    runCheck();
+  }, 30);
 };
 $('#aUse').onclick = async () => {
   const c = aiCandidate, pasteOnly = aiPasteOnly;
@@ -3015,7 +3115,8 @@ function setPasteOnly(on) {
 }
 setPasteOnly(false);
 function clearAnswer() {
-  $('#aJson').value = ''; $('#aMsg').textContent = ''; $('#aErrCopy').hidden = $('#aErrOn').hidden = true;
+  $('#aReopen').hidden = true;
+  $('#aJson').value = ''; $('#aMsg').textContent = ''; $('#aErrOpen').hidden = $('#aErrOn').hidden = true;
   $('#aCheckMsg').textContent = ''; $('#aUseRow').hidden = true;
 }
 function openAiPaste() {
@@ -3034,7 +3135,7 @@ function openAi() {
 }
 // closing never keeps the AI's model: whatever was there before comes back
 function closeAi() {
-  demoRun++; stopPeek(); restoreHeld();
+  aiFixing = false; demoRun++; stopPeek(); restoreHeld();
   $('#aiBox').hidden = true;
   if (aiPasteOnly) {
     setPasteOnly(false); clearAnswer();
