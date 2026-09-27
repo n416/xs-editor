@@ -276,6 +276,7 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
     <p class="hint">作りたい機体を書いて「頼み方をコピー」を押し、使っている AI に貼り付けます。AI は仕様書（<a id="aSpec" target="_blank" rel="noopener">ai.md</a>）を読んで JSON を出します。URL を開けない AI には「仕様ごとコピー」を使ってください。</p>
     <textarea id="aWish" rows="2" placeholder="どんな機体？（例：肩が大きい重装型。色は緑と白。背中に大きなブースター）"></textarea>
     <div class="seg"><button id="aCopyUrl" class="on">頼み方をコピー</button><button id="aCopyFull">仕様ごとコピー</button></div>
+    <textarea id="aManual" rows="6" readonly hidden></textarea>
     <h2>2. AI の答えを貼り付ける</h2>
     <textarea id="aJson" rows="6" placeholder='AI が出した JSON（{"format": "xs-editor-model", ...}）を貼り付け。前後に説明文があってもかまいません'></textarea>
     <div class="row"><label>使ったAI</label><input type="text" id="aName" maxlength="40" placeholder="JSON から自動で入ります（例：サービス名 / モデル名）" style="grid-column: span 2"></div>
@@ -2373,11 +2374,43 @@ const say = (el, text, cls = '') => { const e = $(el); e.textContent = text; e.c
 const copied = ok => ok ? 'コピーしました。AI に貼り付けてください。' : 'コピーできませんでした（ブラウザがクリップボードを許可していません）。';
 const askText = spec => `XS部品エディタ用の人型ロボット（XS）の機体データを作ってください。\n${spec}\n\n作りたい機体: ${$('#aWish').value.trim() || '（おまかせ）'}\n\n仕様どおりの JSON を 1 つだけ出力してください。"ai" にはあなた自身のサービス名とモデル名を書いてください。`;
 $('#aCopyUrl').onclick = async () => say('#aMsg', copied(await copyText(askText(`仕様書: ${SPEC_URL} （必ず読んでから作ってください）`))));
+// The spec is fetched when the screen opens: Safari only lets a click write the clipboard if nothing is awaited
+// before it, so the copy itself must not wait for the network. A 404 page must never be passed off as the spec.
+let specText = null, specLoading = null;
+const fetchSpec = url => fetch(url, { cache: 'no-cache' }).then(r => (r.ok ? r.text() : Promise.reject(new Error(r.status))))
+  .then(t => (t.startsWith('# XS部品エディタ') ? t : Promise.reject(new Error('not the spec'))));
+function loadSpec() {
+  if (specText) return Promise.resolve(specText);
+  return (specLoading ??= fetchSpec('ai.md').catch(() => fetchSpec(SPEC_URL))
+    .then(t => (specText = t), () => { specLoading = null; return null; }));
+}
+const fullAsk = md => askText('以下が仕様書です。\n\n' + md);
+// last resort: show the text so it can be selected and copied by hand
+function showManualCopy(text) {
+  const ta = $('#aManual');
+  ta.value = text; ta.hidden = false; ta.focus(); ta.select();
+  say('#aMsg', '自動でコピーできませんでした。下の欄の全文が選ばれているので、⌘C（Windows は Ctrl+C）でコピーしてください。', 'ng');
+}
 $('#aCopyFull').onclick = async () => {
-  let md;
-  try { const r = await fetch('ai.md'); if (!r.ok) throw 0; md = await r.text(); }
-  catch { try { md = await (await fetch(SPEC_URL)).text(); } catch { say('#aMsg', '仕様書を読み込めませんでした。「頼み方をコピー」を使ってください。', 'ng'); return; } }
-  say('#aMsg', copied(await copyText(askText('以下が仕様書です。\n\n' + md))));
+  $('#aManual').hidden = true;
+  if (specText) {   // already here: write straight away, still inside the click
+    const text = fullAsk(specText);
+    if (await copyText(text)) say('#aMsg', copied(true)); else showManualCopy(text);
+    return;
+  }
+  // not loaded yet: Safari accepts a clipboard item whose content is still on its way
+  if (window.ClipboardItem && navigator.clipboard?.write) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'text/plain': loadSpec().then(md => {
+        if (!md) throw new Error('no spec');
+        return new Blob([fullAsk(md)], { type: 'text/plain' });
+      }) })]);
+      say('#aMsg', copied(true)); return;
+    } catch { /* fall through */ }
+  }
+  const md = await loadSpec();
+  if (!md) { say('#aMsg', '仕様書を読み込めませんでした。通信を確かめるか、「頼み方をコピー」を使ってください。', 'ng'); return; }
+  showManualCopy(fullAsk(md));
 };
 
 // the AI's answer: the JSON may sit inside a code block or between sentences
@@ -2458,7 +2491,7 @@ $('#aCheckCopy').onclick = () => {
 $('#bCopyCheck').onclick = async () => { $('#bCopyCheck').textContent = (await copyText(`${fixHead()}\n\n${$('#checkResult').innerText.trim()}`)) ? 'コピーしました' : 'コピーできませんでした'; };
 new MutationObserver(() => { $('#bCopyCheck').hidden = !$('#checkResult .ng'); $('#bCopyCheck').textContent = '結果を AI に渡す用にコピー'; })
   .observe($('#checkResult'), { childList: true });
-function openAi() { $('#aiBox').hidden = false; $('#aName').value = sceneAi; }
+function openAi() { $('#aiBox').hidden = false; $('#aName').value = sceneAi; loadSpec(); }
 $('#bAi').onclick = openAi;
 $('#aClose').onclick = () => { $('#aiBox').hidden = true; };
 $('#aiBox').onclick = e => { if (e.target === $('#aiBox')) $('#aiBox').hidden = true; };
