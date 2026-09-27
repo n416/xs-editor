@@ -311,7 +311,7 @@ import { MeshBVH } from 'three-mesh-bvh';
 const $ = s => document.querySelector(s);
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '5aa707f';
+const BUILD = '8ff757f';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -2655,7 +2655,8 @@ buildPresetButtons();
   let skip = false; try { skip = localStorage.getItem(SKIP_START_KEY) === '1'; } catch { /* storage blocked */ }
   // just reloaded for a new version: straight back to the model being edited
   try { if (sessionStorage.getItem('xs-editor-resume')) { sessionStorage.removeItem('xs-editor-resume'); skip = true; } } catch { /* storage blocked */ }
-  if (new URLSearchParams(location.search).has('v')) history.replaceState(null, '', location.pathname + location.hash);
+  // window.history: the module's own `history` is the undo list
+  if (new URLSearchParams(location.search).has('v')) window.history.replaceState(null, '', location.pathname + location.hash);
   if (!skip) openStart();
 }
 </script>
