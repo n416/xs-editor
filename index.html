@@ -111,6 +111,9 @@ button.stcard:hover:not(:disabled) { border-color: var(--accent); }
 .stcard span { color: var(--dim); font-size: 12px; }
 .stcard .seg { margin-top: auto; }
 .stcard .seg button { padding: 8px; }
+.stbuild { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 12px; }
+.stbuild input { flex: 1; }
+.stbuild output { width: 2.2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
 textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 6px; font: 12px/1.4 ui-monospace, Consolas, monospace; resize: vertical; }
 #aiBox .gbox { width: min(640px, 100%); }
 #aiBox .seg { margin: 6px 0; }
@@ -257,7 +260,8 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
     <div class="stgrid">
       <button id="stResume" class="stcard"><b>つづきから</b><span id="stResumeInfo"></span></button>
       <div class="stcard"><b>0 から作る</b><span>あたり（大まかな箱）だけの機体から始めます</span>
-        <div class="seg"><button id="stSlim">細身</button><button id="stBroad">太め</button></div></div>
+        <label class="stbuild">細身 <input type="range" id="stBuild" min="1" max="10" step="1" value="4"> 太め <output id="stBuildOut">4</output></label>
+        <div class="seg"><button id="stRough">この体型で始める</button></div></div>
       <button id="stSample" class="stcard"><b>参考モデルから</b><span>サンプル集の機体を開いて作り変えます</span></button>
       <button id="stAi" class="stcard"><b>自分の AI に作ってもらう</b><span>使っているチャット AI に頼み方をコピーして渡し、答えを貼り付けます</span></button>
     </div>
@@ -2476,7 +2480,7 @@ const ROUGH = [
   ['あたり・前腕', 0.17, 0.46, 0.19, 0.5, 1.72, 0.02, 1], ['あたり・手', 0.12, 0.14, 0.12, 0.5, 1.42, 0.03, 1],
   ['あたり・太もも', 0.2, 0.6, 0.22, 0.15, 1.33, 0, 1], ['あたり・すね', 0.22, 0.8, 0.26, 0.15, 0.6, 0, 1], ['あたり・足', 0.22, 0.14, 0.42, 0.15, 0.07, 0.05, 1],
 ];
-function roughBody(k) {   // k: 1 = 細身, 1.4 = 太め
+function roughBody(k) {   // k: width/thickness scale
   return ROUGH.map(([name, w, h, d, x, y, z, m]) => ({ ...DEFAULTS, name, kind: 'extrude', pts: rect(w * k, h), depth: d * k, bevel: 0, corner: 0,
     blockout: true, mirror: !!m, pos: [x * (1 + (k - 1) * 0.55), y, z], rot: [0, 0, 0], scl: [1, 1, 1] }));
 }
@@ -2490,8 +2494,9 @@ function openStart() {
 const closeStart = () => { $('#start').hidden = true; };
 $('#stSkip').onchange = e => { try { if (e.target.checked) localStorage.setItem(SKIP_START_KEY, '1'); else localStorage.removeItem(SKIP_START_KEY); } catch { /* storage blocked */ } };
 $('#stResume').onclick = () => { const cur = readCurrent(); if (cur) loadScene(cur.parts, cur.ai); closeStart(); };
-$('#stSlim').onclick = () => { loadScene(roughBody(1)); closeStart(); openSteps(); };
-$('#stBroad').onclick = () => { loadScene(roughBody(1.4)); closeStart(); openSteps(); };
+// build 1 (slimmest) .. 10 (broadest): widths and thicknesses x0.85 .. x1.6
+$('#stBuild').oninput = e => { $('#stBuildOut').textContent = e.target.value; };
+$('#stRough').onclick = () => { loadScene(roughBody(0.85 + (Number($('#stBuild').value) - 1) * 0.75 / 9)); closeStart(); openSteps(); };
 $('#stSample').onclick = () => { closeStart(); openGallery(); };
 $('#stAi').onclick = () => { closeStart(); openAi(); };
 $('#stClose').onclick = closeStart;
