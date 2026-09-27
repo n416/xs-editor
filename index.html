@@ -116,6 +116,14 @@ input[type=text] { width: 100%; background: var(--panel2); color: var(--text); b
 .gfoot { display: flex; gap: 6px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
 #share, #aiBox, #start { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 10; padding: 16px; }
 #share[hidden], #aiBox[hidden], #start[hidden] { display: none; }
+#msgBox { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; z-index: 30; padding: 16px; }
+#msgBox[hidden] { display: none; }
+#msgBox .mbox { width: min(460px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 22px 24px 18px; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+#msgText { font-size: 16px; line-height: 1.6; margin: 0 0 18px; white-space: pre-wrap; }
+#msgBox .mfoot { display: flex; justify-content: flex-end; gap: 8px; }
+#msgBox .mfoot button { font-size: 15px; padding: 9px 18px; min-width: 96px; }
+#msgOk.danger { border-color: #ff6b6b; color: #ff9b9b; }
 .stbox { width: min(620px, 100%); }
 .stgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-bottom: 12px; }
 .stcard { display: flex; flex-direction: column; gap: 6px; text-align: left; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
@@ -128,11 +136,59 @@ button.stcard:hover:not(:disabled) { border-color: var(--accent); }
 .stbuild input { flex: 1; }
 .stbuild output { width: 2.2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
 textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 6px; font: 12px/1.4 ui-monospace, Consolas, monospace; resize: vertical; }
-#aiBox .gbox { width: min(640px, 100%); }
+#aiBox .gbox { width: min(900px, 100%); min-height: min(640px, 88vh); max-height: 92vh; padding: 24px 28px; }
+#aiBox .ghead h1 { font-size: 20px; }
+#aiBox button, #aiBox a.abtn { font-size: 15px; padding: 10px 12px; }
+#aiBox #aClose { font-size: 13px; padding: 6px 10px; }
+#aiBox #aNav button { font-size: 15px; padding: 10px 4px; }
+#aiBox .stcard { padding: 20px; }
+#aiBox .stcard b { font-size: 18px; }
+#aiBox .stcard span { font-size: 14px; }
+#aiBox h2 { font-size: 17px; margin: 18px 0 8px; }
+#aiBox .hint { font-size: 15px; }
+#aiBox .hint { margin: 10px 0; }
+#aiBox textarea { font-size: 14px; }
 #aiBox .seg { margin: 6px 0; }
-#aMsg { white-space: pre-wrap; }
-#aMsg.ng { color: #ff9b9b; }
-#aMsg.ok { color: #7ee2a8; }
+/* one step at a time; the navigator on top shows where you are, done steps can be clicked to go back */
+.astep[hidden] { display: none; }
+#aNav { display: flex; gap: 6px; margin: 4px 0 16px; }
+#aNav button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px;
+  background: transparent; border: none; border-bottom: 3px solid var(--line); border-radius: 0; color: var(--dim); padding: 8px 4px; }
+#aNav button b { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px;
+  background: var(--panel2); flex: none; }
+#aNav button.done { color: var(--text); border-bottom-color: #7ee2a8; }
+#aNav button.done b { background: #2f5a45; color: #b8f5d2; }
+#aNav button.cur { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+#aNav button.cur b { background: var(--accent); color: #1a1a1a; }
+#aNav button:disabled { opacity: 1; cursor: default; }
+#aNav button span { white-space: nowrap; }
+#aNav button[hidden] { display: none; }
+/* narrow screens: numbers only, with the current step named */
+@media (max-width: 760px) { #aNav button:not(.cur) span { display: none; } #aNav button.cur { flex: 4; } #aiBox .gbox { padding: 16px; } }
+#aiBox .stgrid { margin: 8px 0 0; }
+#aPeek { position: relative; height: min(52vh, 460px); border-radius: 10px; overflow: hidden; background: #0b0d11; margin-top: 8px; }
+#aPeek canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#aPeek .apeekbar { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; gap: 12px; align-items: center;
+  justify-content: space-between; color: var(--dim); font-size: 13px; pointer-events: none; }
+#aPeek .apeekbar label { pointer-events: auto; color: var(--text); display: flex; gap: 6px; align-items: center; }
+#aPeek select { width: auto; font-size: 14px; }
+#aiBox .seg[hidden], #aiBox .seg button[hidden] { display: none; }
+#aiBox .askip { justify-content: flex-end; }
+#aiBox .askip button { flex: none; font-size: 13px; padding: 6px 14px; }
+#aWhich { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 8px 0; }
+#aWhich .stcard { align-items: center; text-align: center; justify-content: center; min-height: 72px; }
+.ademo svg { display: block; width: 100%; max-height: 260px; background: #0b0d11; border-radius: 10px; margin-top: 10px; }
+#aiBox .acap { color: var(--accent); font-size: 17px; font-weight: 600; min-height: 1.4em; text-align: center; margin: 12px 0 0; }
+#aiBox .anote { color: var(--text); }
+#aiBox .aafter .abtn { font-size: 17px; padding: 12px 18px; }
+#aiBox a.abtn { display: inline-block; text-align: center; background: var(--accent); color: #1a1a1a; border-radius: 6px;
+  padding: 10px 18px; text-decoration: none; font-weight: 600; }
+#aiBox a.abtn[hidden] { display: none; }
+#aiBox h2 { color: var(--text); letter-spacing: .02em; }
+#aWish { font-family: inherit; font-size: 15px; line-height: 1.5; }
+#aMsg, #aAskMsg, #aCheckMsg { white-space: pre-wrap; }
+#aMsg.ng, #aAskMsg.ng, #aCheckMsg.ng { color: #ff9b9b; }
+#aMsg.ok, #aAskMsg.ok, #aCheckMsg.ok { color: #7ee2a8; }
 .aimeta { color: var(--dim); font-size: 11px; }
 .stabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
 .stabs select { width: auto; }
@@ -200,7 +256,7 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
       <div class="step"><b>5</b><button id="bCheck">つながりチェック</button><span class="hint">浮いた部品は別の部品でつなぐ</span></div>
       <div class="step"><b>6</b><button id="bJoint">関節チェック</button><span class="hint">ゲームの姿勢で外れ・めり込みを調べる</span></div>
       <div id="checkResult"></div>
-      <div class="seg" style="margin-top:6px"><button id="bCopyCheck" hidden>結果を AI に渡す用にコピー</button></div>
+      <div class="seg" style="margin-top:6px"><button id="bCopyCheck" hidden>結果を AI に渡す用にコピー</button><button id="bPasteAi">AI の答えを貼る</button></div>
     </div>
   </div>
   <main id="view">
@@ -288,24 +344,70 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
   </div>
 </div>
 
+<div id="msgBox" hidden>
+  <div class="mbox">
+    <p id="msgText"></p>
+    <div class="mfoot"><button id="msgCancel">やめる</button><button id="msgOk" class="on">OK</button></div>
+  </div>
+</div>
+
 <div id="aiBox" hidden>
   <div class="gbox">
-    <div class="ghead"><h1>AIで作る</h1><button id="aClose">閉じる Esc</button></div>
-    <h2>1. AI に頼む</h2>
-    <p class="hint">作りたい機体を書いて「頼み方をコピー」を押し、使っている AI に貼り付けます。AI は仕様書（<a id="aSpec" target="_blank" rel="noopener">ai.md</a>）を読んで JSON を出します。URL を開けない AI には「仕様ごとコピー」を使ってください。</p>
-    <textarea id="aWish" rows="2" placeholder="どんな機体？（例：肩が大きい重装型。色は緑と白。背中に大きなブースター）"></textarea>
-    <div class="seg"><button id="aCopyUrl" class="on">頼み方をコピー</button><button id="aCopyFull">仕様ごとコピー</button></div>
-    <textarea id="aManual" rows="6" readonly hidden></textarea>
-    <h2>2. AI の答えを貼り付ける</h2>
-    <textarea id="aJson" rows="6" placeholder='AI が出した JSON（{"format": "xs-editor-model", ...}）を貼り付け。前後に説明文があってもかまいません'></textarea>
-    <div class="row"><label>使ったAI</label><input type="text" id="aName" maxlength="40" placeholder="JSON から自動で入ります（例：サービス名 / モデル名）" style="grid-column: span 2"></div>
-    <div class="seg"><button id="aLoad" class="on">読み込む（今の形は消えます）</button></div>
-    <div id="aMsg" class="hint"></div>
-    <div class="seg"><button id="aErrCopy" hidden>読み込めなかった理由を AI に渡す用にコピー</button></div>
-    <h2>3. チェックして AI に直してもらう</h2>
-    <p class="hint">つながりチェックと関節チェックを行い、結果を文章でコピーします。AI に貼ると、直した JSON を出してくれます。2 に貼り直して読み込んでください。</p>
-    <div class="seg"><button id="aCheckCopy">チェックして結果をコピー</button></div>
-    <div id="aCheckMsg" class="hint"></div>
+    <div class="ghead"><h1 id="aTitle">AIで作る</h1><button id="aClose">閉じる Esc</button></div>
+    <nav id="aNav"><button><b>1</b><span>作り方</span></button><button><b>2</b><span>使う AI</span></button><button><b>3</b><span>頼み方</span></button><button><b>4</b><span>AI に送る</span></button><button><b>5</b><span>答えを貼る</span></button><button><b>6</b><span>チラ見</span></button><button><b>7</b><span>確かめる</span></button></nav>
+    <section class="astep">
+      <h2>1. どうやって作りますか？</h2>
+      <div class="stgrid" id="aMode">
+        <button class="stcard" data-mode="text"><b>文章で作る</b><span>作りたい機体を言葉で伝えて、AI に作ってもらいます</span></button>
+        <button class="stcard" data-mode="image"><b>画像で作る</b><span>絵や写真を AI に見せて、似た機体を作ってもらいます</span></button>
+      </div>
+    </section>
+    <section class="astep" hidden>
+      <h2>2. どの AI を使いますか？</h2>
+      <div id="aWhich"><button class="stcard" data-ai="chatgpt"><b>ChatGPT</b></button><button class="stcard" data-ai="claude"><b>Claude</b></button><button class="stcard" data-ai="deepseek"><b>DeepSeek</b></button><button class="stcard" data-ai="gemini"><b>Gemini</b></button><button class="stcard" data-ai="grok"><b>Grok</b></button><button class="stcard" data-ai="other"><b>そのほか</b><span>新しいタブを開くだけです</span></button></div>
+    </section>
+    <section class="astep" hidden>
+      <h2>3. 頼み方をコピーする</h2>
+      <p class="hint" id="aWishLabel"></p>
+      <textarea id="aWish" rows="3"></textarea>
+      <div class="seg"><button id="aCopyFull" class="on">頼み方をコピー</button></div>
+      <textarea id="aManual" rows="6" readonly hidden></textarea>
+      <div id="aAskMsg" class="hint"></div>
+      <div class="seg" id="aManualNext" hidden><button id="aManualGo" class="on">コピーしたら 次へ</button></div>
+    </section>
+    <section class="astep" hidden>
+      <h2>4. AI に送る</h2>
+      <p class="hint" id="aSendNote"></p>
+      <div id="aSend">
+        <p class="hint acap"></p>
+        <div class="ademo"></div>
+        <div class="seg askip"><button id="aSkip" hidden>見本をとばす</button></div>
+        <div class="aafter" hidden>
+          <p class="hint anote"></p>
+          <div class="seg"><a class="abtn" target="_blank" rel="noopener"></a><button class="areplay">もう一度見る</button><button id="aGo5" class="on anext">AI が答えたら 次へ</button></div>
+        </div>
+      </div>
+    </section>
+    <section class="astep" hidden>
+      <h2>5. AI の答えを貼り付ける</h2>
+      <textarea id="aJson" rows="8" placeholder="AI の答えをまるごと貼り付けてください"></textarea>
+      <div class="seg"><button id="aLoad" class="on">読み込む</button></div>
+      <div id="aMsg" class="hint"></div>
+      <div class="seg"><button id="aErrCopy" hidden>直してもらう文章をコピー</button><button id="aErrOn" hidden>このまま次へ</button></div>
+    </section>
+    <section class="astep" hidden>
+      <h2>6. チラ見 ― AI が作った機体を見てみる</h2>
+      <div id="aPeek"><div class="apeekbar"><label>ポーズ <select id="aPeekPose"></select></label><span>ドラッグで回す ・ ホイールで拡大</span></div></div>
+      <p class="hint" id="aPeekNote"></p>
+      <div class="seg"><button id="aGo7" class="on">次へ（確かめる）</button></div>
+    </section>
+    <section class="astep" hidden>
+      <h2>7. ちゃんと組み立てられているか確かめる</h2>
+      <p class="hint">まだ読み込んではいません。確かめてから、この機体にするかを決めます。</p>
+      <div class="seg"><button id="aCheck" class="on">確かめる</button></div>
+      <div id="aCheckMsg" class="hint"></div>
+      <div class="seg" id="aUseRow" hidden><button id="aFixCopy">直してもらう文章をコピー</button><button id="aUse" class="on">この機体にする</button></div>
+    </section>
   </div>
 </div>
 
@@ -320,9 +422,28 @@ import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { MeshBVH } from 'three-mesh-bvh';
 
 const $ = s => document.querySelector(s);
+// a question in the page's own dialog instead of the browser's confirm(): resolves true for the main button
+function ask(text, { ok = 'OK', cancel = 'やめる', danger = false } = {}) {   // cancel: null = just a notice
+  return new Promise(done => {
+    $('#msgText').textContent = text;
+    $('#msgOk').textContent = ok; $('#msgOk').classList.toggle('danger', danger);
+    $('#msgCancel').textContent = cancel ?? ''; $('#msgCancel').hidden = cancel === null;
+    $('#msgBox').hidden = false; $('#msgOk').focus();
+    const end = v => { $('#msgBox').hidden = true; $('#msgOk').onclick = $('#msgCancel').onclick = null; done(v); };
+    $('#msgOk').onclick = () => end(true);
+    $('#msgCancel').onclick = () => end(false);
+  });
+}
+// a dialog closes when the dark backdrop around it is clicked - only when the press also started there, so
+// selecting text and letting go outside the dialog does not close it
+function closeOnBackdrop(el, close) {
+  let downOnBackdrop = false;
+  el.addEventListener('pointerdown', e => { downOnBackdrop = e.target === el; });
+  el.addEventListener('click', e => { if (downOnBackdrop && e.target === el) close(); downOnBackdrop = false; });
+}
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = 'c52c281';
+const BUILD = '117c6ec';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -746,9 +867,10 @@ function setMode(m) {
   document.querySelectorAll('#toolbar [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
 }
 window.addEventListener('keydown', e => {
+  if (!$('#msgBox').hidden) { if (e.key === 'Escape') $('#msgCancel').click(); return; }
   if (galleryOpen()) { if (e.key === 'Escape') closeGallery(); return; }
   if (!$('#share').hidden) { if (e.key === 'Escape') $('#share').hidden = true; return; }
-  if (!$('#aiBox').hidden) { if (e.key === 'Escape') $('#aiBox').hidden = true; return; }
+  if (!$('#aiBox').hidden) { if (e.key === 'Escape') closeAi(); return; }
   if (!$('#start').hidden) { if (e.key === 'Escape') $('#start').hidden = true; return; }
   if (e.target.matches?.('input[type=text], textarea')) return;
   const k = e.key.toLowerCase();
@@ -1200,7 +1322,7 @@ function showConnectionReport() {
 }
 
 $('#tGhost').onclick = e => { showGhosts = !showGhosts; e.target.classList.toggle('on', showGhosts); scheduleRebuild(); };
-$('#bClear').onclick = () => { if (confirm('すべての部品を消しますか？')) loadScene([]); };
+$('#bClear').onclick = async () => { if (await ask('すべての部品を消しますか？', { ok: '消す', danger: true })) loadScene([]); };
 $('#bExport').onclick = () => {
   const g = new THREE.Group();
   for (const m of resultGroup.children) if (m.isMesh) g.add(new THREE.Mesh(m.geometry, m.material));
@@ -1209,7 +1331,7 @@ $('#bExport').onclick = () => {
     a.href = URL.createObjectURL(new Blob([data], { type: 'model/gltf-binary' }));
     a.download = 'robot.glb'; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  }, err => alert('書き出しに失敗しました: ' + err), { binary: true });
+  }, err => ask('書き出しに失敗しました: ' + err, { cancel: null }), { binary: true });
 };
 
 
@@ -1669,7 +1791,7 @@ function buildGameModel() {
 }
 
 $('#bGame').onclick = () => {
-  if (!parts.some(p => p.op === 'add' && !p.blockout)) { alert('書き出す部品がありません。'); return; }
+  if (!parts.some(p => p.op === 'add' && !p.blockout)) { ask('書き出す部品がありません。', { cancel: null }); return; }
   const id = prompt('機体id（public/models/<機体id>.glb のファイル名）\n例: a_raid / a_heavy / a_support / b_raid / b_heavy / b_support', 'a_raid');
   if (id === null) return;
   const name = (id.trim() || 'xs_model').replace(/[^\w.-]/g, '_');
@@ -1691,7 +1813,7 @@ $('#bGame').onclick = () => {
       ` 描画回数 ${report.calls[0]} ${ok(report.calls[0], GAME_LIMITS.drawCalls)}（${report.materials.join(', ')}）。` +
       (loose.length ? ` ✗ 関節で問題が出ます — ${loose.join(' ／ ')}` : ` 関節チェック（${Object.keys(joints).length} 姿勢）✓ 外れ・めり込みなし。`) + ' public/models/ に置いてください。';
     $('#checkResult').appendChild(div);
-  }, err => alert('書き出しに失敗しました: ' + err), { binary: true });
+  }, err => ask('書き出しに失敗しました: ' + err, { cancel: null }), { binary: true });
 };
 
 // ---------- undo history ----------
@@ -2112,7 +2234,7 @@ function openGallery() { ensureBuiltinThumbs(); gallery.hidden = false; $('#gNot
 function closeGallery() { gallery.hidden = true; }
 $('#bSample').onclick = openGallery;
 $('#gClose').onclick = closeGallery;
-gallery.onclick = e => { if (e.target === gallery) closeGallery(); };
+closeOnBackdrop(gallery, closeGallery);
 
 function note(text) { $('#gNote').textContent = text; }
 
@@ -2140,13 +2262,14 @@ function renderGallery() {
     };
     button('読み込む', () => { loadScene(structuredClone(s.parts), s.ai); closeGallery(); }, 'on');
     if (!s.builtin) {
-      button('上書き', () => {
-        if (!confirm(`「${s.name}」を今の形で上書きしますか？`)) return;
+      button('上書き', async () => {
+        if (!await ask(`「${s.name}」を今の形で上書きしますか？`, { ok: '上書き' })) return;
         Object.assign(s, { parts: parts.map(serialize), ai: sceneAi, thumb: captureThumb(), savedAt: new Date().toISOString() });
         persist(`「${s.name}」を上書きしました。`);
       });
-      button('削除', () => {
-        if (!confirm(`「${s.name}」を削除しますか？（元に戻せません）`)) return;
+      button('削除', async () => {
+        if (!await ask(`「${s.name}」を削除しますか？
+元に戻せません。`, { ok: '削除', danger: true })) return;
         userSamples = userSamples.filter(q => q !== s);
         persist(`「${s.name}」を削除しました。`);
       });
@@ -2161,12 +2284,12 @@ function persist(message) {
   note(ok ? message : message + ' ※ブラウザに保存できなかったので、閉じる前に「ファイルに書き出す」で残してください。');
 }
 
-$('#gSave').onclick = () => {
+$('#gSave').onclick = async () => {
   if (!parts.length) { note('部品がないので保存できません。'); return; }
   const input = $('#gName');
   const name = input.value.trim() || `作品 ${userSamples.length + 1}`;
   const same = userSamples.find(s => s.name === name);
-  if (same && !confirm(`「${name}」はもうあります。上書きしますか？`)) return;
+  if (same && !await ask(`「${name}」はもうあります。上書きしますか？`, { ok: '上書き' })) return;
   sceneAi = $('#gAi').value.trim().slice(0, 40);
   const entry = { id: Date.now(), name, ai: sceneAi, parts: parts.map(serialize), thumb: captureThumb(), savedAt: new Date().toISOString() };
   if (same) Object.assign(same, entry); else userSamples.push(entry);
@@ -2342,14 +2465,15 @@ function shareCard(m) {
     heart.disabled = true; heart.title = '自分の機体にはイイネできません';
     button('上書き', async () => {
       if (!checksPassed()) { sNote('つながりチェックと関節チェックの両方が OK になってから上書きしてください。'); return; }
-      if (!confirm(`「${m.title}」を今の形で上書きしますか？`)) return;
+      if (!await ask(`「${m.title}」を今の形で上書きしますか？`, { ok: '上書き' })) return;
       try {
         await central(`/api/models/${m.id}`, 'PUT', { scene: parts.filter(p => !p.blockout).map(serialize), ai: sceneAi, thumb: captureThumb() });
         await loadShare(); sNote(`「${m.title}」を上書きしました。`);
       } catch (e) { sNote(e.message); }
     });
     button('削除', async () => {
-      if (!confirm(`「${m.title}」を削除しますか？集まったイイネも消えます（元に戻せません）`)) return;
+      if (!await ask(`「${m.title}」を削除しますか？
+集まったイイネも消えます。元に戻せません。`, { ok: '削除', danger: true })) return;
       try { await central(`/api/models/${m.id}`, 'DELETE'); card.remove(); sNote(`「${m.title}」を削除しました。`); }
       catch (e) { sNote(e.message); }
     });
@@ -2380,8 +2504,9 @@ $('#sUpload').onclick = async () => {
   if (!title) { sNote('機体名を入れてください。'); return; }
   const list = parts.filter(p => !p.blockout);
   if (!list.length) { sNote('部品がないので投稿できません。'); return; }
-  if (list.length < parts.length && !confirm('あたり（下書き）の部品は投稿に含めません。よろしいですか？')) return;
-  if (!confirm(`「${title}」を公開します。だれでも見られるようになります。よろしいですか？`)) return;
+  if (list.length < parts.length && !await ask('あたり（下書き）の部品は投稿に含めません。よろしいですか？', { ok: '投稿に進む' })) return;
+  if (!await ask(`「${title}」を公開します。
+だれでも見られるようになります。よろしいですか？`, { ok: '公開する' })) return;
   try {
     sceneAi = $('#sAi').value.trim().slice(0, 40);
     await central('/api/models', 'POST', { title, ai: sceneAi, scene: list.map(serialize), thumb: captureThumb() });
@@ -2397,13 +2522,12 @@ $('#bShare').onclick = async () => {
   loadShare();
 };
 $('#sClose').onclick = () => { $('#share').hidden = true; };
-$('#share').onclick = e => { if (e.target === $('#share')) $('#share').hidden = true; };
+closeOnBackdrop($('#share'), () => { $('#share').hidden = true; });
 
 // ---------- AIで作る: the request to hand an AI, pasting its JSON back, check results as text it can act on ----------
 // ai.md lives next to the page; a local copy (localhost / file) points the AI at the public one it can reach
 const SPEC_URL = /^(localhost|127\.|\[::1\])/.test(location.hostname) || location.protocol === 'file:'
   ? 'https://n416.github.io/xs-editor/ai.md' : new URL('ai.md', location.href).href;
-$('#aSpec').href = SPEC_URL;
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); return true; } catch {
     const ta = document.createElement('textarea');
@@ -2413,9 +2537,257 @@ async function copyText(t) {
   }
 }
 const say = (el, text, cls = '') => { const e = $(el); e.textContent = text; e.className = 'hint' + (cls ? ' ' + cls : ''); };
-const copied = ok => ok ? 'コピーしました。AI に貼り付けてください。' : 'コピーできませんでした（ブラウザがクリップボードを許可していません）。';
-const askText = spec => `XS部品エディタ用の人型ロボット（XS）の機体データを作ってください。\n${spec}\n\n作りたい機体: ${$('#aWish').value.trim() || '（おまかせ）'}\n\n仕様どおりの JSON を 1 つだけ出力してください。"ai" にはあなた自身のサービス名とモデル名を書いてください。`;
-$('#aCopyUrl').onclick = async () => say('#aMsg', copied(await copyText(askText(`仕様書: ${SPEC_URL} （必ず読んでから作ってください）`))));
+// 1 starts with a choice: made from words, or from a picture the user pastes into the AI next to the request
+// Seven steps, one on screen at a time, with a navigator on top: 1 made from words or from a picture, 2 which
+// chat AI, 3 copying the request, 4 sending it in that AI (an animated example, then the button that opens it),
+// 5 pasting the answer, 6 a look at the model (チラ見), 7 checking it; only この機体にする there loads it.
+// そのほか only opens an empty tab to go to the AI from
+const AI_SERVICES = { chatgpt: ['ChatGPT', 'https://chatgpt.com/'], claude: ['Claude', 'https://claude.ai/new'],
+  deepseek: ['DeepSeek', 'https://chat.deepseek.com/'], gemini: ['Gemini', 'https://gemini.google.com/app'],
+  grok: ['Grok', 'https://grok.com/'], other: ['使っている AI', 'about:blank'] };
+const AI_SERVICE_KEY = 'xs-part-editor-ai-service';
+let aiMode = null, aiService = (() => { try { return localStorage.getItem(AI_SERVICE_KEY); } catch { return null; } })();
+if (!(aiService in AI_SERVICES)) aiService = null;
+const byImage = () => aiMode === 'image';
+const PHONE = /iPhone|iPad|Android/.test(navigator.userAgent);
+// The example of what to do in the chat AI: a plain chat window (no real service's look). On a computer the
+// picture is dragged in and the text pasted from the right-click menu; on a phone the picture comes from the ＋
+// button and the text is pasted by a long press. The button that opens the AI comes after it: a browser only
+// opens a tab straight from a click, not when an animation ends.
+const PIC = (x, y, w, h, c1 = '#f0a93b', c2 = '#6fb3d9') => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="#3a4250"/>`
+  + `<circle cx="${x + w * .25}" cy="${y + h * .3}" r="${h * .1}" fill="${c1}"/>`
+  + `<path d="M${x + 3} ${y + h - 3} L${x + w * .4} ${y + h * .45} L${x + w * .6} ${y + h * .7} L${x + w * .75} ${y + h * .58} L${x + w - 3} ${y + h - 3} Z" fill="${c2}"/>`;
+const DEMO_SVG = `<svg viewBox="${PHONE ? '160 0 400 250' : '0 0 560 250'}" role="img" aria-label="チャット AI での操作の見本">
+  <g class="dFile">${PIC(30, 70, 84, 66)}<text x="72" y="156" font-size="11" fill="#b9c1cc" text-anchor="middle">機体の画像</text></g>
+  <rect x="170" y="10" width="380" height="232" rx="12" fill="#101318" stroke="#3a4250"/>
+  <circle cx="188" cy="24" r="4" fill="#3a4250"/><circle cx="202" cy="24" r="4" fill="#3a4250"/><circle cx="216" cy="24" r="4" fill="#3a4250"/>
+  <text x="360" y="28" font-size="11" fill="#6c7584" text-anchor="middle">チャット AI の画面</text>
+  <g class="dBubble" opacity="0"><rect x="300" y="48" width="236" height="96" rx="12" fill="#2b3340"/>
+    <g class="dBubbleImg">${PIC(312, 58, 52, 40)}</g>
+    <rect x="312" y="106" width="210" height="8" rx="4" fill="#5c6778"/><rect x="312" y="122" width="170" height="8" rx="4" fill="#5c6778"/></g>
+  <rect x="185" y="190" width="350" height="38" rx="19" fill="#1d2128" stroke="#4a5260"/>
+  <circle cx="205" cy="209" r="11" fill="#2b3340"/><path d="M205 203 V215 M199 209 H211" stroke="#b9c1cc" stroke-width="2" stroke-linecap="round"/>
+  <text class="dPh" x="224" y="214" font-size="13" fill="#6c7584">メッセージを入力</text>
+  <g class="dChip" opacity="0">${PIC(222, 196, 34, 26)}</g>
+  <text class="dText" x="224" y="214" font-size="13" fill="#e3e7ee" opacity="0">XS部品エディタ用の人型ロボット（XS）の…</text>
+  <circle class="dSend" cx="515" cy="209" r="13" fill="#4a5260"/><path d="M515 216 V203 M509 208 L515 202 L521 208" stroke="#e3e7ee" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <g class="dPick" opacity="0"><rect x="185" y="92" width="200" height="90" rx="10" fill="#1d2128" stroke="#4a5260"/>
+    <text x="200" y="112" font-size="12" fill="#b9c1cc">写真を選ぶ</text>${PIC(200, 122, 50, 46)}${PIC(258, 122, 50, 46, '#4a5260', '#4a5260')}</g>
+  <g class="dMenu" opacity="0"><rect x="330" y="92" width="130" height="94" rx="8" fill="#252a33" stroke="#4a5260"/>
+    <text x="344" y="112" font-size="12" fill="#6c7584">元に戻す</text><text x="344" y="134" font-size="12" fill="#e3e7ee">切り取り</text>
+    <text x="344" y="156" font-size="12" fill="#e3e7ee">コピー</text>
+    <rect class="dMenuHi" x="334" y="164" width="122" height="20" rx="4" fill="#f0a93b" opacity="0"/><text x="344" y="178" font-size="12" fill="#e3e7ee">貼り付け</text></g>
+  <g class="dPaste" opacity="0"><rect x="290" y="142" width="100" height="32" rx="8" fill="#252a33" stroke="#4a5260"/>
+    <text x="340" y="163" font-size="14" fill="#e3e7ee" text-anchor="middle">ペースト</text></g>
+  <circle class="dRing" cx="0" cy="0" r="14" fill="none" stroke="#f0a93b" stroke-width="3" opacity="0"/>
+  <g class="dCursor">${PHONE ? '<circle r="11" fill="rgba(255,255,255,.55)" stroke="#fff" stroke-width="2"/>'
+    : '<path d="M0 0 L0 20 L5 15 L9 24 L13 22 L9 13 L16 13 Z" fill="#fff" stroke="#111" stroke-width="1.2"/>'}</g>
+</svg>`;
+let demoRun = 0;
+async function playDemo(withImage) {
+  const box = $('#aSend');
+  const run = ++demoRun, live = () => run === demoRun && aiStep === 4 && !$('#aiBox').hidden;
+  const stage = box.querySelector('.ademo');
+  stage.innerHTML = DEMO_SVG;
+  const g = c => stage.querySelector('.' + c), cur = g('dCursor');
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const anim = (el, kf, ms) => el.animate(kf, { duration: ms, fill: 'forwards', easing: 'ease-in-out' }).finished;
+  const at = (x, y) => `translate(${x}px, ${y}px)`;
+  let cx = 150, cy = 230;
+  const move = async (x, y, ms, extra = []) => {
+    const from = at(cx, cy); cx = x; cy = y;
+    await Promise.all([anim(cur, [{ transform: from }, { transform: at(x, y) }], ms),
+      ...extra.map(([el, dx, dy]) => anim(el, [{ transform: 'translate(0px, 0px)' }, { transform: at(dx, dy) }], ms))]);
+  };
+  const tap = (ms = 380) => anim(g('dRing'), [{ transform: `${at(cx, cy)} scale(.3)`, opacity: 1 }, { transform: `${at(cx, cy)} scale(1.4)`, opacity: 0 }], ms);
+  const cap = t => { box.querySelector('.acap').textContent = t; };
+  const show = (el, on, ms = 250) => anim(el, [{ opacity: on ? 0 : 1 }, { opacity: on ? 1 : 0 }], ms);
+  box.querySelector('.aafter').hidden = true;
+  $('#aSkip').hidden = false;
+  g('dFile').style.display = withImage && !PHONE ? '' : 'none';
+  g('dBubbleImg').style.display = withImage ? '' : 'none';
+  cur.style.transform = at(cx, cy);
+  const afterChip = () => { g('dText').setAttribute('x', 264); g('dPh').setAttribute('x', 264); };
+  let n = 1;
+  if (withImage && PHONE) {
+    cap(`${n++}. 入力欄の「＋」を押して、機体の画像を選ぶ`);
+    await move(205, 209, 800); if (!live()) return;
+    await tap(); await show(g('dPick'), true); await wait(400); if (!live()) return;
+    await move(225, 145, 700); if (!live()) return;
+    await tap(); await Promise.all([show(g('dPick'), false, 200), show(g('dChip'), true)]); afterChip();
+    await wait(700); if (!live()) return;
+  } else if (withImage) {
+    cap(`${n++}. 機体の画像を、チャット AI の画面にドラッグ＆ドロップする`);
+    await move(70, 100, 700); if (!live()) return;
+    await wait(250);
+    await move(252, 205, 1300, [[g('dFile'), 182, 105]]); if (!live()) return;
+    await Promise.all([show(g('dFile'), false, 200), show(g('dChip'), true)]); afterChip();
+    await wait(700); if (!live()) return;
+  }
+  if (PHONE) {
+    cap(`${n++}. 入力欄を長押しして、「ペースト」を押す`);
+    await move(340, 212, 800); if (!live()) return;
+    await tap(1100); await show(g('dPaste'), true, 200); await wait(300); if (!live()) return;
+    await move(340, 160, 500); if (!live()) return;
+    await tap(); await Promise.all([show(g('dPaste'), false, 150), show(g('dPh'), false, 150), show(g('dText'), true, 300)]);
+  } else {
+    cap(`${n++}. 入力欄を右クリックして、「貼り付け」を選ぶ`);
+    await move(335, 212, 800); if (!live()) return;
+    await tap(); await show(g('dMenu'), true, 200); await wait(400); if (!live()) return;
+    await move(372, 176, 600); if (!live()) return;
+    await show(g('dMenuHi'), true, 150); await wait(250); await tap();
+    await Promise.all([show(g('dMenu'), false, 150), show(g('dPh'), false, 150), show(g('dText'), true, 300)]);
+  }
+  await wait(900); if (!live()) return;
+  cap(`${n++}. 送信ボタンを押す`);
+  await move(515, 209, 900); if (!live()) return;
+  await tap();
+  g('dSend').setAttribute('fill', '#f0a93b');
+  await Promise.all([show(g('dText'), false, 200), show(g('dChip'), false, 200), show(g('dBubble'), true, 400)]);
+  await wait(900); if (!live()) return;
+  demoDone();
+}
+// the end of the example, reached by watching it or by とばす
+function demoDone() {
+  demoRun++;
+  $('#aSend .acap').textContent = '';
+  $('#aSkip').hidden = true;
+  $('#aSend .aafter').hidden = false;
+  $('#aSend .aafter').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+// step 4, after anything was copied for the AI: the example, then the button that opens the chosen AI; "the AI
+// answered" appears once that button has been used. Going on to 5 clears the previous answer.
+let sendImage = false;
+function showHandoff(kind, note) {
+  if (aiPasteOnly) {   // no sending step here: the fix request goes to the AI by hand and its answer comes back to 1
+    clearAnswer(); aiCandidate = null; aiReached = 5; showStep(5);
+    say('#aMsg', 'AI に直してもらう文章をコピーしました。AI に貼って送り、返ってきた答えをここに貼り直してください。', 'ok');
+    return;
+  }
+  sendImage = kind === 'ask' && byImage();
+  const [name, url] = AI_SERVICES[aiService] ?? AI_SERVICES.other;
+  const other = aiService === 'other' || !(aiService in AI_SERVICES);
+  const box = $('#aSend'), a = box.querySelector('a.abtn');
+  a.href = url; a.textContent = other ? '新しいタブを開く' : `${name} を開く`;
+  box.querySelector('.anote').textContent = other
+    ? '新しいタブで使っている AI を開き、今の見本のとおりにしてください。'
+    : `${name} が新しいタブで開きます。今の見本のとおりにしてください。`;
+  $('#aGo5').hidden = true;
+  a.onclick = () => { $('#aGo5').hidden = false; };
+  say('#aSendNote', note, 'ok');
+  if (kind === 'ask') aiCandidate = null;
+  aiReached = 4;
+  showStep(4);
+  playDemo(sendImage);
+}
+$('#aSend .areplay').onclick = () => playDemo(sendImage);
+$('#aSkip').onclick = demoDone;
+$('#aGo5').onclick = () => {
+  $('#aJson').value = ''; $('#aMsg').textContent = ''; $('#aErrCopy').hidden = $('#aErrOn').hidden = true;
+  showStep(5); $('#aJson').focus();
+};
+
+const aSteps = [...document.querySelectorAll('#aiBox .astep')], aNav = [...$('#aNav').children];
+let aiStep = 1, aiReached = 1;
+// The AI's model is only a candidate until この機体にする: for チラ見 (6) and 確かめる (7) it stands in for the
+// scene's parts (the checks work on those), outside the undo history and the autosave, and the model that was
+// there comes back on any other step and whenever the dialog closes.
+let aiCandidate = null, aiHeld = null;
+function showCandidate() {
+  if (!aiHeld) {
+    save();   // flush a pending edit first, so it cannot be saved while the candidate is shown
+    aiHeld = { list: parts.map(serialize), ai: sceneAi, sel: parts.findIndex(p => p.id === selectedId),
+      pose: viewPose, frame: viewFrame, report: $('#checkResult').innerHTML };
+  }
+  if (aiHeld.shown === aiCandidate) return;
+  aiHeld.shown = aiCandidate;
+  replaceParts(aiCandidate.list);
+  viewPose = '待機'; viewFrame = 0; syncPoseUI();
+  select(null); rebuild();
+}
+function restoreHeld() {
+  if (!aiHeld) return;
+  const h = aiHeld; aiHeld = null;
+  replaceParts(h.list); sceneAi = h.ai;
+  viewPose = h.pose; viewFrame = h.frame; syncPoseUI();
+  select(parts[h.sel]?.id ?? null); rebuild();
+  $('#checkResult').innerHTML = h.report;
+  updateCheckBadge();
+}
+function showStep(n) {
+  aiStep = n; aiReached = Math.max(aiReached, n);
+  if (n >= 6 && aiCandidate) showCandidate(); else restoreHeld();
+  aSteps.forEach((s, i) => { s.hidden = i + 1 !== n; });
+  if (n === 6) startPeek(); else stopPeek();
+  aNav.forEach((b, i) => {
+    const k = i + 1;
+    b.classList.toggle('cur', k === n); b.classList.toggle('done', k !== n && k <= aiReached);
+    b.disabled = k === n || k > aiReached;
+  });
+}
+aNav.forEach((b, i) => { b.onclick = () => { showStep(i + 1); if (i + 1 === 4) playDemo(sendImage); }; });
+// steps 1 and 2 are choices that move on by themselves; a different choice starts the request (3) over
+for (const b of $('#aMode').children) b.onclick = () => {
+  if (aiMode !== b.dataset.mode) { aiMode = b.dataset.mode; aiReached = 2; resetAsk(); }
+  for (const o of $('#aMode').children) o.classList.toggle('on', o.dataset.mode === aiMode);
+  showStep(2);
+};
+for (const b of $('#aWhich').children) b.onclick = () => {
+  if (aiService !== b.dataset.ai || aiReached < 3) { aiService = b.dataset.ai; aiReached = 3; resetAsk(); }
+  try { localStorage.setItem(AI_SERVICE_KEY, aiService); } catch { /* storage blocked */ }
+  showStep(3); $('#aWish').focus();
+};
+function resetAsk() {
+  for (const o of $('#aWhich').children) o.classList.toggle('on', o.dataset.ai === aiService);   // last time's AI stays marked
+  $('#aWishLabel').textContent = byImage() ? 'ひとこと添えるなら（なくてもかまいません）' : 'どんな機体を作りたいですか？';
+  $('#aWish').placeholder = byImage() ? '例：色は赤と黒に' : '例：肩が大きい重装型。色は緑と白。背中に大きなブースター';
+  $('#aAskMsg').textContent = ''; $('#aManual').hidden = true; $('#aManualNext').hidden = true;
+}
+const asked = () => showHandoff('ask', 'コピーしました。チャット AI では、次のように操作します。');
+$('#aManualGo').onclick = asked;
+const copied = ok => ok ? 'コピーしました。' : 'コピーできませんでした（ブラウザがクリップボードを許可していません）。';
+
+// チラ見: a second view of the same scene inside the dialog, turned with the mouse or a finger; posing uses the
+// editor's pose (restored with the model when the step is left)
+let peek = null;
+function startPeek() {
+  if (!peek) {
+    const r = new THREE.WebGLRenderer({ antialias: true });
+    r.setPixelRatio(Math.min(devicePixelRatio, 2));
+    r.toneMapping = renderer.toneMapping;
+    r.shadowMap.enabled = true; r.shadowMap.type = renderer.shadowMap.type;
+    $('#aPeek').prepend(r.domElement);
+    const cam = new THREE.PerspectiveCamera(35, 1, 0.05, 100);
+    const ctl = new OrbitControls(cam, r.domElement); ctl.enableDamping = true;
+    peek = { r, cam, ctl, on: false };
+    for (const k of Object.keys(POSES)) $('#aPeekPose').add(new Option(k, k));
+    $('#aPeekPose').onchange = e => { viewPose = e.target.value; viewFrame = 0; syncPoseUI(); applyViewPose(); };
+  }
+  const { r, cam, ctl } = peek;
+  $('#aPeekPose').value = viewPose;
+  const box = new THREE.Box3().setFromObject(resultGroup);
+  if (!box.isEmpty()) {
+    const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+    cam.position.copy(c).add(new THREE.Vector3(0.55, 0.2, 1).normalize().multiplyScalar(Math.max(size.x, size.y, size.z) * 2));
+    ctl.target.copy(c); ctl.update();
+  }
+  if (peek.on) return;
+  peek.on = true;
+  r.setAnimationLoop(() => {
+    const el = $('#aPeek'), w = el.clientWidth, h = el.clientHeight;
+    if (!w || !h) return;
+    const s = r.getSize(new THREE.Vector2());
+    if (s.x !== w || s.y !== h) { r.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
+    ctl.update(); r.render(scene, cam);
+  });
+}
+function stopPeek() { if (peek?.on) { peek.r.setAnimationLoop(null); peek.on = false; } }
+$('#aGo7').onclick = () => {
+  showStep(7);
+};
+const askText = spec => `XS部品エディタ用の人型ロボット（XS）の機体データを作ってください。\n${spec}\n\n${byImage()
+  ? `添付した画像の機体を、この仕様で作ってください。見た目（形・色・大きさのバランス）をできるだけ似せてください。${$('#aWish').value.trim() ? `\n追加の希望: ${$('#aWish').value.trim()}` : ''}`
+  : `作りたい機体: ${$('#aWish').value.trim() || '（おまかせ）'}`}\n\n仕様どおりの JSON を 1 つだけ出力してください。"ai" にはあなた自身のサービス名とモデル名を書いてください。`;
 // The spec is fetched when the screen opens: Safari only lets a click write the clipboard if nothing is awaited
 // before it, so the copy itself must not wait for the network. A 404 page must never be passed off as the spec.
 let specText = null, specLoading = null;
@@ -2431,13 +2803,15 @@ const fullAsk = md => askText('以下が仕様書です。\n\n' + md);
 function showManualCopy(text) {
   const ta = $('#aManual');
   ta.value = text; ta.hidden = false; ta.focus(); ta.select();
-  say('#aMsg', '自動でコピーできませんでした。下の欄の全文が選ばれているので、⌘C（Windows は Ctrl+C）でコピーしてください。', 'ng');
+  say('#aAskMsg', PHONE ? '自動でコピーできませんでした。下の欄を長押しして「すべてを選択」→「コピー」でコピーしてください。'
+    : '自動でコピーできませんでした。下の欄の全文が選ばれているので、右クリックして「コピー」を選んでください。', 'ng');
+  $('#aManualNext').hidden = false;
 }
 $('#aCopyFull').onclick = async () => {
   $('#aManual').hidden = true;
   if (specText) {   // already here: write straight away, still inside the click
     const text = fullAsk(specText);
-    if (await copyText(text)) say('#aMsg', copied(true)); else showManualCopy(text);
+    if (await copyText(text)) asked(); else showManualCopy(text);
     return;
   }
   // not loaded yet: Safari accepts a clipboard item whose content is still on its way
@@ -2447,11 +2821,11 @@ $('#aCopyFull').onclick = async () => {
         if (!md) throw new Error('no spec');
         return new Blob([fullAsk(md)], { type: 'text/plain' });
       }) })]);
-      say('#aMsg', copied(true)); return;
+      asked(); return;
     } catch { /* fall through */ }
   }
   const md = await loadSpec();
-  if (!md) { say('#aMsg', '仕様書を読み込めませんでした。通信を確かめるか、「頼み方をコピー」を使ってください。', 'ng'); return; }
+  if (!md) { say('#aAskMsg', '頼み方を読み込めませんでした。通信を確かめて、もう一度押してください。', 'ng'); return; }
   showManualCopy(fullAsk(md));
 };
 
@@ -2558,50 +2932,119 @@ function checkAiParts(list) {
   return { ok, errors, unknown: [...unknown] };
 }
 let importErrors = '';
-$('#aJson').oninput = () => { try { const m = parseAiText($('#aJson').value); if (m.ai && !$('#aName').value.trim()) $('#aName').value = String(m.ai).slice(0, 40); } catch { /* not complete yet */ } };
-$('#aName').onchange = () => { sceneAi = $('#aName').value.trim().slice(0, 40); writeCurrent(); };
+// 5: the answer becomes the candidate (nothing is loaded yet) and 6 shows it
 $('#aLoad').onclick = () => {
   let model;
+  $('#aErrOn').hidden = true;
   try { model = parseAiText($('#aJson').value); } catch (e) {
     const forAi = e instanceof AiTextError && !e.message.startsWith('貼り付けたのは');
     importErrors = forAi ? e.message : '';
     $('#aErrCopy').hidden = !forAi;
-    say('#aMsg', e.message, 'ng'); return;
+    // a broken JSON is for the AI to fix: the parser's wording goes into the copied text, not on screen
+    say('#aMsg', e.message.startsWith('JSON の書き方') ? 'AI の答えをうまく読めませんでした。下のボタンでコピーして AI に貼ると、出し直してくれます。' : e.message, 'ng');
+    return;
   }
-  const { ok, errors, unknown } = checkAiParts(model.parts.slice(0, 400));
+  const { ok, errors } = checkAiParts(model.parts.slice(0, 400));
   if (model.parts.length > 400) errors.push(`部品が ${model.parts.length} 個あります。400 個までしか読み込めません。`);
   importErrors = errors.join('\n');
   $('#aErrCopy').hidden = !importErrors;
-  if (!ok.length) { say('#aMsg', '読み込める部品がありません。\n' + importErrors, 'ng'); return; }
-  if (parts.length && !confirm('今の形を消して、AI の機体を読み込みますか？')) return;
-  const ai = ($('#aName').value.trim() || String(model.ai ?? '').trim()).slice(0, 40);
-  $('#aName').value = ai;
-  loadScene(ok, ai);
-  const lines = [`${ok.length} 個の部品を読み込みました。` + (ai ? `（使ったAI: ${ai}）` : '')];
-  if (errors.length) lines.push(`読み込めなかった部品が ${errors.length} 個あります:`, ...errors);
-  if (unknown.length) lines.push(`知らない項目は無視しました: ${unknown.join(', ')}`);
-  if (!errors.length) lines.push('次は 3 のチェックをしてください。');
-  say('#aMsg', lines.join('\n'), errors.length ? 'ng' : 'ok');
+  if (!ok.length) { say('#aMsg', '使える部品がありません。下のボタンでコピーして AI に貼ると、直した答えを出してくれます。', 'ng'); return; }
+  // the AI names itself in the JSON ("ai"); the name can be corrected when posting
+  aiCandidate = { list: ok, ai: String(model.ai ?? '').trim().slice(0, 40) };
+  aiReached = 5;
+  $('#aCheckMsg').textContent = ''; $('#aUseRow').hidden = true;
+  if (!errors.length) { $('#aMsg').textContent = ''; showStep(6); return; }
+  say('#aMsg', `部品 ${ok.length} 個を使えます。${errors.length} 個の部品は使えませんでした。\n下のボタンでコピーして AI に直してもらうか、このまま次へ進んでください。`, 'ng');
+  $('#aErrOn').hidden = false;
 };
+$('#aErrOn').onclick = () => showStep(6);
 const fixHead = () => `XS部品エディタで確かめた結果です。指摘された部品の位置や大きさを直して、機体全体の JSON をもう一度出力してください（差分ではなく全体）。\n仕様: ${SPEC_URL}\n座標は 1 単位 = 6 m、+Y が上、+Z が正面、+X が機体の左です。`;
-$('#aErrCopy').onclick = async () => say('#aMsg', copied(await copyText(`${fixHead()}\n\n【読み込めなかった理由】\n${importErrors}`)));
-$('#aCheckCopy').onclick = () => {
-  if (!parts.some(p => p.op === 'add' && !p.blockout)) { say('#aCheckMsg', 'チェックする部品がありません。', 'ng'); return; }
-  say('#aCheckMsg', 'チェック中…（姿勢ごとに調べるので少しかかります）');
-  setTimeout(async () => {
+const fixSent = 'AI に直してもらう文章をコピーしました。チャット AI では、次のように操作します。';
+$('#aErrCopy').onclick = async () => {
+  if (await copyText(`${fixHead()}\n\n【読み込めなかった理由】\n${importErrors}`)) showHandoff('fix', fixSent);
+  else say('#aMsg', copied(false), 'ng');
+};
+// 7: checks whether the parts are connected and the joints bend cleanly, on the candidate; the report itself is
+// only copied for the AI when something needs fixing. この機体にする is the one place the model is loaded.
+let fixText = '';
+$('#aCheck').onclick = () => {
+  $('#aUseRow').hidden = true;
+  if (!parts.some(p => p.op === 'add' && !p.blockout)) { say('#aCheckMsg', '確かめる部品がありません。', 'ng'); return; }
+  say('#aCheckMsg', '確かめています…（少しかかります）');
+  setTimeout(() => {
     showConnectionReport(); const conn = $('#checkResult').innerText.trim();
     showJointReport(); const joint = $('#checkResult').innerText.trim();
-    const text = `${fixHead()}\n\n【つながりチェック】\n${conn}\n\n【関節チェック】\n${joint}`;
-    say('#aCheckMsg', copied(await copyText(text)) + '\n\n' + conn + '\n' + joint);
+    const good = checksPassed();
+    fixText = `${fixHead()}\n\n【つながりチェック】\n${conn}\n\n【関節チェック】\n${joint}`;
+    say('#aCheckMsg', good ? '問題ありません。この機体にしますか？'
+      : '離れている部品や、動かすとぶつかる所が見つかりました。\nAI に直してもらうか、このままこの機体にするかを選んでください。', good ? 'ok' : 'ng');
+    $('#aFixCopy').hidden = good;
+    $('#aUse').textContent = good ? 'この機体にする' : 'このままこの機体にする';
+    $('#aUseRow').hidden = false;
   }, 30);
+};
+$('#aFixCopy').onclick = async () => {
+  if (await copyText(fixText)) showHandoff('fix', fixSent); else say('#aCheckMsg', copied(false), 'ng');
+};
+$('#aUse').onclick = async () => {
+  const c = aiCandidate, pasteOnly = aiPasteOnly;
+  if (aiHeld?.list.length && !await ask('今の形を消して、AI が作った機体にしますか？', { ok: 'この機体にする', danger: true })) return;
+  restoreHeld();
+  loadScene(c.list, c.ai);
+  updateCheckBadge();   // the checks just run were on this very shape
+  closeAi();
+  if (!pasteOnly) { aiCandidate = null; aiReached = 3; showStep(3); }
 };
 $('#bCopyCheck').onclick = async () => { $('#bCopyCheck').textContent = (await copyText(`${fixHead()}\n\n${$('#checkResult').innerText.trim()}`)) ? 'コピーしました' : 'コピーできませんでした'; };
 new MutationObserver(() => { $('#bCopyCheck').hidden = !$('#checkResult .ng'); $('#bCopyCheck').textContent = '結果を AI に渡す用にコピー'; })
   .observe($('#checkResult'), { childList: true });
-function openAi() { $('#aiBox').hidden = false; $('#aName').value = sceneAi; loadSpec(); }
+// The same dialog with only 貼る → チラ見 → 確かめる, for an answer the AI gave to the check results (from the
+// check window). The main dialog's progress is put aside meanwhile and comes back when this one closes.
+let aiPasteOnly = false, aiWizard = null;
+function setPasteOnly(on) {
+  aiPasteOnly = on;
+  $('#aTitle').textContent = on ? 'AI の答えを貼る' : 'AIで作る';
+  aNav.forEach((b, i) => { b.hidden = on && i < 4; b.querySelector('b').textContent = on ? i - 3 : i + 1; });
+  aSteps.forEach((s, i) => {
+    const h = s.querySelector('h2');
+    h.dataset.t ??= h.textContent;
+    h.textContent = on && i >= 4 ? h.dataset.t.replace(/^\d+/, i - 3) : h.dataset.t;
+  });
+  $('#aPeekNote').textContent = on ? 'まだ読み込んではいません。気に入らなければ、閉じれば今の機体のままです。'
+    : 'まだ読み込んではいません。気に入らなければ、上の「3 頼み方」から頼み直せます。';
+}
+setPasteOnly(false);
+function clearAnswer() {
+  $('#aJson').value = ''; $('#aMsg').textContent = ''; $('#aErrCopy').hidden = $('#aErrOn').hidden = true;
+  $('#aCheckMsg').textContent = ''; $('#aUseRow').hidden = true;
+}
+function openAiPaste() {
+  if (!$('#aiBox').hidden) return;
+  aiWizard = { step: aiStep, reached: aiReached, cand: aiCandidate, json: $('#aJson').value };
+  aiCandidate = null; aiReached = 5;
+  clearAnswer(); setPasteOnly(true);
+  $('#aiBox').hidden = false;
+  showStep(5); $('#aJson').focus();
+}
+$('#bPasteAi').onclick = openAiPaste;
+function openAi() {
+  $('#aiBox').hidden = false; loadSpec();
+  showStep(aiStep);
+  if (aiStep === 4) playDemo(sendImage);
+}
+// closing never keeps the AI's model: whatever was there before comes back
+function closeAi() {
+  demoRun++; stopPeek(); restoreHeld();
+  $('#aiBox').hidden = true;
+  if (aiPasteOnly) {
+    setPasteOnly(false); clearAnswer();
+    ({ step: aiStep, reached: aiReached, cand: aiCandidate } = aiWizard);
+    $('#aJson').value = aiWizard.json; aiWizard = null;
+  }
+}
 $('#bAi').onclick = openAi;
-$('#aClose').onclick = () => { $('#aiBox').hidden = true; };
-$('#aiBox').onclick = e => { if (e.target === $('#aiBox')) $('#aiBox').hidden = true; };
+$('#aClose').onclick = closeAi;
+closeOnBackdrop($('#aiBox'), closeAi);
 
 // ---------- check status: both checks must pass on the shape as it is now (blockout parts are not posted, so not counted) ----------
 const CHECK_KEY = 'xs-part-editor-checks-v1';
@@ -2687,7 +3130,7 @@ $('#stRough').onclick = () => { loadScene(roughBody(0.85 + (Number($('#stBuild')
 $('#stSample').onclick = () => { closeStart(); openGallery(); };
 $('#stAi').onclick = () => { closeStart(); openAi(); };
 $('#stClose').onclick = closeStart;
-$('#start').onclick = e => { if (e.target === $('#start')) closeStart(); };
+closeOnBackdrop($('#start'), closeStart);
 $('#bStart').onclick = openStart;
 
 // ---------- new version: offer a reload to a URL the browser has not cached (?v=<build>) ----------
