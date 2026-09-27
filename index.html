@@ -2413,19 +2413,79 @@ $('#aCopyFull').onclick = async () => {
   showManualCopy(fullAsk(md));
 };
 
-// the AI's answer: the JSON may sit inside a code block or between sentences
+// The AI's answer, as pasted: the JSON may sit in a code block or between sentences, come in two messages
+// (「続き」), be cut off, or carry what chat AIs like to add: comments, trailing commas, curly quotes, True/None.
+class AiTextError extends Error {}
+// JS-ish text -> JSON text: strings are kept (single quotes become double), comments dropped, then outside
+// strings: trailing commas, bare keys and Python literals fixed
+function lenientJson(src) {
+  src = src.replace(/[“”＂]/g, '"').replace(/[‘’]/g, "'").replace(/ |　/g, ' ');
+  const strs = [];
+  let out = '';
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1, s = '';
+      while (j < src.length && src[j] !== c) { if (src[j] === '\\') { s += src[j] + (src[j + 1] ?? ''); j += 2; } else s += src[j++]; }
+      if (c === "'") s = s.replace(/\\'/g, "'").replace(/"/g, '\\"');
+      out += `\u0000${strs.push('"' + s.replace(/\n/g, '\\n') + '"') - 1}\u0000`;
+      i = j;
+    } else if (c === '/' && src[i + 1] === '/') { while (i < src.length && src[i] !== '\n') i++; out += '\n'; }
+    else if (c === '/' && src[i + 1] === '*') { const e = src.indexOf('*/', i + 2); i = e < 0 ? src.length : e + 1; }
+    else out += c;
+  }
+  out = out.replace(/,(\s*[}\]])/g, '$1')
+    .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
+    .replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null');
+  return out.replace(/\u0000(\d+)\u0000/g, (_, k) => strs[k]);
+}
+// from `start` (a '{'), where its matching '}' is, or -1 when the text ends first (cut off)
+function closingBrace(t, start) {
+  let depth = 0, q = null;
+  for (let i = start; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '\\') i++; else if (c === q) q = null; continue; }
+    if (c === '"' || c === '“' || c === '”') q = c === '“' ? '”' : c;
+    else if (c === '{' || c === '[') depth++;
+    else if (c === '}' || c === ']') { if (--depth === 0) return i; }
+  }
+  return -1;
+}
 function parseAiText(text) {
-  const t = text.replace(/```[a-z]*/gi, '');
-  const a = t.indexOf('{'), b = t.indexOf('[');
-  const start = a < 0 ? b : b < 0 ? a : Math.min(a, b);
-  const end = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'));
-  if (start < 0 || end < start) throw new Error('JSON が見つかりません。AI の答えの { から } までを貼り付けてください。');
-  let data;
-  try { data = JSON.parse(t.slice(start, end + 1)); }
-  catch (e) { throw new Error(`JSON として読めません（${e.message}）。答えが途中で切れていないか確かめてください。`); }
-  const model = Array.isArray(data) ? { parts: data } : Array.isArray(data?.samples) ? data.samples[0] : data;
-  if (!Array.isArray(model?.parts)) throw new Error('"parts"（部品の一覧）がありません。');
-  return model;
+  // the request this screen copies (or the spec itself) pasted back here instead of the AI's answer
+  if (/人型ロボット（XS）の機体データを作ってください|# XS部品エディタ：AI向けの機体データ仕様/.test(text))
+    throw new AiTextError('貼り付けたのは、AI に渡す「頼み方」です。この文章を ChatGPT などの AI に貼り付けて送り、AI が返してきた答え（JSON）をここに貼ってください。');
+  const blocks = [...text.matchAll(/```[a-zA-Z]*\s*\n?([\s\S]*?)(?:```|$)/g)].map(m => m[1]).filter(b => /[{[]/.test(b));
+  const bare = text.replace(/```[a-zA-Z]*/g, '');
+  const candidates = [...blocks];
+  if (blocks.length > 1) candidates.push(blocks.join('\n'));   // one answer split over two messages
+  // outside code blocks: every '{' that opens an object holding "parts", then a bare list of parts
+  let cutOff = false;
+  for (const m of bare.matchAll(/\{/g)) {
+    const end = closingBrace(bare, m.index);
+    if (end < 0) { if (/parts/.test(bare.slice(m.index))) cutOff = true; break; }
+    const s = bare.slice(m.index, end + 1);
+    if (/["']?parts["']?\s*:/.test(s)) { candidates.push(s); break; }
+  }
+  const a = bare.indexOf('['), z = bare.lastIndexOf(']');
+  if (a >= 0 && z > a) candidates.push(bare.slice(a, z + 1));
+  let firstError = null;
+  for (const c of candidates) {
+    for (const src of [c, lenientJson(c)]) {
+      let data;
+      try { data = JSON.parse(src); } catch (e) { firstError ??= { e, src }; continue; }
+      const model = Array.isArray(data) ? { parts: data } : Array.isArray(data?.samples) ? data.samples[0] : data;
+      if (Array.isArray(model?.parts)) return model;
+    }
+  }
+  if (!candidates.length && !cutOff) throw new AiTextError('JSON が見つかりません。AI の答えの { から } までを、まるごと貼り付けてください。');
+  if (cutOff || (firstError && /end of|Unterminated|Unexpected end/i.test(firstError.e.message)))
+    throw new AiTextError('AI の答えが途中で切れています（最後の } まで届いていません）。AI の答えが長すぎて止まったときに起きます。AI に「部品の数を 80 個くらいに減らして、JSON 全体を 1 回で出して」と頼んでください。続きを出してもらった場合は、1 回目と 2 回目の答えを続けて貼り付けても読めます。');
+  if (!firstError) throw new AiTextError('"parts"（部品の一覧）がありません。');
+  // show where it broke, so it can be handed back to the AI
+  const pos = Number(/position (\d+)/.exec(firstError.e.message)?.[1] ?? -1);
+  const near = pos >= 0 ? `\n問題の場所の近く: …${firstError.src.slice(Math.max(0, pos - 60), pos + 40).replace(/\s+/g, ' ')}…` : '';
+  throw new AiTextError(`JSON の書き方に誤りがあって読めません（${firstError.e.message}）。${near}`);
 }
 const RANGES = { depth: [0.001, 20], bevel: [0, 5], bevelSegs: [1, 8], corner: [0, 5], cornerSegs: [1, 8], taper: [0.05, 3],
   tiltY: [-10, 10], ridge: [0, 10], segments: [3, 64], arrayCount: [1, 16], metal: [0, 1], rough: [0, 1] };
@@ -2460,7 +2520,12 @@ $('#aJson').oninput = () => { try { const m = parseAiText($('#aJson').value); if
 $('#aName').onchange = () => { sceneAi = $('#aName').value.trim().slice(0, 40); writeCurrent(); };
 $('#aLoad').onclick = () => {
   let model;
-  try { model = parseAiText($('#aJson').value); } catch (e) { say('#aMsg', e.message, 'ng'); return; }
+  try { model = parseAiText($('#aJson').value); } catch (e) {
+    const forAi = e instanceof AiTextError && !e.message.startsWith('貼り付けたのは');
+    importErrors = forAi ? e.message : '';
+    $('#aErrCopy').hidden = !forAi;
+    say('#aMsg', e.message, 'ng'); return;
+  }
   const { ok, errors, unknown } = checkAiParts(model.parts.slice(0, 400));
   if (model.parts.length > 400) errors.push(`部品が ${model.parts.length} 個あります。400 個までしか読み込めません。`);
   importErrors = errors.join('\n');
@@ -2477,7 +2542,7 @@ $('#aLoad').onclick = () => {
   say('#aMsg', lines.join('\n'), errors.length ? 'ng' : 'ok');
 };
 const fixHead = () => `XS部品エディタで確かめた結果です。指摘された部品の位置や大きさを直して、機体全体の JSON をもう一度出力してください（差分ではなく全体）。\n仕様: ${SPEC_URL}\n座標は 1 単位 = 6 m、+Y が上、+Z が正面、+X が機体の左です。`;
-$('#aErrCopy').onclick = async () => say('#aMsg', copied(await copyText(`${fixHead()}\n\n【読み込めなかった部品】\n${importErrors}`)));
+$('#aErrCopy').onclick = async () => say('#aMsg', copied(await copyText(`${fixHead()}\n\n【読み込めなかった理由】\n${importErrors}`)));
 $('#aCheckCopy').onclick = () => {
   if (!parts.some(p => p.op === 'add' && !p.blockout)) { say('#aCheckMsg', 'チェックする部品がありません。', 'ng'); return; }
   say('#aCheckMsg', 'チェック中…（姿勢ごとに調べるので少しかかります）');
