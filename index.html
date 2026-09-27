@@ -37,6 +37,11 @@ body.has-sel #inspector { display: block; }
 #viewOpts { display: contents; }
 #menuPop #viewOpts { display: flex; flex-direction: column; gap: 4px; }
 #tabs, #qa { display: none; }
+#updBar { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 20; width: min(640px, calc(100% - 16px));
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #2a2412; border: 1px solid var(--accent); border-radius: 10px;
+  padding: 8px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.5); }
+#updBar[hidden] { display: none; }
+#updBar span { flex: 1; min-width: 200px; }
 #view canvas { display: block; }
 h1 { font-size: 15px; margin: 0 0 10px; letter-spacing: .04em; }
 h2 { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; margin: 14px 0 6px; font-weight: 600; }
@@ -162,6 +167,7 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
 </script>
 </head>
 <body>
+<div id="updBar" hidden><span>新しい版のエディタが出ています。作業中の機体は自動で保存されているので、そのまま続きから開けます。</span><button id="updGo" class="on">今すぐ更新</button><button id="updLater">あとで</button></div>
 <div id="app">
   <aside id="side">
     <h1>XS部品エディタ</h1>
@@ -215,6 +221,7 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
           <button id="bGame" title="docs/models.md の仕様（骨・向き・描画回数・陣営色・LOD）で書き出す">ゲーム用に書き出す</button>
           <hr>
           <button id="bClear">全消去</button>
+          <span id="buildInfo" class="hint"></span>
         </div>
       </div>
     </div>
@@ -302,6 +309,9 @@ import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { MeshBVH } from 'three-mesh-bvh';
 
 const $ = s => document.querySelector(s);
+// Version footprint: the publish workflow writes the commit here and into version.json next to the page.
+// The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
+const BUILD = '5aa707f';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -1356,7 +1366,7 @@ const POSES = {
 // The game's real motion, sampled frame by frame (xs-editor/poses.json, written by tools/genposes.ts):
 // { moves: { name: [ { hips: { dy, x, y, z }, torso: { x, y, z }, ... } x 16 ] } }. Missing file = basic poses only.
 let MOVES = {};
-fetch('poses.json').then(r => (r.ok ? r.json() : null)).then(j => { if (j && j.moves) { MOVES = j.moves; fillPoseSelector(); } }).catch(() => {});
+fetch(`poses.json?v=${BUILD}`).then(r => (r.ok ? r.json() : null)).then(j => { if (j && j.moves) { MOVES = j.moves; fillPoseSelector(); } }).catch(() => {});
 const poseOf = (name, frame) => POSES[name] || MOVES[name]?.[frame] || {};
 
 // parts that are the rotation centre of a bone (the child side of the joint), by name unless set per part
@@ -2618,11 +2628,34 @@ $('#stClose').onclick = closeStart;
 $('#start').onclick = e => { if (e.target === $('#start')) closeStart(); };
 $('#bStart').onclick = openStart;
 
+// ---------- new version: offer a reload to a URL the browser has not cached (?v=<build>) ----------
+let newBuild = null;
+async function checkUpdate() {
+  if (BUILD === 'dev' || newBuild) return;
+  try {
+    const j = await (await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' })).json();
+    if (j?.build && j.build !== BUILD) { newBuild = j.build; $('#updBar').hidden = false; }
+  } catch { /* offline or no version file */ }
+}
+$('#updGo').onclick = () => {
+  writeCurrent();
+  try { sessionStorage.setItem('xs-editor-resume', '1'); } catch { /* storage blocked */ }
+  location.replace(`${location.pathname}?v=${encodeURIComponent(newBuild)}${location.hash}`);
+};
+$('#updLater').onclick = () => { $('#updBar').hidden = true; };
+$('#buildInfo').textContent = `版: ${BUILD}`;
+setTimeout(checkUpdate, 3000);
+setInterval(checkUpdate, 10 * 60_000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+
 buildPresetButtons();
 {
   const cur = readCurrent();
   loadScene(structuredClone(cur ? cur.parts : BUILTIN[0].parts), cur?.ai);
   let skip = false; try { skip = localStorage.getItem(SKIP_START_KEY) === '1'; } catch { /* storage blocked */ }
+  // just reloaded for a new version: straight back to the model being edited
+  try { if (sessionStorage.getItem('xs-editor-resume')) { sessionStorage.removeItem('xs-editor-resume'); skip = true; } } catch { /* storage blocked */ }
+  if (new URLSearchParams(location.search).has('v')) history.replaceState(null, '', location.pathname + location.hash);
   if (!skip) openStart();
 }
 </script>
