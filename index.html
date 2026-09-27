@@ -1,0 +1,1995 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XS部品エディタ</title>
+<style>
+:root {
+  --bg: #15181d; --panel: #1d2128; --panel2: #252a33; --line: #323843;
+  --text: #e3e7ee; --dim: #8b94a3; --accent: #f0a93b; --sub: #ff6b6b; --add: #5cc8ff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 13px/1.4 system-ui, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; }
+#app { display: flex; height: 100%; }
+#side { width: 340px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
+  overflow-y: auto; padding: 12px; }
+#view { flex: 1; position: relative; min-width: 0; }
+#view canvas { display: block; }
+h1 { font-size: 15px; margin: 0 0 10px; letter-spacing: .04em; }
+h2 { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; margin: 14px 0 6px; font-weight: 600; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 6px; font: inherit; cursor: pointer; }
+button:hover { border-color: #4a5260; }
+button:disabled { opacity: .4; cursor: default; }
+button.on {border-color: var(--accent); color: var(--accent); }
+button.subp { color: #ffb0b0; }
+#list { list-style: none; margin: 0; padding: 0; }
+#list li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; cursor: pointer; }
+#list li:hover { background: var(--panel2); }
+#list li.sel { background: #2f3542; outline: 1px solid var(--accent); }
+.badge { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; font-weight: 700; flex: none; font-size: 12px; }
+.badge.add { background: #1e3a4a; color: var(--add); }
+.badge.sub { background: #4a1e24; color: var(--sub); }
+.badge.blk { background: #1d3552; color: #7fbfff; }
+.flow { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 4px; }
+.flow .step { display: flex; align-items: center; gap: 8px; margin: 4px 0; flex-wrap: wrap; }
+.posesel { display: flex; align-items: center; gap: 4px; background: rgba(29,33,40,.9); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; color: var(--dim); }
+.posesel select { width: auto; padding: 2px 4px; }
+.flow .step b { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: #1a1a1a; display: grid; place-items: center; font-size: 11px; flex: none; }
+#checkResult { font-size: 12px; margin-top: 6px; }
+#checkResult .ok { color: #7ee2a8; }
+#checkResult .ng { color: #ff9b9b; }
+#checkResult li { cursor: pointer; margin: 3px 0; }
+#checkResult li:hover { text-decoration: underline; }
+#checkResult ul { margin: 4px 0 0; padding-left: 16px; }
+.swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; margin-left: auto; }
+.row { display: grid; grid-template-columns: 112px 1fr 44px; align-items: center; gap: 6px; margin: 4px 0; }
+.row label { color: var(--dim); }
+.row output { text-align: right; font-variant-numeric: tabular-nums; color: var(--dim); }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+select { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font: inherit; }
+input[type=text] { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font: inherit; }
+.seg { display: flex; gap: 4px; }
+.seg button { flex: 1; }
+#profile { width: 100%; aspect-ratio: 1; background: #101317; border: 1px solid var(--line); border-radius: 8px; touch-action: none; display: block; }
+.hint { color: var(--dim); font-size: 11px; margin: 4px 0; }
+.check { display: flex; align-items: center; gap: 6px; color: var(--dim); margin: 4px 0; }
+#toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; flex-wrap: wrap; pointer-events: none; }
+#toolbar > * { pointer-events: auto; }
+#toolbar .sp { flex: 1; pointer-events: none; }
+#toolbar button { background: rgba(29,33,40,.9); }
+#help { position: absolute; bottom: 10px; left: 12px; color: var(--dim); font-size: 11px; pointer-events: none; }
+#stat { position: absolute; bottom: 10px; right: 12px; color: var(--dim); font-size: 11px; }
+#gallery { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 10; padding: 16px; }
+#gallery[hidden] { display: none; }
+.gbox { width: min(820px, 100%); max-height: 88vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.ghead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.ghead h1 { margin: 0; }
+.gsave { display: flex; gap: 6px; margin-bottom: 12px; }
+.gsave input { flex: 1; }
+.ggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.gcard { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+.gthumb { aspect-ratio: 4 / 3; background: #101317; display: grid; place-items: center; color: var(--dim); font-size: 11px; }
+.gthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gbody { padding: 8px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.gname { font-weight: 600; overflow-wrap: anywhere; }
+.gmeta { color: var(--dim); font-size: 11px; }
+.gbtns { display: flex; gap: 4px; margin-top: auto; padding-top: 4px; }
+.gbtns button { flex: 1; padding: 4px; white-space: nowrap; }
+.gfoot { display: flex; gap: 6px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  #app { flex-direction: column-reverse; }
+  #side { width: 100%; height: 50%; border-right: none; border-top: 1px solid var(--line); }
+}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.3/build/index.module.js",
+  "three-bvh-csg": "https://cdn.jsdelivr.net/npm/three-bvh-csg@0.0.16/build/index.module.js"
+} }
+</script>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <h1>XS部品エディタ</h1>
+    <h2>作り方</h2>
+    <div class="flow">
+      <div class="step"><b>1</b>あたり（大まかな形）を置く<span class="hint">「あたり箱」か、部品の「あたり」にチェック</span></div>
+      <div class="step"><b>2</b>関節を置く<span class="hint">肩・ひじ・股関節・ひざ・首・腹に回転体を置き、「回転の中心」にする。回る側との境目は軸まわりの丸い形に</span></div>
+      <div class="step"><b>3</b>あたりに沿って装甲・飾りのブロックを付けていく</div>
+      <div class="step"><b>4</b>だいたい埋まったら <button id="bDelBlock">あたりを削除</button><span id="blockCount" class="hint"></span></div>
+      <div class="step"><b>5</b><button id="bCheck">つながりチェック</button><span class="hint">浮いた部品は別の部品でつなぐ</span></div>
+      <div class="step"><b>6</b><button id="bJoint">関節チェック</button><span class="hint">ゲームの姿勢で外れ・めり込みを調べる</span></div>
+      <div id="checkResult"></div>
+    </div>
+    <h2>足す部品</h2>
+    <div class="grid" id="addButtons"></div>
+    <h2>引く部品（穴・溝）</h2>
+    <div class="grid" id="subButtons"></div>
+    <h2>部品一覧</h2>
+    <p class="hint">引く部品は、一覧でそれより上にある部品だけを削ります。</p>
+    <ul id="list"></ul>
+    <div id="props"></div>
+  </aside>
+  <main id="view">
+    <div id="toolbar">
+      <button data-mode="translate" class="on">移動 W</button>
+      <button data-mode="rotate">回転 E</button>
+      <button data-mode="scale">拡大 R</button>
+      <button id="bUndo" title="Ctrl+Z">↶ 元に戻す</button>
+      <button id="bRedo" title="Ctrl+Y / Ctrl+Shift+Z">↷ やり直し</button>
+      <span class="sp"></span>
+      <button id="tEdges" class="on">輪郭線</button>
+      <button id="tGhost">引く部品を表示</button>
+      <button id="tBlock" class="on">あたりを表示</button>
+      <label class="posesel">姿勢 <select id="poseSel"></select><input type="range" id="poseFrame" min="0" max="15" step="1" value="0" style="width: 90px; display: none" title="フレーム"></label>
+      <button id="bExport">GLB書き出し</button>
+      <button id="bGame" title="docs/models.md の仕様（骨・向き・描画回数・陣営色・LOD）で書き出す">ゲーム用に書き出す</button>
+      <button id="bSample">サンプル集</button>
+      <button id="bClear">全消去</button>
+    </div>
+    <div id="help">クリックで選択 ・ ドラッグで回転 ・ 右ドラッグで平行移動 ・ Ctrl+D 複製 ・ Delete 削除</div>
+    <div id="stat"></div>
+  </main>
+</div>
+<div id="gallery" hidden>
+  <div class="gbox">
+    <div class="ghead"><h1>サンプル集</h1><button id="gClose">閉じる Esc</button></div>
+    <div class="gsave"><input type="text" id="gName" placeholder="名前（例：重量級タイプ）" maxlength="60"><button id="gSave" class="on">今の形を保存</button></div>
+    <div id="gGrid" class="ggrid"></div>
+    <div class="gfoot">
+      <span class="hint" id="gNote"></span><span style="flex:1"></span>
+      <button id="gExport">ファイルに書き出す</button><button id="gImport">ファイルから読み込む</button>
+      <input type="file" id="gFile" accept=".json,application/json" hidden>
+    </div>
+    <p class="hint">自分のサンプルはこのブラウザに保存されます。別のPCやブラウザに持っていくときは「ファイルに書き出す」を使ってください。</p>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { toCreasedNormals, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
+import { MeshBVH } from 'three-mesh-bvh';
+
+const $ = s => document.querySelector(s);
+const deg = THREE.MathUtils.degToRad;
+
+// ---------- three.js setup ----------
+const view = $('#view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+view.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1d22);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 100);
+camera.position.set(3.0, 2.2, 6.0);
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.target.set(0, 1.85, 0);
+orbit.enableDamping = true;
+
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(3, 7, 5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4 });
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+const rim = new THREE.DirectionalLight(0x88aaff, 0.8);
+rim.position.set(-4, 3, -5);
+scene.add(rim);
+
+scene.add(new THREE.GridHelper(10, 40, 0x39414d, 0x262b33));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.ShadowMaterial({ opacity: 0.35 }));
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.001;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const resultGroup = new THREE.Group(); scene.add(resultGroup);
+const ghostGroup = new THREE.Group(); scene.add(ghostGroup);
+const blockGroup = new THREE.Group(); scene.add(blockGroup);
+const proxyGroup = new THREE.Group(); scene.add(proxyGroup);
+
+const gizmo = new TransformControls(camera, renderer.domElement);
+gizmo.setSize(0.8);
+gizmo.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; if (!e.value) save(); });
+gizmo.addEventListener('objectChange', () => scheduleRebuild());
+scene.add(gizmo);
+
+new ResizeObserver(() => {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h, false);
+  renderer.domElement.style.width = w + 'px';
+  renderer.domElement.style.height = h + 'px';
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}).observe(view);
+
+renderer.setAnimationLoop(() => { orbit.update(); renderer.render(scene, camera); });
+
+// ---------- parts ----------
+const rect = (w, h) => [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]];
+
+const PRESETS = {
+  blockbox: { label: 'あたり箱', name: 'あたり', kind: 'extrude', pts: rect(0.6, 0.6), depth: 0.6, bevel: 0, corner: 0, blockout: true },
+  box:      { label: '面取り箱', name: '面取り箱', kind: 'extrude', pts: rect(0.8, 0.8), depth: 0.8, bevel: 0.05, bevelSegs: 1 },
+  roundbox: { label: '丸箱', name: '丸箱', kind: 'extrude', pts: rect(0.8, 0.8), depth: 0.8, bevel: 0.1, bevelSegs: 4, corner: 0.15, cornerSegs: 4 },
+  plate:    { label: '装甲板', name: '装甲板', kind: 'extrude', pts: [[-0.8, -0.5], [0.5, -0.5], [0.8, -0.15], [0.8, 0.5], [-0.55, 0.5], [-0.8, 0.25]], depth: 0.2, bevel: 0.035, corner: 0.06 },
+  wedge:    { label: 'くさび', name: 'くさび', kind: 'extrude', pts: [[-0.6, -0.3], [0.6, -0.3], [0.3, 0.3], [-0.3, 0.3]], depth: 0.6, bevel: 0.04, corner: 0.05, taper: 0.6 },
+  joint:    { label: '関節', name: '関節', kind: 'lathe', pts: [[0.3, -0.2], [0.36, -0.13], [0.36, 0.13], [0.3, 0.2]], segments: 28 },
+  thruster: { label: 'スラスター', name: 'スラスター', kind: 'lathe', pts: [[0.12, 0.3], [0.15, 0.12], [0.28, -0.15], [0.33, -0.3]], segments: 24 },
+  nut:      { label: '六角ナット', name: '六角ナット', kind: 'lathe', pts: [[0.12, -0.05], [0.12, 0.05]], segments: 6 },
+  piston:   { label: 'ピストン', name: 'ピストン', kind: 'lathe', pts: [[0.12, -0.6], [0.12, 0], [0.07, 0], [0.07, 0.6]], segments: 20 },
+  lathe:    { label: '自由回転体', name: '回転体', kind: 'lathe', pts: [[0.4, -0.4], [0.4, 0.4]], segments: 32 },
+  slit:     { label: 'スリット', name: 'スリット', kind: 'extrude', op: 'sub', pts: rect(0.5, 0.05), depth: 0.2, bevel: 0, arrayCount: 4, arrayStep: [0, 0.1, 0] },
+  hole:     { label: '丸穴', name: '丸穴', kind: 'lathe', op: 'sub', pts: [[0.1, -0.6], [0.1, 0.6]], segments: 20 },
+  groove:   { label: 'パネルライン', name: 'パネルライン', kind: 'extrude', op: 'sub', pts: rect(0.025, 0.8), depth: 0.06, bevel: 0 },
+  cutbox:   { label: '箱で削る', name: '削り箱', kind: 'extrude', op: 'sub', pts: rect(0.5, 0.5), depth: 0.5, bevel: 0 },
+};
+
+const DEFAULTS = {
+  name: '部品', kind: 'extrude', op: 'add', color: '#c3c9d2', mirror: false,
+  pts: rect(0.8, 0.8), depth: 0.4, bevel: 0.04, bevelSegs: 1, corner: 0, cornerSegs: 1, taper: 1, tiltY: 0, ridge: 0,
+  segments: 24, arrayCount: 1, arrayStep: [0, 0.15, 0], metal: 0.55, rough: 0.38, blockout: false, bone: 'auto', team: false, glow: null, pivot: 'auto',
+  pos: [0, 0, 0], rot: [0, 0, 0], scl: [1, 1, 1],
+};
+const FIELDS = Object.keys(DEFAULTS);
+
+let parts = [];
+let selectedId = null;
+let nextId = 1;
+
+function makePart(data) {
+  const p = { id: nextId++ };
+  for (const k of FIELDS) p[k] = structuredClone(data[k] ?? DEFAULTS[k]);
+  p.proxy = new THREE.Object3D();
+  p.proxy.position.fromArray(p.pos);
+  p.proxy.rotation.set(...p.rot);
+  p.proxy.scale.fromArray(p.scl);
+  p.proxy.userData.partId = p.id;
+  proxyGroup.add(p.proxy);
+  return p;
+}
+
+function serialize(p) {
+  const out = {};
+  for (const k of FIELDS) out[k] = structuredClone(p[k]);
+  out.pos = p.proxy.position.toArray();
+  out.rot = [p.proxy.rotation.x, p.proxy.rotation.y, p.proxy.rotation.z];
+  out.scl = p.proxy.scale.toArray();
+  return out;
+}
+
+const getPart = id => parts.find(p => p.id === id);
+
+// ---------- geometry ----------
+// 2D profile corners: replace each vertex by a chamfer (segs=1) or a rounded arc (segs>1)
+function roundCorners(pts, r, segs, closed) {
+  if (r <= 0) return pts.map(p => p.slice());
+  const n = pts.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[i];
+    if (!closed && (i === 0 || i === n - 1)) { out.push(p.slice()); continue; }
+    const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+    const v1 = [a[0] - p[0], a[1] - p[1]], v2 = [b[0] - p[0], b[1] - p[1]];
+    const l1 = Math.hypot(...v1), l2 = Math.hypot(...v2);
+    const d = Math.min(r, l1 * 0.45, l2 * 0.45);
+    if (d < 1e-4) { out.push(p.slice()); continue; }
+    const s = [p[0] + v1[0] / l1 * d, p[1] + v1[1] / l1 * d];
+    const e = [p[0] + v2[0] / l2 * d, p[1] + v2[1] / l2 * d];
+    for (let k = 0; k <= segs; k++) {
+      const t = k / segs, u = 1 - t;
+      out.push([u * u * s[0] + 2 * u * t * p[0] + t * t * e[0], u * u * s[1] + 2 * u * t * p[1] + t * t * e[1]]);
+    }
+  }
+  return out;
+}
+
+function signedArea(loop) {
+  let a = 0;
+  for (let i = 0; i < loop.length; i++) {
+    const p = loop[i], q = loop[(i + 1) % loop.length];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  return a / 2;
+}
+
+// closed silhouette of a lathe profile (right half, including the axis)
+function latheLoop(p) {
+  const pts = roundCorners(p.pts.map(([x, y]) => [Math.max(0, x), y]), p.corner, p.cornerSegs, false);
+  let loop = [[0, pts[0][1]], ...pts, [0, pts[pts.length - 1][1]]];
+  loop = loop.filter((v, i) => i === 0 || Math.hypot(v[0] - loop[i - 1][0], v[1] - loop[i - 1][1]) > 1e-6);
+  if (signedArea(loop) < 0) loop.reverse();
+  return loop;
+}
+
+function buildLocalGeometry(p) {
+  const key = JSON.stringify([p.kind, p.pts, p.depth, p.bevel, p.bevelSegs, p.corner, p.cornerSegs, p.taper, p.tiltY, p.ridge, p.segments]);
+  if (p._geoKey === key) return p._geo;
+  let g;
+  if (p.kind === 'extrude') {
+    const pts = roundCorners(p.pts, p.corner, p.cornerSegs, true);
+    const shape = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+    const b = Math.min(p.bevel, p.depth * 0.45);
+    const inner = Math.max(0.001, p.depth - 2 * b);
+    g = new THREE.ExtrudeGeometry(shape, {
+      depth: inner, curveSegments: 1,
+      bevelEnabled: b > 0.0005, bevelThickness: b, bevelSize: b, bevelOffset: -b, bevelSegments: p.bevelSegs,
+    });
+    g.translate(0, 0, -inner / 2);
+    if (p.taper !== 1) {
+      const pos = g.attributes.position, half = p.depth / 2;
+      for (let i = 0; i < pos.count; i++) {
+        const t = (pos.getZ(i) + half) / p.depth;
+        const s = 1 + (p.taper - 1) * t;
+        pos.setXY(i, pos.getX(i) * s, pos.getY(i) * s);
+      }
+    }
+    // Angle the faces: thickness varies with height (tiltY) and shrinks away from the centre line (ridge),
+    // so the front becomes sloped and/or folded into two planes. Rates are per unit of local x/y, which lets
+    // a plate with the same pos/tiltY/ridge and a slightly larger depth sit flush on the sloped surface.
+    if (p.tiltY || p.ridge) {
+      const pos = g.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const k = Math.max(0.05, 1 + p.tiltY * pos.getY(i) - p.ridge * Math.abs(pos.getX(i)));
+        pos.setZ(i, pos.getZ(i) * k);
+      }
+    }
+  } else {
+    g = new THREE.LatheGeometry(latheLoop(p).map(([x, y]) => new THREE.Vector2(x, y)), p.segments);
+  }
+  g.deleteAttribute('uv');
+  g = toCreasedNormals(g, deg(35));
+  p._geo?.dispose();
+  p._geo = g; p._geoKey = key;
+  return g;
+}
+
+function flipWinding(g) {
+  for (const name of ['position', 'normal']) {
+    const a = g.attributes[name].array;
+    for (let i = 0; i < a.length; i += 9)
+      for (let k = 0; k < 3; k++) { const t = a[i + 3 + k]; a[i + 3 + k] = a[i + 6 + k]; a[i + 6 + k] = t; }
+  }
+}
+
+const MIRROR = new THREE.Matrix4().makeScale(-1, 1, 1);
+function worldGeometries(p) {
+  const base = buildLocalGeometry(p);
+  p.proxy.updateMatrixWorld();
+  const mats = [];
+  for (let k = 0; k < Math.max(1, p.arrayCount); k++) {
+    const m = new THREE.Matrix4().makeTranslation(p.arrayStep[0] * k, p.arrayStep[1] * k, p.arrayStep[2] * k).multiply(p.proxy.matrixWorld);
+    mats.push(m);
+    if (p.mirror) mats.push(MIRROR.clone().multiply(m));
+  }
+  return mats.map(m => {
+    const g = base.clone().applyMatrix4(m);
+    if (m.determinant() < 0) flipWinding(g);
+    g.computeBoundingBox();
+    return g;
+  });
+}
+
+// ---------- rebuild (CSG) ----------
+const evaluator = new Evaluator();
+evaluator.attributes = ['position', 'normal'];
+evaluator.useGroups = false;
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x0b0d10, transparent: true, opacity: 0.55 });
+const ghostEdgeMat = new THREE.LineBasicMaterial({ color: 0xff6b6b, transparent: true, opacity: 0.5 });
+const ghostEdgeSelMat = new THREE.LineBasicMaterial({ color: 0xffd0d0 });
+const ghostMat = new THREE.MeshBasicMaterial({ color: 0xff6b6b, transparent: true, opacity: 0.08, depthWrite: false });
+const ghostSelMat = new THREE.MeshBasicMaterial({ color: 0xff6b6b, transparent: true, opacity: 0.22, depthWrite: false });
+let showEdges = true, showGhosts = false, showBlock = true;
+const blockMat = new THREE.MeshStandardMaterial({ color: 0x5aa9ff, transparent: true, opacity: 0.22, depthWrite: false, roughness: 0.8 });
+const blockSelMat = new THREE.MeshStandardMaterial({ color: 0x5aa9ff, transparent: true, opacity: 0.42, depthWrite: false, roughness: 0.8 });
+const blockEdgeMat = new THREE.LineBasicMaterial({ color: 0x7fbfff, transparent: true, opacity: 0.7 });
+const disconnectedMat = new THREE.MeshStandardMaterial({ color: 0xff4d4d, emissive: 0x991111, roughness: 0.5 });
+
+function clearGroup(group) {
+  for (const o of [...group.children]) {
+    o.geometry?.dispose();
+    if (o.material && o.userData.ownMaterial) o.material.dispose();
+    group.remove(o);
+  }
+}
+
+// Like EdgesGeometry, but only edges shared by exactly two faces that meet at a crease.
+// CSG output has T-junctions whose open edges EdgesGeometry would draw as stray lines.
+function creaseEdges(geometry, angleDeg) {
+  const pos = geometry.attributes.position, idx = geometry.index;
+  const triCount = idx ? idx.count / 3 : pos.count / 3;
+  const cosT = Math.cos(deg(angleDeg));
+  const q = i => {
+    const v = idx ? idx.getX(i) : i;
+    return [pos.getX(v), pos.getY(v), pos.getZ(v)];
+  };
+  const keyOf = v => `${Math.round(v[0] * 1e4)},${Math.round(v[1] * 1e4)},${Math.round(v[2] * 1e4)}`;
+  const map = new Map();
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let t = 0; t < triCount; t++) {
+    const v = [q(3 * t), q(3 * t + 1), q(3 * t + 2)];
+    a.fromArray(v[0]); b.fromArray(v[1]); c.fromArray(v[2]);
+    const n = new THREE.Vector3().subVectors(c, b).cross(a.clone().sub(b));
+    if (n.lengthSq() < 1e-14) continue;
+    n.normalize();
+    for (let k = 0; k < 3; k++) {
+      const p0 = v[k], p1 = v[(k + 1) % 3];
+      const k0 = keyOf(p0), k1 = keyOf(p1);
+      const key = k0 < k1 ? k0 + '|' + k1 : k1 + '|' + k0;
+      const e = map.get(key);
+      if (e) e.normals.push(n); else map.set(key, { p0, p1, normals: [n] });
+    }
+  }
+  const out = [];
+  for (const e of map.values())
+    if (e.normals.length === 2 && e.normals[0].dot(e.normals[1]) < cosT) out.push(...e.p0, ...e.p1);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+  return g;
+}
+
+let rebuildQueued = false;
+function scheduleRebuild() {
+  if (rebuildQueued) return;
+  rebuildQueued = true;
+  requestAnimationFrame(() => { rebuildQueued = false; rebuild(); });
+}
+
+function rebuild() {
+  const t0 = performance.now();
+  clearGroup(resultGroup); clearGroup(ghostGroup); clearGroup(blockGroup);
+  for (const p of parts.filter(p => p.blockout)) {
+    const sel = p.id === selectedId;
+    for (const g of worldGeometries(p)) {
+      const bm = new THREE.Mesh(g, sel ? blockSelMat : blockMat);
+      bm.userData.partId = p.id;
+      bm.visible = showBlock || sel;
+      blockGroup.add(bm);
+      const be = new THREE.LineSegments(new THREE.EdgesGeometry(g, 30), blockEdgeMat);
+      be.visible = bm.visible;
+      blockGroup.add(be);
+    }
+  }
+  let tris = 0;
+
+  // a cutting part only cuts the parts listed above it, so later parts (eyes in a recess) survive
+  const subBrushes = [];
+  for (const p of parts.filter(p => p.op === 'sub' && !p.blockout)) {
+    for (const g of worldGeometries(p)) {
+      const b = new Brush(g); b.updateMatrixWorld();
+      b.userData.order = parts.indexOf(p); subBrushes.push(b);
+      const sel = p.id === selectedId;
+      const gm = new THREE.Mesh(g, sel ? ghostSelMat : ghostMat);
+      gm.userData.partId = p.id;
+      gm.visible = showGhosts || sel;
+      ghostGroup.add(gm);
+      const ge = new THREE.LineSegments(new THREE.EdgesGeometry(g, 30), sel ? ghostEdgeSelMat : ghostEdgeMat);
+      ge.visible = gm.visible;
+      ghostGroup.add(ge);
+    }
+  }
+
+  for (const p of parts.filter(p => p.op === 'add' && !p.blockout)) {
+    const mat = new THREE.MeshStandardMaterial({ color: p.color, metalness: p.metal, roughness: p.rough });
+    let first = true;
+    for (const g of worldGeometries(p)) {
+      let brush = new Brush(g); brush.updateMatrixWorld();
+      for (const sb of subBrushes) {
+        if (sb.userData.order < parts.indexOf(p)) continue;
+        if (!g.boundingBox.intersectsBox(sb.geometry.boundingBox)) continue;
+        const next = evaluator.evaluate(brush, sb, SUBTRACTION);
+        if (brush.geometry !== g) brush.geometry.dispose();
+        brush = next;
+      }
+      if (brush.geometry !== g) g.dispose();
+      const mesh = new THREE.Mesh(brush.geometry, mat);
+      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.userData.partId = p.id;
+      mesh.userData.ownMaterial = first; first = false;
+      resultGroup.add(mesh);
+      tris += brush.geometry.attributes.position.count / 3;
+      if (showEdges) resultGroup.add(new THREE.LineSegments(creaseEdges(brush.geometry, 30), edgeMat));
+    }
+  }
+  if (viewPose !== '待機') applyViewPose();
+  $('#stat').textContent = `${parts.length} 部品 ・ ${Math.round(tris).toLocaleString()} 三角形 ・ ${(performance.now() - t0).toFixed(0)} ms`;
+}
+
+// ---------- selection & picking ----------
+const raycaster = new THREE.Raycaster();
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downAt || e.button !== 0 || gizmo.axis) return;
+  if (Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  raycaster.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
+  const targets = [...resultGroup.children, ...ghostGroup.children, ...blockGroup.children].filter(o => o.isMesh && o.visible);
+  const hit = raycaster.intersectObjects(targets, false)[0];
+  select(hit ? hit.object.userData.partId : null);
+});
+
+function select(id) {
+  selectedId = id;
+  const p = getPart(id);
+  if (p) gizmo.attach(p.proxy); else gizmo.detach();
+  renderList(); renderProps(); scheduleRebuild();
+}
+
+document.querySelectorAll('#toolbar [data-mode]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+function setMode(m) {
+  gizmo.setMode(m);
+  document.querySelectorAll('#toolbar [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+}
+window.addEventListener('keydown', e => {
+  if (galleryOpen()) { if (e.key === 'Escape') closeGallery(); return; }
+  if (e.target.matches?.('input[type=text], textarea')) return;
+  const k = e.key.toLowerCase();
+  if (k === 'w') setMode('translate');
+  else if (k === 'e') setMode('rotate');
+  else if (k === 'r') setMode('scale');
+  else if ((k === 'delete' || k === 'backspace') && selectedId) deletePart(selectedId);
+  else if (k === 'd' && (e.ctrlKey || e.metaKey) && selectedId) { e.preventDefault(); duplicatePart(selectedId); }
+  else if (k === 'escape') select(null);
+  else if (k === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if (k === 'y' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); redo(); }
+});
+
+// ---------- part operations ----------
+function addPart(data, doSelect = true) {
+  const p = makePart(data);
+  parts.push(p);
+  if (doSelect) select(p.id);
+  save();
+  return p;
+}
+function deletePart(id) {
+  const p = getPart(id);
+  if (!p) return;
+  proxyGroup.remove(p.proxy); p._geo?.dispose();
+  parts = parts.filter(q => q !== p);
+  select(null); save();
+}
+function duplicatePart(id) {
+  const d = serialize(getPart(id));
+  d.pos[0] += 0.2; d.name += ' コピー';
+  addPart(d);
+}
+
+function buildPresetButtons() {
+  for (const [key, pr] of Object.entries(PRESETS)) {
+    const b = document.createElement('button');
+    b.textContent = pr.label;
+    if (pr.op === 'sub') b.classList.add('subp');
+    b.onclick = () => {
+      const t = orbit.target;
+      addPart({ ...pr, pos: [t.x, t.y, t.z] });
+    };
+    (pr.op === 'sub' ? $('#subButtons') : $('#addButtons')).appendChild(b);
+  }
+}
+
+// ---------- list ----------
+function renderList() {
+  const ul = $('#list');
+  ul.innerHTML = '';
+  for (const p of parts) {
+    const li = document.createElement('li');
+    li.className = p.id === selectedId ? 'sel' : '';
+    li.innerHTML = (p.blockout ? `<span class="badge blk">あ</span><span></span>` : `<span class="badge ${p.op}">${p.op === 'add' ? '+' : '−'}</span><span></span>`) +
+      (p.op === 'add' ? `<span class="swatch" style="background:${p.color}"></span>` : '');
+    li.children[1].textContent = p.name + (p.mirror ? ' ⇋' : '') + (p.arrayCount > 1 ? ` ×${p.arrayCount}` : '');
+    li.onclick = () => select(p.id);
+    ul.appendChild(li);
+  }
+  if (!parts.length) ul.innerHTML = '<li class="hint">上のボタンで部品を追加</li>';
+  const nb = parts.filter(p => p.blockout).length;
+  $('#blockCount').textContent = nb ? `あたり ${nb} 個` : 'あたりなし';
+  $('#bDelBlock').disabled = !nb;
+}
+
+// ---------- properties ----------
+function slider(label, key, min, max, step, idx) {
+  return { label, key, min, max, step, idx };
+}
+function renderProps() {
+  const el = $('#props');
+  const p = getPart(selectedId);
+  if (!p) { el.innerHTML = '<h2>プロパティ</h2><p class="hint">部品を選ぶとここで形を編集できます。</p>'; return; }
+
+  const sliders = [];
+  if (p.kind === 'extrude') sliders.push(
+    ['押し出し', [slider('厚み', 'depth', 0.02, 2, 0.01), slider('テーパー', 'taper', 0.2, 1.6, 0.01)]],
+    ['エッジ（厚み方向）', [slider('面取り幅', 'bevel', 0, 0.3, 0.005), slider('段数', 'bevelSegs', 1, 8, 1)]],
+    ['面の角度（正面を斜めにする）', [slider('厚みの傾き（上下）', 'tiltY', -3, 3, 0.05), slider('中央の盛り上がり', 'ridge', 0, 4, 0.05)]],
+  );
+  else sliders.push(['回転体', [slider('分割数', 'segments', 3, 64, 1)]]);
+  sliders.push(
+    ['角（断面の頂点）', [slider('面取り幅', 'corner', 0, 0.5, 0.005), slider('段数', 'cornerSegs', 1, 8, 1)]],
+    ['繰り返し', [slider('個数', 'arrayCount', 1, 16, 1), slider('間隔 X', 'arrayStep', -1, 1, 0.01, 0),
+      slider('間隔 Y', 'arrayStep', -1, 1, 0.01, 1), slider('間隔 Z', 'arrayStep', -1, 1, 0.01, 2)]],
+  );
+  if (p.op === 'add') sliders.push(['質感', [slider('金属感', 'metal', 0, 1, 0.01), slider('粗さ', 'rough', 0.02, 1, 0.01)]]);
+
+  el.innerHTML = `
+    <h2>プロパティ</h2>
+    <div class="row"><label>名前</label><input type="text" id="pName" style="grid-column: span 2"></div>
+    <div class="row"><label>演算</label><div class="seg" style="grid-column: span 2">
+      <button id="opAdd" class="${p.op === 'add' ? 'on' : ''}">＋ 足す</button>
+      <button id="opSub" class="${p.op === 'sub' ? 'on' : ''}">− 引く</button></div></div>
+    ${p.op === 'add' ? `<div class="row"><label>色</label><input type="color" id="pColor" value="${p.color}"></div>` : ''}
+    <label class="check"><input type="checkbox" id="pMirror" ${p.mirror ? 'checked' : ''}> 左右ミラー（X=0 で反転コピー）</label>
+    <label class="check"><input type="checkbox" id="pBlock" ${p.blockout ? 'checked' : ''}> あたり（下書き・最後に削除する）</label>
+    <h2>ゲーム用</h2>
+    <div class="row"><label>付く骨</label><select id="pBone" style="grid-column: span 2">${Object.entries(BONE_CHOICES).map(([k, v]) => `<option value="${k}" ${p.bone === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + BONE_CHOICES[boneGroupOf({ ...p, bone: 'auto' })] : ''}</option>`).join('')}</select></div>
+    <div class="row"><label>回転の中心</label><select id="pPivot" style="grid-column: span 2">${Object.entries(PIVOT_CHOICES).map(([k, v]) => `<option value="${k}" ${p.pivot === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + (PIVOT_CHOICES[pivotOf({ ...p, pivot: 'auto' })] ?? 'なし') : ''}</option>`).join('')}</select></div>
+    <label class="check"><input type="checkbox" id="pTeam" ${p.team ? 'checked' : ''}> 陣営色で塗る（マテリアル team_color）</label>
+    <label class="check"><input type="checkbox" id="pGlow" ${isGlow(p) ? 'checked' : ''}> 発光する（目・センサーなど）</label>
+    <h2>断面 ${p.kind === 'extrude' ? '（押し出し）' : '（回転体：右半分を描く）'}</h2>
+    <canvas id="profile"></canvas>
+    <p class="hint">点をドラッグ ・ 辺をクリックで点を追加 ・ 点をダブルクリックで削除 ・ 何もない所をドラッグで移動 ・ ホイールで拡大縮小</p>
+    <div style="display:flex;align-items:center;gap:6px">
+      <label class="check" style="flex:1"><input type="checkbox" id="pSnap" ${snap ? 'checked' : ''}> <span id="pSnapLabel">グリッドにスナップ</span></label>
+      <button id="pFit">全体を表示</button>
+    </div>
+    <div id="sliders"></div>
+    <div class="seg" style="margin-top:12px"><button id="bDup">複製 Ctrl+D</button><button id="bDel">削除 Del</button></div>
+  `;
+  const name = $('#pName');
+  name.value = p.name;
+  name.oninput = () => { p.name = name.value; renderList(); saveSoon(); };
+  $('#opAdd').onclick = () => { p.op = 'add'; renderList(); renderProps(); scheduleRebuild(); save(); };
+  $('#opSub').onclick = () => { p.op = 'sub'; renderList(); renderProps(); scheduleRebuild(); save(); };
+  if ($('#pColor')) $('#pColor').oninput = e => { p.color = e.target.value; renderList(); scheduleRebuild(); saveSoon(); };
+  $('#pMirror').onchange = e => { p.mirror = e.target.checked; renderList(); scheduleRebuild(); save(); };
+  $('#pBlock').onchange = e => { p.blockout = e.target.checked; renderList(); scheduleRebuild(); save(); };
+  $('#pBone').onchange = e => { p.bone = e.target.value; save(); };
+  $('#pTeam').onchange = e => { p.team = e.target.checked; save(); };
+  $('#pPivot').onchange = e => { p.pivot = e.target.value; save(); if (viewPose !== '待機') applyViewPose(); };
+  $('#pGlow').onchange = e => { p.glow = e.target.checked; save(); };
+  $('#pSnap').onchange = e => { snap = e.target.checked; };
+  $('#bDup').onclick = () => duplicatePart(p.id);
+  $('#bDel').onclick = () => deletePart(p.id);
+
+  const box = $('#sliders');
+  for (const [title, list] of sliders) {
+    const h = document.createElement('h2'); h.textContent = title; box.appendChild(h);
+    for (const s of list) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `<label></label><input type="range" min="${s.min}" max="${s.max}" step="${s.step}"><output></output>`;
+      row.children[0].textContent = s.label;
+      const input = row.children[1], out = row.children[2];
+      const get = () => s.idx === undefined ? p[s.key] : p[s.key][s.idx];
+      const fmt = v => s.step >= 1 ? String(v) : v.toFixed(s.step < 0.01 ? 3 : 2);
+      input.value = get(); out.textContent = fmt(get());
+      input.oninput = () => {
+        const v = Number(input.value);
+        if (s.idx === undefined) p[s.key] = v; else p[s.key][s.idx] = v;
+        out.textContent = fmt(v);
+        if (s.key === 'corner' || s.key === 'cornerSegs') drawProfile();
+        if (s.key === 'arrayCount') renderList();
+        scheduleRebuild(); saveSoon();
+      };
+      box.appendChild(row);
+    }
+  }
+  setupProfile(p);
+}
+
+// ---------- 2D profile editor ----------
+let snap = true;
+let pe = null; // { p, canvas, ctx, size, drag, view: { cx, cy, span } }
+
+// 1, 2, 5 × 10^k: the smallest "nice" number >= x
+function niceStep(x) {
+  const k = Math.pow(10, Math.floor(Math.log10(x)));
+  return [1, 2, 5, 10].map(m => m * k).find(v => v >= x * 0.999);
+}
+function gridSteps() {
+  const major = niceStep(pe.view.span / 5);
+  return { major, minor: major / 5, snap: major / 10 };
+}
+// Frame the profile so its points are comfortably large, whatever the part's size
+function fitView() {
+  const p = pe.p;
+  const xs = p.pts.map(q => q[0]), ys = p.pts.map(q => q[1]);
+  if (p.kind === 'lathe') { const r = Math.max(...xs); xs.push(0, -0.25 * r); }
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  pe.view = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, span: Math.max(x1 - x0, y1 - y0, 0.005) * 1.4 };
+}
+function pointsOutOfView() {
+  const m = pe.view.span * 0.47;
+  return pe.p.pts.some(([x, y]) => Math.abs(x - pe.view.cx) > m || Math.abs(y - pe.view.cy) > m);
+}
+
+function setupProfile(p) {
+  const canvas = $('#profile');
+  const ctx = canvas.getContext('2d');
+  pe = { p, canvas, ctx, size: 0, drag: -1, hover: -1, pan: null };
+  fitView();
+  const resize = () => {
+    const s = canvas.clientWidth;
+    pe.size = s;
+    canvas.width = canvas.height = Math.round(s * devicePixelRatio);
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    drawProfile();
+  };
+  new ResizeObserver(resize).observe(canvas);
+
+  const local = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  canvas.onpointerdown = e => {
+    const m = local(e);
+    let i = hitPoint(m);
+    if (i < 0) {
+      const ed = hitEdge(m);
+      if (ed) {
+        const pts = pe.p.pts;
+        // lathe: edges -1 (axis→first) and n-1 (last→axis) extend the ends
+        const at = ed.index + 1;
+        pts.splice(Math.max(0, at), 0, snapPt(toWorld(m)));
+        i = Math.max(0, at);
+      }
+    }
+    if (i >= 0) { pe.drag = i; canvas.setPointerCapture(e.pointerId); onProfileChange(); }
+    else { pe.pan = { m, cx: pe.view.cx, cy: pe.view.cy }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; }
+  };
+  canvas.onpointermove = e => {
+    const m = local(e);
+    if (pe.drag >= 0) {
+      pe.p.pts[pe.drag] = snapPt(toWorld(m));
+      onProfileChange();
+    } else if (pe.pan) {
+      const k = pe.view.span / pe.size;
+      pe.view.cx = pe.pan.cx - (m[0] - pe.pan.m[0]) * k;
+      pe.view.cy = pe.pan.cy + (m[1] - pe.pan.m[1]) * k;
+      drawProfile();
+    } else {
+      const h = hitPoint(m);
+      canvas.style.cursor = h >= 0 ? 'grab' : hitEdge(m) ? 'copy' : 'default';
+      if (h !== pe.hover) { pe.hover = h; drawProfile(); }
+    }
+  };
+  canvas.onpointerup = () => {
+    pe.pan = null;
+    if (pe.drag >= 0) { pe.drag = -1; if (pointsOutOfView()) fitView(); drawProfile(); save(); }
+  };
+  canvas.onwheel = e => {
+    e.preventDefault();
+    const m = local(e), before = toWorld(m);
+    pe.view.span = Math.min(20, Math.max(0.002, pe.view.span * Math.exp(e.deltaY * 0.0015)));
+    const after = toWorld(m);
+    pe.view.cx += before[0] - after[0]; pe.view.cy += before[1] - after[1];
+    drawProfile();
+  };
+  $('#pFit').onclick = () => { fitView(); drawProfile(); };
+  canvas.ondblclick = e => {
+    const i = hitPoint(local(e));
+    const min = pe.p.kind === 'extrude' ? 3 : 1;
+    if (i >= 0 && pe.p.pts.length > min) { pe.p.pts.splice(i, 1); onProfileChange(); save(); }
+  };
+}
+
+function onProfileChange() { drawProfile(); scheduleRebuild(); }
+
+const toCanvas = ([x, y]) => {
+  const { cx, cy, span } = pe.view, s = pe.size / span;
+  return [pe.size / 2 + (x - cx) * s, pe.size / 2 - (y - cy) * s];
+};
+const toWorld = ([px, py]) => {
+  const { cx, cy, span } = pe.view, s = pe.size / span;
+  return [cx + (px - pe.size / 2) / s, cy - (py - pe.size / 2) / s];
+};
+function snapPt([x, y]) {
+  if (snap) { const g = gridSteps().snap; x = Math.round(x / g) * g; y = Math.round(y / g) * g; }
+  if (pe.p.kind === 'lathe') x = Math.max(0, x);
+  return [+x.toFixed(5), +y.toFixed(5)];
+}
+function hitPoint(m) {
+  let best = -1, bd = 9;
+  pe.p.pts.forEach((q, i) => { const c = toCanvas(q), d = Math.hypot(c[0] - m[0], c[1] - m[1]); if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+function editEdges() {
+  const pts = pe.p.pts, e = [];
+  if (pe.p.kind === 'extrude') for (let i = 0; i < pts.length; i++) e.push([i, pts[i], pts[(i + 1) % pts.length]]);
+  else {
+    e.push([-1, [0, pts[0][1]], pts[0]]);
+    for (let i = 0; i < pts.length - 1; i++) e.push([i, pts[i], pts[i + 1]]);
+    e.push([pts.length - 1, pts[pts.length - 1], [0, pts[pts.length - 1][1]]]);
+  }
+  return e;
+}
+function hitEdge(m) {
+  for (const [index, a, b] of editEdges()) {
+    const A = toCanvas(a), B = toCanvas(b);
+    const dx = B[0] - A[0], dy = B[1] - A[1], L = dx * dx + dy * dy;
+    if (L < 1) continue;
+    const t = Math.max(0, Math.min(1, ((m[0] - A[0]) * dx + (m[1] - A[1]) * dy) / L));
+    if (t < 0.05 || t > 0.95) continue;
+    if (Math.hypot(A[0] + dx * t - m[0], A[1] + dy * t - m[1]) < 6) return { index };
+  }
+  return null;
+}
+
+function drawProfile() {
+  if (!pe || !pe.size) return;
+  const { ctx, size, p } = pe;
+  ctx.clearRect(0, 0, size, size);
+  // grid (steps follow the zoom level)
+  const g = gridSteps();
+  const [wx0, wy1] = toWorld([0, 0]), [wx1, wy0] = toWorld([size, size]);
+  ctx.lineWidth = 1;
+  for (let i = Math.floor(wx0 / g.minor); i <= Math.ceil(wx1 / g.minor); i++) {
+    const [cx] = toCanvas([i * g.minor, 0]);
+    ctx.strokeStyle = i % 5 === 0 ? '#252b34' : '#191d23';
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, size); ctx.stroke();
+  }
+  for (let i = Math.floor(wy0 / g.minor); i <= Math.ceil(wy1 / g.minor); i++) {
+    const [, cy] = toCanvas([0, i * g.minor]);
+    ctx.strokeStyle = i % 5 === 0 ? '#252b34' : '#191d23';
+    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(size, cy); ctx.stroke();
+  }
+  const label = $('#pSnapLabel');
+  if (label) label.textContent = `グリッドにスナップ（${+g.snap.toPrecision(3)}）・ 太線の間隔 ${+g.major.toPrecision(3)}`;
+  const [ox, oy] = toCanvas([0, 0]);
+  ctx.strokeStyle = '#3c4552';
+  ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, size); ctx.moveTo(0, oy); ctx.lineTo(size, oy); ctx.stroke();
+  if (p.kind === 'lathe') {
+    ctx.fillStyle = '#6b7686'; ctx.font = '10px system-ui';
+    ctx.fillText('回転軸', ox + 4, 12);
+  }
+
+  // filled silhouette (with corner rounding applied)
+  const fill = p.op === 'sub' ? 'rgba(255,107,107,.18)' : 'rgba(240,169,59,.18)';
+  const stroke = p.op === 'sub' ? '#ff8b8b' : '#f0a93b';
+  const path = poly => { ctx.beginPath(); poly.forEach((q, i) => { const c = toCanvas(q); i ? ctx.lineTo(...c) : ctx.moveTo(...c); }); ctx.closePath(); };
+  if (p.kind === 'extrude') {
+    path(roundCorners(p.pts, p.corner, p.cornerSegs, true));
+    ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+  } else {
+    const loop = latheLoop(p);
+    path(loop.map(([x, y]) => [-x, y]));
+    ctx.fillStyle = 'rgba(255,255,255,.04)'; ctx.fill();
+    path(loop);
+    ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  // control polygon
+  ctx.setLineDash([3, 3]); ctx.strokeStyle = '#7d8796'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  p.pts.forEach((q, i) => { const c = toCanvas(q); i ? ctx.lineTo(...c) : ctx.moveTo(...c); });
+  if (p.kind === 'extrude') ctx.closePath();
+  ctx.stroke(); ctx.setLineDash([]);
+  // handles
+  p.pts.forEach((q, i) => {
+    const [cx, cy] = toCanvas(q);
+    ctx.beginPath(); ctx.arc(cx, cy, i === pe.drag || i === pe.hover ? 6 : 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = i === pe.drag || i === pe.hover ? '#ffffff' : '#dfe5ee';
+    ctx.fill(); ctx.strokeStyle = '#15181d'; ctx.lineWidth = 1.5; ctx.stroke();
+  });
+}
+
+// ---------- toolbar ----------
+$('#tEdges').onclick = e => { showEdges = !showEdges; e.target.classList.toggle('on', showEdges); scheduleRebuild(); };
+$('#tBlock').onclick = e => { showBlock = !showBlock; e.target.classList.toggle('on', showBlock); scheduleRebuild(); };
+$('#bDelBlock').onclick = () => {
+  const list = parts.filter(p => p.blockout);
+  if (!list.length) return;
+  for (const p of list) { proxyGroup.remove(p.proxy); p._geo?.dispose(); }
+  parts = parts.filter(p => !p.blockout);
+  select(null); save();
+  $('#checkResult').innerHTML = `<span class="hint">あたりを ${list.length} 個削除しました。次は「つながりチェック」で浮いた部品を探してください。</span>`;
+};
+$('#bJoint').onclick = () => {
+  $('#checkResult').innerHTML = '<span class="hint">関節チェック中…（姿勢ごとに調べるので少しかかります）</span>';
+  setTimeout(showJointReport, 30);
+};
+$('#bCheck').onclick = () => {
+  $('#checkResult').innerHTML = '<span class="hint">チェック中…</span>';
+  setTimeout(showConnectionReport, 30);
+};
+
+// ---------- connectivity check ----------
+// Two parts are connected when their surfaces intersect or come within TOUCH of each other.
+// Everything reachable from the largest cluster is the body; anything else is floating.
+const TOUCH = 0.004;
+function checkConnections() {
+  rebuild();
+  return connectivity(resultGroup.children.filter(o => o.isMesh).map(m => ({ m, g: m.geometry, id: m.userData.partId })));
+}
+// items: [{ g: world geometry, id: part id, ... }] -> { total, floating: [{ members, gap, near }] }
+function connectivity(list) {
+  const I = new THREE.Matrix4(), v = new THREE.Vector3(), hit = { point: new THREE.Vector3() };
+  const items = list.map(it => {
+    const g = it.g;
+    g.computeBoundingBox();
+    const cx = (g.boundingBox.min.x + g.boundingBox.max.x) / 2;
+    return { ...it, bvh: new MeshBVH(g), side: cx > 0.02 ? '右' : cx < -0.02 ? '左' : '' };
+  });
+  const vertDist = (a, b) => {
+    const pos = a.g.attributes.position, step = Math.max(1, Math.floor(pos.count / 400));
+    let best = Infinity;
+    for (let i = 0; i < pos.count; i += step) {
+      v.fromBufferAttribute(pos, i);
+      if (b.g.boundingBox.distanceToPoint(v) > best) continue;
+      const r = b.bvh.closestPointToPoint(v, hit, 0, best);
+      if (r && r.distance < best) { best = r.distance; if (best <= TOUCH) break; }
+    }
+    return best;
+  };
+  const gap = (a, b) => a.bvh.intersectsGeometry(b.g, I) ? 0 : Math.min(vertDist(a, b), vertDist(b, a));
+  const n = items.length, adj = items.map(() => []), gaps = [];
+  for (let a = 0; a < n; a++) {
+    const near = items[a].g.boundingBox.clone().expandByScalar(0.05);
+    for (let b = a + 1; b < n; b++) {
+      if (!near.intersectsBox(items[b].g.boundingBox)) continue;
+      const d = gap(items[a], items[b]);
+      if (d <= TOUCH) { adj[a].push(b); adj[b].push(a); } else gaps.push([a, b, d]);
+    }
+  }
+  const comp = new Array(n).fill(-1);
+  let count = 0;
+  for (let s = 0; s < n; s++) {
+    if (comp[s] >= 0) continue;
+    const stack = [s]; comp[s] = count;
+    while (stack.length) { const u = stack.pop(); for (const w of adj[u]) if (comp[w] < 0) { comp[w] = count; stack.push(w); } }
+    count++;
+  }
+  const groups = [];
+  comp.forEach((c, k) => (groups[c] ||= []).push(k));
+  groups.sort((x, y) => y.length - x.length);
+  const body = new Set(groups[0] || []);
+  const floating = groups.slice(1).map(g => {
+    let best = null;
+    for (const [a, b, d] of gaps) {
+      const inA = g.includes(a), inB = g.includes(b);
+      if ((inA && body.has(b)) || (inB && body.has(a))) if (!best || d < best.d) best = { d, near: items[inA ? b : a] };
+    }
+    return { members: g.map(k => items[k]), gap: best?.d, near: best?.near };
+  });
+  return { total: n, floating };
+}
+function showConnectionReport() {
+  const box = $('#checkResult');
+  if (!parts.some(p => p.op === 'add' && !p.blockout)) { box.innerHTML = '<span class="hint">チェックする部品がありません。</span>'; return; }
+  const { total, floating } = checkConnections();
+  const label = it => (getPart(it.id)?.name ?? '?') + (it.side ? `（${it.side}）` : '');
+  const nb = parts.filter(p => p.blockout).length;
+  const blockNote = nb ? `<div class="hint">※あたりが ${nb} 個残っています（チェックの対象外）。</div>` : '';
+  if (!floating.length) { box.innerHTML = `<div class="ok">✓ すべての部品（${total} 個）がつながっています。</div>` + blockNote; return; }
+  for (const f of floating) for (const it of f.members) it.m.material = disconnectedMat;
+  box.innerHTML = `<div class="ng">つながっていない部品が ${floating.length} グループあります（赤で表示）。別の部品でつないでください。</div><ul></ul>` + blockNote;
+  const ul = box.querySelector('ul');
+  for (const f of floating) {
+    const li = document.createElement('li');
+    const names = [...new Set(f.members.map(label))];
+    const where = f.gap === undefined ? '本体から離れています' : `本体まで ${f.gap.toFixed(3)}（近い部品: ${label(f.near)}）`;
+    li.textContent = `${names.slice(0, 3).join('、')}${names.length > 3 ? ` ほか${names.length - 3}` : ''} — ${where}`;
+    li.onclick = () => { select(f.members[0].id); setTimeout(showConnectionReport, 80); }; // after select's rebuild, so the red stays
+    ul.appendChild(li);
+  }
+}
+
+$('#tGhost').onclick = e => { showGhosts = !showGhosts; e.target.classList.toggle('on', showGhosts); scheduleRebuild(); };
+$('#bClear').onclick = () => { if (confirm('すべての部品を消しますか？')) loadScene([]); };
+$('#bExport').onclick = () => {
+  const g = new THREE.Group();
+  for (const m of resultGroup.children) if (m.isMesh) g.add(new THREE.Mesh(m.geometry, m.material));
+  new GLTFExporter().parse(g, data => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: 'model/gltf-binary' }));
+    a.download = 'robot.glb'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, err => alert('書き出しに失敗しました: ' + err), { binary: true });
+};
+
+
+// ---------- export for the game (docs/models.md) ----------
+// One skeleton with the 9 bones the game drives; every part is bound rigidly (weight 1) to one bone.
+// Geometry is merged per material class so LOD0 stays within the draw-call budget, and LOD1/LOD2 are
+// generated by simplifying and then boxing the parts. The editor faces +Z; the game faces -Z with the
+// sole at y = 0, so everything is turned 180° about Y and dropped onto the ground.
+const GAME_LIMITS = { tris: [30000, 5000, 800], drawCalls: 5 };
+const BONE_CHOICES = { auto: '自動（部品名から）', head: '頭', torso: '胴', hips: '腰', arm: '腕（肩〜ひじ）', fore: '前腕・手', leg: '太もも', shin: 'すね・足' };
+// first match wins; the order keeps e.g. 「ウイングの腕」 on the torso and 「肩の付け根」 on the chest
+const BONE_RULES = [
+  ['torso', /ウイング|付け根|バックパック|フィン|ロッド|背中|レーダー|ミサイル|ブースター/],
+  ['head', /頭|^首|目|バイザー|トサカ|顔|ヘルメット|ほほ|耳|カメラ|アンテナ|額/],   // ^首: not 足首 / 手首
+  ['shin', /すね|ふくらはぎ|ひざ|足|つま先|かかと/],
+  ['leg', /太もも|股関節/],
+  ['fore', /前腕|手|指|ライフル|銃|マガジン|マズル|パイル|杭|シールド/],
+  ['arm', /肩|腕|ひじ/],
+  ['hips', /腰|股|スカート/],
+];
+const GLOW_RE = /目|センサー|バイザー|アイ/;
+// hand weapons go to the `gun` node, which the game hides during saber cuts, throws and the bazooka
+const GUN_RE = /ライフル|銃|マガジン|マズル/;
+const isGun = p => p.gun ?? GUN_RE.test(p.name);
+const JOINT_PARENT = { arm: 'torso', fore: 'arm', leg: 'hips', shin: 'leg', head: 'torso', torso: 'hips' };
+const boneGroupOf = p => {
+  if (p.bone && p.bone !== 'auto') return p.bone;
+  const pv = typeof pivotOf === 'function' ? pivotOf(p) : null;   // a joint stays on the side that doesn't turn
+  if (pv) return JOINT_PARENT[pv];
+  for (const [g, re] of BONE_RULES) if (re.test(p.name)) return g;
+  return 'torso';
+};
+const isGlow = p => p.glow ?? GLOW_RE.test(p.name);
+// editor +X is the XS's left (it faces +Z), so after the 180° turn it lands on the game's -X = left
+const sided = (group, cx) => ['arm', 'leg', 'shin', 'fore'].includes(group) ? `${group === 'fore' ? 'forearm' : group}_${cx >= 0 ? 'l' : 'r'}` : group;
+const GAME_BONES = [['hips', null], ['torso', 'hips'], ['head', 'torso'], ['arm_l', 'torso'], ['arm_r', 'torso'],
+  ['leg_l', 'hips'], ['shin_l', 'leg_l'], ['leg_r', 'hips'], ['shin_r', 'leg_r'],
+  ['forearm_l', 'arm_l'], ['forearm_r', 'arm_r']];   // elbows: extra bones the spec allows
+
+function materialClass(p) {
+  if (p.team) return 'team';
+  if (isGlow(p)) return 'glow';
+  if (p.metal >= 0.7) return 'metal';
+  return 'body';
+}
+
+// meshes of one LOD: [{ geo (world, non-indexed), part, bone }]
+function lodPieces(level) {
+  const out = [];
+  const addParts = (geos, p) => {
+    for (const g of geos) {
+      g.computeBoundingBox();
+      const cx = (g.boundingBox.min.x + g.boundingBox.max.x) / 2;
+      out.push({ geo: g.index ? g.toNonIndexed() : g, part: p, bone: sided(boneGroupOf(p), cx) });
+    }
+  };
+  const solid = parts.filter(p => p.op === 'add' && !p.blockout);
+  if (level === 0) {
+    rebuild();
+    for (const m of resultGroup.children) if (m.isMesh) {
+      const p = getPart(m.userData.partId);
+      addParts([m.geometry.clone()], p);
+    }
+    return out;
+  }
+  // LOD1: no cuts, no bevels, coarse lathes; drop the smallest parts until it fits
+  const simple = p => ({ ...p, bevel: 0, bevelSegs: 1, cornerSegs: 1, corner: Math.min(p.corner, 0.01), segments: Math.min(p.segments, 8), _geo: null, _geoKey: null });
+  const all = solid.flatMap(p => worldGeometries(simple(p)).map(g => ({ g, p })));
+  const diag = g => { g.computeBoundingBox(); return g.boundingBox.getSize(new THREE.Vector3()).length(); };
+  all.sort((a, b) => diag(b.g) - diag(a.g));
+  if (level === 1) {
+    let tris = 0;
+    for (const { g, p } of all) {
+      const t = g.attributes.position.count / 3;
+      if (tris + t > GAME_LIMITS.tris[1] * 0.95) continue;
+      tris += t; addParts([g], p);
+    }
+    return out;
+  }
+  // LOD2: the largest parts as boxes (12 triangles each)
+  const maxBoxes = Math.floor(GAME_LIMITS.tris[2] * 0.95 / 12);
+  for (const { g, p } of all.slice(0, maxBoxes)) {
+    const b = g.boundingBox, s = b.getSize(new THREE.Vector3()), c = b.getCenter(new THREE.Vector3());
+    const box = new THREE.BoxGeometry(Math.max(s.x, 0.01), Math.max(s.y, 0.01), Math.max(s.z, 0.01)).translate(c.x, c.y, c.z).toNonIndexed();
+    box.deleteAttribute('uv');
+    addParts([box], p);
+  }
+  return out;
+}
+
+// joint positions (editor space) from the bounding boxes of what each bone carries
+function jointPositions(pieces) {
+  const boxes = {};
+  for (const pc of pieces) (boxes[pc.bone] ||= new THREE.Box3()).union(pc.geo.boundingBox);
+  const B = n => boxes[n] || null;
+  const whole = new THREE.Box3(); Object.values(boxes).forEach(b => whole.union(b));
+  const H = whole.max.y - whole.min.y;
+  const at = {};
+  const legTop = Math.max(B('leg_l')?.max.y ?? -Infinity, B('leg_r')?.max.y ?? -Infinity);
+  at.hips = new THREE.Vector3(0, isFinite(legTop) ? legTop - 0.03 * H : whole.min.y + 0.5 * H, B('hips')?.getCenter(new THREE.Vector3()).z ?? 0);
+  at.torso = new THREE.Vector3(0, B('torso')?.min.y ?? at.hips.y + 0.05 * H, B('torso')?.getCenter(new THREE.Vector3()).z ?? 0);
+  at.head = new THREE.Vector3(0, B('head')?.min.y ?? whole.max.y - 0.1 * H, B('head')?.getCenter(new THREE.Vector3()).z ?? 0);
+  for (const s of ['l', 'r']) {
+    const sign = s === 'l' ? 1 : -1;
+    const a = B('arm_' + s), l = B('leg_' + s), k = B('shin_' + s);
+    at['arm_' + s] = a ? new THREE.Vector3(sign * (Math.min(Math.abs(a.min.x), Math.abs(a.max.x)) + 0.15 * (a.max.x - a.min.x)), a.max.y - 0.18 * (a.max.y - a.min.y), a.getCenter(new THREE.Vector3()).z)
+      : new THREE.Vector3(sign * 0.25 * H, at.head.y - 0.1 * H, 0);
+    at['leg_' + s] = l ? new THREE.Vector3(l.getCenter(new THREE.Vector3()).x, l.max.y - 0.05 * (l.max.y - l.min.y), l.getCenter(new THREE.Vector3()).z)
+      : new THREE.Vector3(sign * 0.08 * H, at.hips.y, 0);
+    at['shin_' + s] = k ? new THREE.Vector3(k.getCenter(new THREE.Vector3()).x, k.max.y - 0.08 * (k.max.y - k.min.y), k.getCenter(new THREE.Vector3()).z)
+      : new THREE.Vector3(at['leg_' + s].x, at['leg_' + s].y - 0.25 * H, 0);
+    const f = B('forearm_' + s);
+    at['forearm_' + s] = f ? new THREE.Vector3(f.getCenter(new THREE.Vector3()).x, f.max.y, f.getCenter(new THREE.Vector3()).z)
+      : at['arm_' + s].clone().add(new THREE.Vector3(0, -0.18 * H, 0));
+  }
+  // joint parts win: their centre is the pivot
+  const found = {};
+  for (const pc of pieces) {
+    const g = pivotOf(pc.part);
+    if (!g) continue;
+    const c = pc.geo.boundingBox.getCenter(new THREE.Vector3());
+    const name = sided(g, c.x);
+    (found[name] ||= []).push(c);
+  }
+  for (const [name, list] of Object.entries(found)) at[name] = list.reduce((a, b) => a.add(b), new THREE.Vector3()).multiplyScalar(1 / list.length);
+  if (found.leg_l && found.leg_r) at.hips = new THREE.Vector3(0, (at.leg_l.y + at.leg_r.y) / 2, (at.leg_l.z + at.leg_r.z) / 2);
+  return { at, whole };
+}
+
+// attachment points (editor space) found from part names; each rides on the bone of the part it comes from
+function attachPoints(pieces) {
+  const find = (re, bone, pick) => {
+    const cand = pieces.filter(pc => re.test(pc.part.name) && (!bone || pc.bone === bone));
+    if (!cand.length) return null;
+    const pc = pick ? cand.sort(pick)[0] : cand[0];
+    const box = new THREE.Box3();
+    cand.filter(c => c.part === pc.part && c.bone === pc.bone).forEach(c => box.union(c.geo.boundingBox));
+    return { pos: box.getCenter(new THREE.Vector3()), bone: pc.bone };
+  };
+  const out = {};
+  out.hand_r = find(/^手$|^手の甲$/, 'forearm_r') || find(/手/, 'forearm_r');
+  out.muzzle = find(/マズル|銃口/, null);
+  const thr = s => pieces.filter(pc => /スラスター|ブースター|バーニア/.test(pc.part.name) && pc.part.kind === 'lathe' && pc.bone === 'torso'
+    && (s === 'l' ? pc.geo.boundingBox.max.x > 0.02 : pc.geo.boundingBox.min.x < -0.02))
+    .sort((a, b) => Math.abs(a.geo.boundingBox.getCenter(new THREE.Vector3()).x) - Math.abs(b.geo.boundingBox.getCenter(new THREE.Vector3()).x))[0];
+  for (const s of ['l', 'r']) { const t = thr(s); if (t) out['thruster_' + s] = { pos: t.geo.boundingBox.getCenter(new THREE.Vector3()), bone: 'torso' }; }
+  return out;
+}
+
+// ---------- joints: pivots, game poses, preview and range check ----------
+// Game poses (client/src/models.ts, client/src/saberpose.ts, the standing upper-body twist), as game-space Euler
+// rotations (YXZ) of each bone, plus the hips' drop in game metres. They include the ends of every joint's range.
+const POSES = {
+  待機: {},
+  構え: { arm_r: { x: 1.45 }, arm_l: { x: 1.3, z: 0.45 } },
+  歩き: { leg_l: { x: 0.5 }, leg_r: { x: -0.5 }, shin_r: { x: -0.6 }, arm_r: { x: 0.4 }, arm_l: { x: -0.3 } },
+  ダッシュ: { torso: { x: -0.3 }, leg_l: { x: 0.55 }, shin_l: { x: -1.1 }, leg_r: { x: -0.15 }, shin_r: { x: -0.6 }, arm_l: { x: 0.2, z: -0.45 }, arm_r: { x: -0.3 } },
+  投げ: { arm_r: { x: 3.8, z: 0.15 }, torso: { x: 0.2 } },
+  しゃがみ: { leg_l: { x: 0.9 }, leg_r: { x: 0.9 }, shin_l: { x: -1.5 }, shin_r: { x: -1.5 }, torso: { x: -0.2 }, hips: { dy: -1.8 } },
+  ひねり左: { torso: { y: 1.5 } },
+  ひねり右: { torso: { y: -1.5 } },
+  脚の端: { leg_l: { x: 1.12 }, shin_l: { x: -2.04 }, leg_r: { x: -0.55 } },
+  腕の後ろ: { arm_r: { x: -0.8 }, arm_l: { x: -0.5, z: -0.25 } },
+  ひじ曲げ: { forearm_r: { x: 1.85 }, forearm_l: { x: 0.31 } },
+};
+// The game's real motion, sampled frame by frame (xs-editor/poses.json, written by tools/genposes.ts):
+// { moves: { name: [ { hips: { dy, x, y, z }, torso: { x, y, z }, ... } x 16 ] } }. Missing file = basic poses only.
+let MOVES = {};
+fetch('poses.json').then(r => (r.ok ? r.json() : null)).then(j => { if (j && j.moves) { MOVES = j.moves; fillPoseSelector(); } }).catch(() => {});
+const poseOf = (name, frame) => POSES[name] || MOVES[name]?.[frame] || {};
+
+// parts that are the rotation centre of a bone (the child side of the joint), by name unless set per part
+const PIVOT_CHOICES = { auto: '自動（部品名から）', none: 'なし', head: '頭', torso: '胴', arm: '腕（肩）', fore: '前腕（ひじ）', leg: '太もも（股関節）', shin: 'すね（ひざ）' };
+const PIVOT_RULES = [['arm', /肩関節/], ['fore', /^ひじ$|ひじ関節/], ['leg', /股関節/], ['shin', /ひざ関節|^ひざ$/], ['head', /^首$/], ['torso', /^腹$|腹のフレーム/]];
+const pivotOf = p => {
+  if (p.pivot && p.pivot !== 'auto') return p.pivot === 'none' ? null : p.pivot;
+  for (const [g, re] of PIVOT_RULES) if (re.test(p.name)) return g;
+  return null;
+};
+
+const _flip = new THREE.Matrix4().makeRotationY(Math.PI);
+const CUT_DEPTH = 0.01;   // cutting-in deeper than this (per 3 units of height, ~6 cm on an 18 m XS) is reported
+// bone matrices (editor space) for a pose: rotate each bone about its pivot, children follow their parents
+function poseMatrices(at, pose, height) {
+  const M = {};
+  for (const [name, parent] of GAME_BONES) {
+    const r = pose[name] || {}, p = at[name];
+    const game = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(r.x || 0, r.y || 0, r.z || 0, 'YXZ'));
+    const rot = _flip.clone().multiply(game).multiply(_flip);             // game faces -Z, the editor +Z
+    const local = new THREE.Matrix4().makeTranslation(p.x, p.y + (r.dy || 0) * height / 18, p.z)
+      .multiply(rot).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z));
+    M[name] = parent ? M[parent].clone().multiply(local) : local;
+  }
+  return M;
+}
+
+// pieces of the current model (editor space, rest pose) straight from the viewport meshes
+function currentPieces() {
+  const out = [];
+  for (const m of resultGroup.children) if (m.isMesh) {
+    const p = getPart(m.userData.partId), g = m.geometry;
+    g.computeBoundingBox();
+    const cx = (g.boundingBox.min.x + g.boundingBox.max.x) / 2;
+    out.push({ geo: g, part: p, bone: sided(boneGroupOf(p), cx), mesh: m });
+  }
+  return out;
+}
+
+// ---- preview: pose the viewport model like the game would
+let viewPose = '待機', viewFrame = 0;
+function applyViewPose() {
+  const pieces = currentPieces();
+  const moving = viewPose !== '待機' && pieces.length;
+  let M = null;
+  if (moving) {
+    const { at, whole } = jointPositions(pieces);
+    M = poseMatrices(at, poseOf(viewPose, viewFrame), whole.max.y - whole.min.y);
+  }
+  let bone = null;
+  for (const o of resultGroup.children) {
+    if (o.isMesh) bone = pieces.find(pc => pc.mesh === o)?.bone;   // edges follow the mesh they were made from
+    o.matrixAutoUpdate = !moving;
+    if (moving && bone) { o.matrix.copy(M[bone]); o.matrixWorldNeedsUpdate = true; }
+    else if (!moving) o.updateMatrix();
+  }
+}
+
+// ---- range check: every pose, parts coming off the body and parts newly cutting into others
+function jointCheck() {
+  rebuild();
+  const pieces = currentPieces();
+  const { at, whole } = jointPositions(pieces);
+  const H = whole.max.y - whole.min.y;
+  const I = new THREE.Matrix4(), v = new THREE.Vector3(), hit = { point: new THREE.Vector3() };
+  for (const pc of pieces) pc.bvh = new MeshBVH(pc.geo);
+  // b moved into a's rest frame; three-mesh-bvh's intersectsGeometry(geometry, matrix) reports false hits,
+  // so the other shape is really moved and tested with an identity matrix
+  const into = (a, ma, b, mb) => ma === mb || ma.equals(mb) ? b.geo : b.geo.clone().applyMatrix4(ma.clone().invert().multiply(mb));
+  // b (moved by mb) within `limit` of a (moved by ma)?
+  const gapUnder = (a, ma, b, mb, limit) => {
+    const g = into(a, ma, b, mb);
+    if (a.bvh.intersectsGeometry(g, I)) return true;
+    const pos = g.attributes.position, step = Math.max(1, Math.floor(pos.count / 300));
+    for (let i = 0; i < pos.count; i += step) {
+      v.fromBufferAttribute(pos, i);
+      if (a.geo.boundingBox.distanceToPoint(v) > limit) continue;
+      const r = a.bvh.closestPointToPoint(v, hit, 0, limit);
+      if (r && r.distance <= limit) return true;
+    }
+    return false;
+  };
+  // contacts in the rest pose
+  const n = pieces.length, touch = [], inside = new Set();
+  for (let a = 0; a < n; a++) {
+    const near = pieces[a].geo.boundingBox.clone().expandByScalar(0.05);
+    for (let b = a + 1; b < n; b++) {
+      if (!near.intersectsBox(pieces[b].geo.boundingBox)) continue;
+      if (pieces[a].bvh.intersectsGeometry(pieces[b].geo, I)) { touch.push([a, b]); inside.add(a + ',' + b); }
+      else if (gapUnder(pieces[a], I, pieces[b], I, TOUCH) || gapUnder(pieces[b], I, pieces[a], I, TOUCH)) touch.push([a, b]);
+    }
+  }
+  const restPair = new Set(touch.map(([a, b]) => a + ',' + b));
+  const depths = new Map();   // deepest cut per pair, in game metres (18 m tall)
+  // how deep g's vertices sit inside a (0 if none): distance to a's surface for vertices behind it
+  const tri = new THREE.Triangle(), nrm = new THREE.Vector3(), d = new THREE.Vector3();
+  const depthIn = (a, g) => {
+    const pos = g.attributes.position, idx = a.geo.index, ap = a.geo.attributes.position;
+    let deep = 0;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      if (!a.geo.boundingBox.containsPoint(v)) continue;
+      const r = a.bvh.closestPointToPoint(v, hit);
+      if (!r) continue;
+      const f = r.faceIndex * 3;
+      tri.set(new THREE.Vector3().fromBufferAttribute(ap, idx.getX(f)), new THREE.Vector3().fromBufferAttribute(ap, idx.getX(f + 1)), new THREE.Vector3().fromBufferAttribute(ap, idx.getX(f + 2)));
+      tri.getNormal(nrm);
+      if (d.subVectors(v, r.point).dot(nrm) < 0) deep = Math.max(deep, r.distance);
+    }
+    return deep;
+  };
+  const label = pc => pc.part.name + (pc.bone.endsWith('_l') ? '（左）' : pc.bone.endsWith('_r') ? '（右）' : '');
+  const report = {};
+  // with the game's real frames loaded, those plus the basic poses; the hand-made extremes are for preview only
+  const basic = Object.keys(MOVES).length ? ['構え', '歩き', 'ダッシュ'] : Object.keys(POSES).filter(k => k !== '待機');
+  const checks = basic.map(k => [k, POSES[k], null]);
+  for (const [k, frames] of Object.entries(MOVES)) frames.forEach((pose, i) => { if (i % 2 === 1) checks.push([k, pose, i]); });
+  for (const [name, pose, frame] of checks) {
+    const M = poseMatrices(at, pose, H);
+    const moved = pc => M[pc.bone];
+    const hidden = /^saber|^throw/.test(name) ? pc => isGun(pc.part) : () => false;   // the game hides the gun then
+    const same = (a, b) => moved(a).equals(moved(b));
+    // 1) off the body: keep the rest contacts that still hold in this pose, then look for islands
+    const adj = pieces.map(() => []);
+    for (const [a, b] of touch) {
+      const pa = pieces[a], pb = pieces[b];
+      if (same(pa, pb) || gapUnder(pa, moved(pa), pb, moved(pb), TOUCH * 2) || gapUnder(pb, moved(pb), pa, moved(pa), TOUCH * 2)) { adj[a].push(b); adj[b].push(a); }
+    }
+    const comp = new Array(n).fill(-1); let c = 0;
+    for (let s = 0; s < n; s++) {
+      if (comp[s] >= 0) continue;
+      const st = [s]; comp[s] = c;
+      while (st.length) { const u = st.pop(); for (const w of adj[u]) if (comp[w] < 0) { comp[w] = c; st.push(w); } }
+      c++;
+    }
+    const sizes = new Array(c).fill(0); comp.forEach(k => sizes[k]++);
+    const body = sizes.indexOf(Math.max(...sizes));
+    const off = [...new Set(pieces.filter((pc, k) => comp[k] !== body && !hidden(pc)).map(label))];
+    // 2) cutting in: pairs moving differently that intersect now but were apart at rest
+    const cut = new Set();
+    const boxes = pieces.map(pc => pc.geo.boundingBox.clone().applyMatrix4(moved(pc)));
+    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
+      const pa = pieces[a], pb = pieces[b];
+      if (same(pa, pb) || hidden(pa) || hidden(pb) || restPair.has(a + ',' + b) || !boxes[a].intersectsBox(boxes[b])) continue;
+      const gb = into(pa, moved(pa), pb, moved(pb));
+      if (!pa.bvh.intersectsGeometry(gb, I)) continue;
+      // grazing contact at a joint's rim is fine; only real cutting-in counts
+      const deep = Math.max(depthIn(pa, gb), depthIn(pb, into(pb, moved(pb), pa, moved(pa))));
+      if (deep > CUT_DEPTH * H / 3) { const key = `${label(pa)} ↔ ${label(pb)}`; cut.add(key); depths.set(key, Math.max(depths.get(key) || 0, deep * 18 / H)); }
+    }
+    const r = (report[name] ||= { off: new Set(), cut: new Set(), frames: [] });
+    off.forEach(x => r.off.add(x)); cut.forEach(x => r.cut.add(x));
+    if ((off.length || cut.size) && frame !== null) r.frames.push(frame);
+  }
+  for (const r of Object.values(report)) { r.off = [...r.off]; r.cut = [...r.cut]; }
+  report.__depths = Object.fromEntries(depths);
+  return report;
+}
+
+function showJointReport() {
+  const box = $('#checkResult');
+  if (!parts.some(p => p.op === 'add' && !p.blockout)) { box.innerHTML = '<span class="hint">チェックする部品がありません。</span>'; return; }
+  const report = jointCheck();
+  const bad = Object.entries(report).filter(([k, r]) => k !== '__depths' && (r.off.length || r.cut.length));
+  if (!bad.length) { box.innerHTML = `<div class="ok">✓ ${Object.keys(report).length - 1} 個の姿勢・動きで、外れる部品・めり込む部品はありません。</div>`; return; }
+  box.innerHTML = `<div class="ng">関節で問題が出る姿勢が ${bad.length} 個あります（上の「姿勢」で表示して確かめられます）。</div><ul></ul>`;
+  const ul = box.querySelector('ul');
+  for (const [name, r] of bad) {
+    const li = document.createElement('li');
+    const bits = [];
+    if (r.off.length) bits.push(`外れる: ${r.off.slice(0, 4).join('、')}${r.off.length > 4 ? ` ほか${r.off.length - 4}` : ''}`);
+    if (r.cut.length) bits.push(`めり込む: ${r.cut.slice(0, 3).join('、')}${r.cut.length > 3 ? ` ほか${r.cut.length - 3}` : ''}`);
+    li.textContent = `${name}${r.frames.length ? `（フレーム ${r.frames.join(',')}）` : ''} — ${bits.join(' ／ ')}`;
+    li.onclick = () => { viewPose = name; viewFrame = r.frames[0] ?? 0; syncPoseUI(); applyViewPose(); };
+    ul.appendChild(li);
+  }
+}
+
+// the toolbar's pose selector (after POSES exists); real moves get a frame slider
+function fillPoseSelector() {
+  const sel = $('#poseSel');
+  sel.innerHTML = '';
+  for (const k of Object.keys(POSES)) sel.add(new Option(k, k));
+  for (const k of Object.keys(MOVES)) sel.add(new Option(`ゲーム: ${k}`, k));
+  syncPoseUI();
+}
+function syncPoseUI() {
+  $('#poseSel').value = viewPose;
+  const fr = $('#poseFrame'), n = MOVES[viewPose]?.length || 0;
+  fr.style.display = n ? '' : 'none';
+  fr.max = Math.max(0, n - 1); fr.value = viewFrame;
+}
+$('#poseSel').onchange = e => { viewPose = e.target.value; viewFrame = 0; syncPoseUI(); applyViewPose(); };
+$('#poseFrame').oninput = e => { viewFrame = Number(e.target.value); applyViewPose(); };
+fillPoseSelector();
+
+const toGame = (v, floor) => new THREE.Vector3(-v.x, v.y - floor, -v.z);   // turn 180° about Y, sole on y = 0
+
+function buildGameModel() {
+  const lods = [0, 1, 2].map(lodPieces);
+  const { at, whole } = jointPositions(lods[0]);
+  const floor = whole.min.y;
+  const root = new THREE.Group(); root.name = 'xs';
+  // skeleton
+  const bones = {};
+  for (const [name, parent] of GAME_BONES) {
+    const b = new THREE.Bone(); b.name = name;
+    const w = toGame(at[name], floor);
+    if (parent) { b.position.copy(w.sub(toGame(at[parent], floor))); bones[parent].add(b); } else { b.position.copy(w); root.add(b); }
+    bones[name] = b;
+  }
+  const attach = attachPoints(lods[0]);
+  for (const [name, a] of Object.entries(attach)) if (a) {
+    const n = new THREE.Bone(); n.name = name;
+    n.position.copy(toGame(a.pos, floor).sub(toGame(at[a.bone], floor)));
+    bones[a.bone].add(n);
+  }
+  root.updateMatrixWorld(true);
+  const boneList = GAME_BONES.map(([n]) => bones[n]);
+  const skeleton = new THREE.Skeleton(boneList);
+  const boneIndex = Object.fromEntries(GAME_BONES.map(([n], i) => [n, i]));
+  const report = { tris: [], calls: [], materials: [] };
+
+  lods.forEach((pieces, level) => {
+    // group by material class; glow keeps its own colour per material (emissive can't take vertex colours)
+    const groups = new Map();
+    for (const pc of pieces) {
+      const cls = isGun(pc.part) ? 'gun' : materialClass(pc.part);
+      const key = cls === 'glow' && level === 0 ? 'glow:' + pc.part.color : cls;
+      (groups.get(key) || groups.set(key, []).get(key)).push(pc);
+    }
+    // stay within the draw-call budget: fold extra glow colours into one
+    if (level === 0 && groups.size > GAME_LIMITS.drawCalls) {
+      const glowKeys = [...groups.keys()].filter(k => k.startsWith('glow:'));
+      const keep = glowKeys.shift();
+      for (const k of glowKeys) { groups.get(keep).push(...groups.get(k)); groups.delete(k); }
+    }
+    let tris = 0;
+    for (const [key, list] of groups) {
+      const cls = key.split(':')[0];
+      const P = [], N = [], C = [], SI = [], SW = [];
+      let metal = 0, rough = 0, n = 0;
+      for (const pc of list) {
+        const pos = pc.geo.attributes.position, nor = pc.geo.attributes.normal;
+        const col = new THREE.Color(pc.part.color), bi = boneIndex[pc.bone];
+        for (let i = 0; i < pos.count; i++) {
+          P.push(-pos.getX(i), pos.getY(i) - floor, -pos.getZ(i));
+          if (nor) N.push(-nor.getX(i), nor.getY(i), -nor.getZ(i));
+          C.push(col.r, col.g, col.b);
+          SI.push(bi, 0, 0, 0); SW.push(1, 0, 0, 0);
+        }
+        metal += pc.part.metal * pos.count; rough += pc.part.rough * pos.count; n += pos.count;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+      if (N.length === P.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); else g.computeVertexNormals();
+      g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+      g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
+      g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
+      const merged = mergeVertices(g, 1e-5);   // share identical corners: same look, far smaller file
+      const glowColor = cls === 'glow' ? new THREE.Color(list[0].part.color) : null;
+      const mat = new THREE.MeshStandardMaterial({
+        name: cls === 'team' ? 'team_color' : cls === 'glow' ? `glow_${[...groups.keys()].indexOf(key)}` : cls,
+        vertexColors: true, metalness: n ? metal / n : 0.3, roughness: n ? rough / n : 0.5,
+        emissive: glowColor || 0x000000, emissiveIntensity: glowColor ? 1 : 0,
+      });
+      const mesh = new THREE.SkinnedMesh(merged, mat);
+      mesh.name = `xs_${mat.name}${level ? '_lod' + level : ''}`;
+      if (cls === 'gun') {
+        let gunNode = root.getObjectByName('gun');
+        if (!gunNode) { gunNode = new THREE.Group(); gunNode.name = 'gun'; root.add(gunNode); }
+        gunNode.add(mesh);
+      } else root.add(mesh);
+      mesh.bind(skeleton, new THREE.Matrix4());
+      tris += P.length / 9;
+      if (level === 0) report.materials.push(mat.name);
+    }
+    report.tris[level] = Math.round(tris);
+    report.calls[level] = groups.size;
+  });
+  report.attach = Object.keys(attach).filter(k => attach[k]);
+  report.height = whole.max.y - whole.min.y;
+  return { root, report };
+}
+
+$('#bGame').onclick = () => {
+  if (!parts.some(p => p.op === 'add' && !p.blockout)) { alert('書き出す部品がありません。'); return; }
+  const id = prompt('機体id（public/models/<機体id>.glb のファイル名）\n例: a_raid / a_heavy / a_support / b_raid / b_heavy / b_support', 'a_raid');
+  if (id === null) return;
+  const name = (id.trim() || 'xs_model').replace(/[^\w.-]/g, '_');
+  const { root, report } = buildGameModel();
+  const joints = jointCheck();
+  const loose = Object.entries(joints).filter(([k, r]) => k !== '__depths' && (r.off.length || r.cut.length))
+    .map(([name, r]) => `${name}: ${[...r.off.map(x => x + ' が外れる'), ...r.cut.slice(0, 2).map(x => x + ' がめり込む')].join('、')}`);
+  new GLTFExporter().parse(root, data => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: 'model/gltf-binary' }));
+    a.download = `${name}.glb`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    const ok = (v, lim) => v <= lim ? '✓' : '✗';
+    $('#checkResult').innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'hint';
+    div.textContent = `ゲーム用に ${name}.glb を書き出しました。骨 11 本（ゲームが動かす 9 本＋前腕 2 本）・取り付け点 ${report.attach.join(', ') || 'なし'}。` +
+      ` 三角形 LOD0 ${report.tris[0].toLocaleString()} ${ok(report.tris[0], GAME_LIMITS.tris[0])} / LOD1 ${report.tris[1].toLocaleString()} ${ok(report.tris[1], GAME_LIMITS.tris[1])} / LOD2 ${report.tris[2]} ${ok(report.tris[2], GAME_LIMITS.tris[2])}、` +
+      ` 描画回数 ${report.calls[0]} ${ok(report.calls[0], GAME_LIMITS.drawCalls)}（${report.materials.join(', ')}）。` +
+      (loose.length ? ` ✗ 関節で問題が出ます — ${loose.join(' ／ ')}` : ` 関節チェック（${Object.keys(joints).length} 姿勢）✓ 外れ・めり込みなし。`) + ' public/models/ に置いてください。';
+    $('#checkResult').appendChild(div);
+  }, err => alert('書き出しに失敗しました: ' + err), { binary: true });
+};
+
+// ---------- undo history ----------
+let saveTimer = 0;
+// Every save() is a commit point: it records an undo step if the scene changed (nothing is persisted).
+const history = [];
+let historyPos = -1;
+const HISTORY_MAX = 200;
+function save() {
+  clearTimeout(saveTimer);
+  const json = JSON.stringify(parts.map(serialize));
+  if (history[historyPos] !== json) {
+    history.splice(historyPos + 1);
+    history.push(json);
+    if (history.length > HISTORY_MAX) history.shift();
+    historyPos = history.length - 1;
+    updateUndoButtons();
+  }
+}
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); }
+function replaceParts(list) {
+  for (const p of parts) { proxyGroup.remove(p.proxy); p._geo?.dispose(); }
+  parts = [];
+  for (const d of list) parts.push(makePart(d));
+}
+function loadScene(list) {
+  replaceParts(list);
+  select(null); save();
+}
+function stepHistory(dir) {
+  save(); // flush a pending slider change so it can be undone too
+  const to = historyPos + dir;
+  if (to < 0 || to >= history.length) return;
+  historyPos = to;
+  const selIndex = parts.findIndex(p => p.id === selectedId);
+  replaceParts(JSON.parse(history[historyPos]));
+  select(parts[selIndex] ? parts[selIndex].id : null);
+  updateUndoButtons();
+}
+const undo = () => stepHistory(-1), redo = () => stepHistory(1);
+function updateUndoButtons() {
+  $('#bUndo').disabled = historyPos <= 0;
+  $('#bRedo').disabled = historyPos >= history.length - 1;
+}
+$('#bUndo').onclick = undo;
+$('#bRedo').onclick = redo;
+
+// ---------- sample: heavy XS (boxy, gunmetal with orange accents) ----------
+const SAMPLE_HEAVY = (() => {
+const GUN = '#5f6670', DARK = '#353a41', LIGHT = '#9aa1ab', ORANGE = '#e8781e', EYE = '#ff3b30', GRAY = '#6a7079';
+// F: extruded from the front (profile in XY, thickness along Z)
+// S: extruded from the side (profile X = forward, thickness along world X)
+// L: lathe (profile right half, axis = local Y)
+const F = (name, pts, depth, pos, o = {}) => ({ ...DEFAULTS, name, kind: 'extrude', pts, depth, pos, bevel: 0.02, corner: 0.02, color: GUN, metal: 0.6, rough: 0.42, ...o });
+const S = (name, pts, width, pos, o = {}) => F(name, pts, width, pos, { rot: [0, deg(-90), 0], ...o });
+const L = (name, pts, pos, o = {}) => ({ ...DEFAULTS, name, kind: 'lathe', pts, pos, segments: 20, color: GRAY, ...o });
+const CUT = { op: 'sub', bevel: 0, corner: 0 };
+const M = { mirror: true };
+const joint = (name, r, w, pos, o = {}) => L(name, [[r * 0.85, -w / 2], [r, -w / 2 + 0.02], [r, w / 2 - 0.02], [r * 0.85, w / 2]], pos, { ...M, rot: [0, 0, deg(90)], ...o });
+return [
+  // legs
+  S('足', [[-0.25, -0.09], [0.22, -0.09], [0.38, -0.02], [0.3, 0.04], [0.05, 0.09], [-0.22, 0.09]], 0.3, [0.3, 0.09, 0.05], { ...M, color: DARK }),
+  joint('足首', 0.1, 0.2, [0.3, 0.22, 0.0]),
+  S('すね', [[-0.14, -0.4], [0.1, -0.4], [0.2, 0.1], [0.22, 0.4], [-0.05, 0.42], [-0.18, 0.1]], 0.22, [0.3, 0.62, 0.05], { ...M, rot: [deg(8), deg(-90), 0] }),
+  S('すね装甲', [[0.1, -0.35], [0.2, -0.3], [0.27, 0.3], [0.36, 0.48], [0.18, 0.46], [0.12, 0.2]], 0.2, [0.3, 0.62, 0.05], { ...M, color: LIGHT, rot: [deg(8), deg(-90), 0] }),
+  S('ひざのライン', [[0.26, 0.3], [0.36, 0.48], [0.32, 0.49], [0.23, 0.33]], 0.21, [0.3, 0.62, 0.05], { ...M, rot: [deg(8), deg(-90), 0], color: ORANGE, bevel: 0.005, corner: 0.005 }),
+  F('すねの排気口', rect(0.18, 0.02), 0.06, [0.41, 0.5, -0.037], { ...M, ...CUT, rot: [deg(8), deg(90), 0], arrayCount: 3, arrayStep: [0, 0.05, 0.05] }),
+  // knee: it folds backward, so its pivot (this cylinder's axis) is on the BACK edge of the leg — thigh and shin both
+  // sit in front of it and the shin folds up behind without meeting the thigh
+  joint('ひざ', 0.07, 0.22, [0.3, 1.02, -0.13]),
+  S('太もも', [[-0.14, -0.25], [0.1, -0.25], [0.15, 0.2], [0.05, 0.27], [-0.15, 0.22]], 0.28, [0.28, 1.25, 0.01], { ...M, rot: [deg(-12), deg(-90), 0] }),
+  S('太もも装甲', [[-0.16, -0.1], [0.14, -0.12], [0.16, 0.18], [-0.1, 0.24]], 0.05, [0.44, 1.28, 0.01], { ...M, color: LIGHT, rot: [deg(-12), deg(-90), 0] }),
+  // waist & core
+  F('腰', [[-0.22, -0.1], [0.22, -0.1], [0.26, 0.08], [-0.26, 0.08]], 0.34, [0, 1.55, -0.02], { color: DARK }),
+  joint('股関節', 0.11, 0.14, [0.26, 1.5, -0.03]),
+  F('腰前アーマー', [[-0.1, 0.06], [0.1, 0.06], [0.05, -0.14], [-0.05, -0.14]], 0.12, [0, 1.48, 0.14], { taper: 0.7 }),
+  F('腹', rect(0.28, 0.26), 0.3, [0, 1.75, -0.03], { color: DARK }),
+  F('腹の吸気口', rect(0.24, 0.015), 0.06, [0, 1.67, 0.13], { ...CUT, arrayCount: 3, arrayStep: [0, 0.035, 0] }),
+  F('コア', [[-0.3, -0.2], [0.3, -0.2], [0.48, 0.05], [0.52, 0.25], [0.4, 0.33], [-0.4, 0.33], [-0.52, 0.25], [-0.48, 0.05]], 0.52,
+    [0, 2.02, -0.06], { taper: 0.75, bevel: 0.03, corner: 0.04 }),
+  F('胸装甲', [[0, -0.18], [0.22, -0.1], [0.3, 0.2], [0, 0.26]], 0.08, [0, 2.05, 0.2], { ...M, rot: [0, deg(20), 0], color: LIGHT, bevel: 0.015 }),
+  F('胸のライン', [[0.19, -0.09], [0.22, -0.1], [0.3, 0.2], [0.27, 0.21]], 0.09, [0, 2.05, 0.2], { ...M, rot: [0, deg(20), 0], color: ORANGE, bevel: 0.004, corner: 0.004 }),
+  F('えり', [[-0.2, -0.04], [0.2, -0.04], [0.16, 0.05], [-0.16, 0.05]], 0.3, [0, 2.36, -0.06], { color: DARK }),
+  // head
+  L('首', [[0.06, -0.06], [0.06, 0.06]], [0, 2.42, -0.04], { segments: 12 }),
+  S('頭', [[-0.14, -0.06], [0.1, -0.06], [0.2, -0.02], [0.12, 0.05], [-0.1, 0.07], [-0.16, 0.02]], 0.2, [0, 2.53, 0.02], { bevel: 0.012, corner: 0.015, scl: [1.5, 1.5, 1.5] }),
+  S('バイザーの溝', [[0.1, -0.018], [0.25, -0.03], [0.25, 0.0], [0.12, 0.005]], 0.24, [0, 2.53, 0.02], { ...CUT, scl: [1.5, 1.5, 1.5] }),
+  S('カメラアイ', [[0.08, -0.015], [0.17, -0.02], [0.17, 0.0], [0.09, 0.003]], 0.16, [0, 2.53, 0.02], { scl: [1.5, 1.5, 1.5], color: EYE, bevel: 0.003, corner: 0.003, metal: 0, rough: 0.2 }),
+  S('アンテナ', [[-0.05, 0], [0, 0], [-0.25, 0.035], [-0.27, 0.02]], 0.015, [0.1, 2.62, -0.01], { ...M, scl: [1.5, 1.5, 1.5], color: LIGHT, bevel: 0.003, corner: 0.005 }),
+  // arms
+  // shoulder: a thick cylinder on the rotation axis (X) runs from inside the core into the armour and stays with the
+  // torso; the armour sits clear of the core and turns around it, so no pose opens a gap or cuts into the chest
+  joint('肩関節', 0.13, 0.3, [0.58, 2.22, -0.04], { bone: 'torso' }),
+  F('肩アーマー', [[-0.14, -0.14], [0.2, -0.14], [0.26, 0], [0.16, 0.13], [-0.12, 0.16], [-0.18, 0.04]], 0.5, [0.78, 2.3, -0.05], { ...M, taper: 0.8, corner: 0.03 }),
+  F('肩のライン', rect(0.5, 0.012), 0.06, [0.8, 2.22, 0.2], { ...M, ...CUT, arrayCount: 2, arrayStep: [0, 0.04, 0] }),
+  F('上腕', [[-0.08, 0.2], [0.08, 0.2], [0.08, 0], [-0.08, 0]], 0.18, [0.72, 2.0, -0.04], { ...M, color: DARK }),
+  L('上腕の軸', [[0.035, -0.13], [0.035, 0.13]], [0.72, 1.87, -0.03], { ...M, segments: 12 }),
+  // elbow: it folds forward, so its pivot (this ball's centre) is on the FRONT edge of the arm — the upper arm sits
+  // above and behind it and the forearm below and behind it, and folding the forearm forward swings it clear
+  L('ひじ', [[0.04, -0.07], [0.07, -0.04], [0.08, 0], [0.07, 0.04], [0.04, 0.07]], [0.72, 1.74, 0.03], { ...M, segments: 16 }),
+  L('前腕の軸', [[0.035, -0.12], [0.035, 0.12]], [0.72, 1.62, -0.01], { ...M, segments: 12 }),
+  S('前腕', [[-0.1, -0.24], [0.12, -0.2], [0.14, -0.02], [0.02, 0], [-0.12, -0.01]], 0.22, [0.72, 1.52, -0.09], M),
+  S('前腕装甲', [[-0.08, -0.18], [0.1, -0.16], [0.12, -0.03], [-0.06, -0.02]], 0.04, [0.845, 1.52, -0.09], { ...M, color: LIGHT }),
+  F('手', rect(0.1, 0.12), 0.12, [0.72, 1.24, -0.05], { ...M, color: GRAY, bevel: 0.02, bevelSegs: 2 }),
+  // weapons: rifle in the right hand (editor -X), barrel down along the forearm so it points forward when the game raises
+  // the arm to aim; pile bunker on the left forearm — every XS holds its gun right-handed
+  S('ライフル', [[-0.2, -0.05], [0.25, -0.05], [0.3, 0.03], [-0.15, 0.06]], 0.08, [-0.72, 1.16, -0.09], { color: DARK, rot: [deg(90), deg(-90), 0] }),
+  F('マガジン', rect(0.05, 0.14), 0.07, [-0.72, 1.08, -0.17], { color: GRAY, rot: [deg(102), 0, 0] }),
+  L('銃身', [[0.025, -0.25], [0.025, 0.25]], [-0.72, 0.68, -0.08], { segments: 12, rot: [deg(180), 0, 0], color: DARK }),
+  L('マズル', [[0.04, -0.04], [0.04, 0.04]], [-0.72, 0.43, -0.08], { segments: 8, rot: [deg(180), 0, 0], color: GRAY }),
+  L('マズルの穴', [[0.018, -0.1], [0.018, 0.1]], [-0.72, 0.39, -0.08], { ...CUT, segments: 12, rot: [deg(180), 0, 0] }),
+  F('パイルバンカー', rect(0.12, 0.12), 0.45, [0.72, 1.36, 0.13], { color: DARK, corner: 0.02 }),
+  F('パイルのライン', rect(0.13, 0.012), 0.2, [0.72, 1.36, 0.3], { ...CUT, arrayCount: 3, arrayStep: [0, 0.03, -0.09], pts: rect(0.14, 0.01) }),
+  L('杭', [[0.03, -0.15], [0.03, 0.1], [0.005, 0.2]], [0.72, 1.36, 0.41], { segments: 12, rot: [deg(90), 0, 0], color: LIGHT }),
+  // back
+  F('背中ユニット', [[-0.3, -0.2], [0.3, -0.2], [0.34, 0.1], [0.2, 0.22], [-0.2, 0.22], [-0.34, 0.1]], 0.2, [0, 2.05, -0.4], { color: DARK }),
+  L('ブースター', [[0.12, 0.3], [0.15, 0.12], [0.28, -0.15], [0.33, -0.3]], [0.18, 1.95, -0.56], { ...M, scl: [0.5, 0.5, 0.5], rot: [deg(90), 0, 0], color: GUN }),
+  L('ブースター内側', [[0.09, 0.05], [0.26, -0.31]], [0.18, 1.95, -0.56], { ...M, ...CUT, scl: [0.5, 0.5, 0.5], rot: [deg(90), 0, 0] }),
+  F('ミサイルの台座', rect(0.1, 0.2), 0.12, [0.27, 2.33, -0.38], { color: DARK }),
+  F('ミサイルポッド', rect(0.34, 0.26), 0.4, [0.27, 2.55, -0.35], { rot: [deg(-15), 0, 0] }),
+  F('ポッドのライン', rect(0.36, 0.012), 0.42, [0.27, 2.55, -0.35], { ...CUT, rot: [deg(-15), 0, 0], pts: rect(0.36, 0.014), depth: 0.1 }),
+  L('発射口 上', [[0.03, -0.1], [0.03, 0.1]], [0.18, 2.655, -0.171], { ...CUT, segments: 16, rot: [deg(75), 0, 0], arrayCount: 3, arrayStep: [0.09, 0, 0] }),
+  L('発射口 下', [[0.03, -0.1], [0.03, 0.1]], [0.18, 2.549, -0.143], { ...CUT, segments: 16, rot: [deg(75), 0, 0], arrayCount: 3, arrayStep: [0.09, 0, 0] }),
+  L('ミサイル 上', [[0.022, -0.05], [0.022, 0], [0, 0.04]], [0.18, 2.642, -0.219], { segments: 12, rot: [deg(75), 0, 0], arrayCount: 3, arrayStep: [0.09, 0, 0], color: EYE, metal: 0.2 }),
+  L('ミサイル 下', [[0.022, -0.05], [0.022, 0], [0, 0.04]], [0.18, 2.536, -0.191], { segments: 12, rot: [deg(75), 0, 0], arrayCount: 3, arrayStep: [0.09, 0, 0], color: EYE, metal: 0.2 }),
+  F('レーダーの台座', rect(0.06, 0.2), 0.12, [-0.35, 2.38, -0.36], { color: DARK }),
+  F('レーダー', [[-0.12, -0.02], [0.12, -0.02], [0.1, 0.02], [-0.1, 0.02]], 0.3, [-0.35, 2.5, -0.4], { color: LIGHT }),
+  L('ロッドアンテナ', [[0.012, -0.2], [0.012, 0.2]], [-0.42, 2.72, -0.45], { segments: 8, color: LIGHT }),
+];
+})();
+
+
+// ---------- sample: winged XS (after the user's reference photos) ----------
+const SAMPLE_WINGED = (() => {
+const G1 = '#4b5058', G2 = '#5f656e', G3 = '#383c43', WHITE = '#e3e5e8', PURPLE = '#7d70b0', MAGENTA = '#ea3a86', VISOR = '#23262c', NOZZLE = '#8b8f96';
+const F = (name, pts, depth, pos, o = {}) => ({ ...DEFAULTS, name, kind: 'extrude', pts, depth, pos, bevel: 0.015, corner: 0.02, color: G1, metal: 0.25, rough: 0.55, ...o });
+const S = (name, pts, width, pos, o = {}) => F(name, pts, width, pos, { rot: [0, deg(-90), 0], ...o });
+const L = (name, pts, pos, o = {}) => ({ ...DEFAULTS, name, kind: 'lathe', pts, pos, segments: 20, color: G3, metal: 0.4, rough: 0.5, ...o });
+const CUT = { op: 'sub', bevel: 0, corner: 0 };
+const M = { mirror: true };
+const W = { color: WHITE, bevel: 0.008, corner: 0.01, metal: 0.1, rough: 0.5 };
+const joint = (name, r, w, pos, o = {}) => L(name, [[r * 0.85, -w / 2], [r, -w / 2 + 0.02], [r, w / 2 - 0.02], [r * 0.85, w / 2]], pos, { ...M, rot: [0, 0, deg(90)], ...o });
+const bell = [[0.12, 0.3], [0.15, 0.12], [0.28, -0.15], [0.33, -0.3]], bellIn = [[0.09, 0.05], [0.26, -0.31]];
+// wide A-stance: leg parts are rolled 13° and placed along the hip→ankle line
+const HIP = [0.2, 1.9], TILT = deg(13);
+const onLeg = (d, z = 0) => [+(HIP[0] + d * Math.sin(TILT)).toFixed(3), +(HIP[1] - d * Math.cos(TILT)).toFixed(3), z];
+const LEG = { ...M, rot: [0, 0, TILT] };
+// a point dx along the leg's own outward axis (for plates on the outer/inner side of a tilted leg)
+const onLegX = (d, dx, z = 0) => { const p = onLeg(d, z); return [+(p[0] + dx * Math.cos(TILT)).toFixed(4), +(p[1] + dx * Math.sin(TILT)).toFixed(4), z]; };
+// wings hang behind the shoulders, bottoms swung slightly back
+const WING = [0.5, 2.12, -0.75], BROT = { ...M, rot: [deg(8), 0, 0], scl: [0.75, 1, 1] };
+// the tall centre fin leans back
+const FIN = [0, 2.45, -0.56], FROT = { rot: [deg(-10), 0, 0] };
+// No broad face stands vertical: every armour block gets a slope (tiltY) and a centre fold (ridge).
+// Plates laid on a block reuse its pos and angles with a slightly larger depth, so they sit flush.
+// head parts are modelled in head-local units and scaled up together about the head origin
+const HK = 1.15, HO = [0, 2.93, 0.07], HS = { scl: [HK, HK, HK] };
+const hp = (x, y, z) => [+(HO[0] + x * HK).toFixed(4), +(HO[1] + y * HK).toFixed(4), +(HO[2] + z * HK).toFixed(4)];
+// yaw about Y, then roll about world Z (e.g. a side plate whose top leans inward)
+const yr = (yaw, roll) => {
+  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), deg(roll))
+    .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), deg(yaw)));
+  const e = new THREE.Euler().setFromQuaternion(q, 'XYZ');
+  return [+e.x.toFixed(5), +e.y.toFixed(5), +e.z.toFixed(5)];
+};
+const CFRONT = [0, 2.5, 0.075];
+const SC = [0.58, 2.6, 0], SP = { taper: 0.9, tiltY: -1.2, ridge: 1.2 };   // shoulder centre / plate angles
+const FC = [0.69, 1.97, -0.04], UA = { taper: 0.85, tiltY: 0.5, ridge: 1.5 }; // forearm centre / upper-arm shells
+const CHEST = [0, 2.5, -0.02], CH = { taper: 0.9, tiltY: -0.6, ridge: 1.0 };
+const SHO = { taper: 0.85, tiltY: -0.8, ridge: 1.0 }, FA = { taper: 0.85, tiltY: 0.8, ridge: 1.0 };
+const TH = { ...LEG, taper: 0.88, tiltY: 0.5, ridge: 1.2 }, SH = { ...LEG, taper: 0.92, tiltY: 0.35, ridge: 0.9 };
+const FT = { ...M, scl: [1.3, 1.3, 1.3], ridge: 0.9, tiltY: -1.0 };
+const BA = { ...BROT, taper: 0.88, tiltY: 0.25, ridge: 1.2 }, FA2 = { ...FROT, ridge: 2.5 }, SK = { rot: [deg(-20), deg(15), 0], ridge: 0.8, scl: [0.85, 1, 1] };
+return [
+  // feet — no base block: a centre block under the ankle, toe and heel blocks on either side of it
+  // (each with a violet cover), the instep on top and the sole underneath
+  S('足・中央ブロック', [[-0.06, -0.08], [0.015, -0.08], [0.015, 0.1], [-0.06, 0.11]], 0.24, [0.6, 0.104, 0.02], { ...FT, color: G3 }),
+  S('つま先', [[0.025, -0.08], [0.12, -0.08], [0.28, -0.03], [0.22, 0.02], [0.025, 0.03]], 0.26, [0.6, 0.104, 0.02], { ...FT }),
+  S('つま先のカバー', [[0.025, 0.035], [0.21, 0.03], [0.18, 0.08], [0.04, 0.12]], 0.23, [0.6, 0.104, 0.02], { ...FT, color: PURPLE, bevel: 0.012 }),
+  S('かかと', [[-0.18, -0.08], [-0.07, -0.08], [-0.07, 0.01], [-0.2, 0.01]], 0.25, [0.6, 0.104, 0.02], { ...FT }),
+  S('かかとのカバー', [[-0.2, 0], [-0.07, 0], [-0.07, 0.12], [-0.18, 0.1]], 0.23, [0.6, 0.104, 0.02], { ...FT, color: PURPLE, bevel: 0.012 }),
+  S('足・甲', [[-0.05, 0.06], [0.12, 0.04], [0.1, 0.1], [-0.06, 0.11]], 0.2, [0.6, 0.104, 0.02], { ...FT, color: G2, bevel: 0.008 }),
+  S('足裏', [[-0.2, -0.08], [0.29, -0.08], [0.29, -0.06], [-0.2, -0.06]], 0.27, [0.6, 0.104, 0.02], { ...FT, color: G3, bevel: 0.004 }),
+  F('かかとのスパイク', [[0, 0.035], [0.24, 0], [0, -0.035]], 0.1, [0.7, 0.04, -0.08], { ...M, color: G3, rot: [0, deg(-25), 0], bevel: 0.008 }),
+  joint('足首', 0.08, 0.18, onLeg(1.62, -0.02)),
+  F('足首アーマー', [[-0.1, 0.05], [0.1, 0.05], [0.12, -0.05], [-0.12, -0.05]], 0.22, onLeg(1.6, 0), { ...LEG, color: G2, tiltY: -1.5, ridge: 1.5 }),
+  // thighs — a frame from the hip joint to the knee joint, front/rear shells, outer and inner plates
+  F('太もも・フレーム', rect(0.14, 0.46), 0.16, onLeg(0.33), { ...LEG, color: G3 }),
+  F('太もも・前装甲', [[-0.11, 0.22], [0.11, 0.22], [0.12, -0.2], [-0.1, -0.23]], 0.12, onLeg(0.33, 0.07), TH),
+  F('太もも・後装甲', [[-0.11, 0.22], [0.11, 0.22], [0.12, -0.2], [-0.1, -0.23]], 0.12, onLeg(0.33, -0.07), TH),
+  F('太もも・前パネル', [[-0.08, 0.18], [0.03, 0.18], [0.03, -0.14], [-0.07, -0.18]], 0.13, onLeg(0.33, 0.07), { ...TH, color: G2 }),
+  F('太もも・外側装甲', [[-0.12, -0.19], [0.12, -0.19], [0.11, 0.2], [-0.11, 0.2]], 0.03, onLegX(0.33, 0.135, 0), { ...M, rot: yr(90, 16), ridge: 2, color: G2 }),
+  F('太もも・白', rect(0.05, 0.08), 0.012, onLegX(0.36, 0.152, 0.03), { ...M, ...W, rot: yr(90, 16) }),
+  F('太もも・内側装甲', [[-0.11, -0.18], [0.11, -0.18], [0.1, 0.18], [-0.1, 0.18]], 0.02, onLegX(0.33, -0.12, 0), { ...M, rot: yr(90, 10), color: G3 }),
+  // knee
+  // knee folds backward: its pivot (the cylinder's axis) is on the back edge, thigh and shin in front of it
+  joint('ひざ関節', 0.06, 0.22, onLeg(0.6, -0.13)),
+  F('ひざアーマー', [[-0.09, 0.08], [0.09, 0.08], [0.1, -0.04], [0, -0.1], [-0.1, -0.04]], 0.1, onLeg(0.62, 0.17), { ...LEG, tiltY: -2, ridge: 2, bevel: 0.012 }),
+  F('ひざの白', [[-0.04, 0.01], [0.04, 0.01], [0, -0.03]], 0.11, onLeg(0.62, 0.17), { ...LEG, ...W, tiltY: -2, ridge: 2 }),
+  // shins — a frame from the knee to the ankle, split front plates, the flared outer block, inner frame and calf
+  F('すね・フレーム', [[-0.1, 0.4], [0.1, 0.4], [0.2, -0.1], [0.2, -0.45], [-0.12, -0.47], [-0.13, 0]], 0.3, onLeg(1.05, -0.04), { ...SH, color: G3 }),
+  F('すね・内側フレーム', [[-0.2, 0.3], [-0.14, 0.3], [-0.14, -0.4], [-0.2, -0.3]], 0.36, onLeg(1.05, -0.04), { ...SH, color: G3 }),
+  F('すね・前装甲（上）', [[-0.12, 0.44], [0.14, 0.44], [0.2, 0.02], [-0.14, 0.02]], 0.14, onLeg(1.05, 0.1), { ...SH, color: G2 }),
+  F('すね・前装甲（下）', [[-0.14, -0.01], [0.2, -0.01], [0.23, -0.1], [0.23, -0.5], [-0.16, -0.52], [-0.16, -0.1]], 0.14, onLeg(1.05, 0.1), SH),
+  F('すね・外側装甲', [[0.155, 0.44], [0.185, 0.44], [0.3, -0.1], [0.3, -0.5], [0.245, -0.5], [0.245, -0.1]], 0.4, onLeg(1.05, -0.04), SH),
+  F('すね・白（上）', [[0.03, 0.44], [0.09, 0.44], [0.05, 0.18], [0, 0.2]], 0.145, onLeg(1.05, 0.1), { ...SH, ...W }),
+  F('すね・白（下）', [[0.25, -0.06], [0.29, -0.1], [0.295, -0.34], [0.255, -0.32]], 0.41, onLeg(1.05, -0.04), { ...SH, ...W }),
+  F('ふくらはぎ装甲', rect(0.3, 0.5), 0.12, onLeg(1.0, -0.23), { ...LEG, tiltY: 0.8, ridge: 1.2 }),
+  L('ふくらはぎのスラスター', bell, onLeg(0.95, -0.28), { ...M, scl: [0.3, 0.3, 0.3], rot: [deg(25), 0, 0], color: NOZZLE, metal: 0.8, rough: 0.3 }),
+  L('ふくらはぎのスラスター内側', bellIn, onLeg(0.95, -0.28), { ...M, ...CUT, scl: [0.3, 0.3, 0.3], rot: [deg(25), 0, 0] }),
+  // waist — no rough block: a small waist frame, front and rear belt blocks either side of it, side blocks carrying
+  // the hip joints and side skirts; front skirts hang from a hinge and split along a seam into inner/outer panels + tip
+  F('腰・フレーム', rect(0.3, 0.1), 0.24, [0, 1.99, -0.02], { color: G3 }),
+  F('腰・前ベルト', [[0.012, 0.07], [0.19, 0.07], [0.2, -0.06], [0.012, -0.06]], 0.1, [0, 1.99, 0.1], { ...M, tiltY: -1.5, ridge: 1.2 }),
+  F('腰・後ベルト', [[0.012, 0.07], [0.19, 0.07], [0.2, -0.06], [0.012, -0.06]], 0.1, [0, 1.99, -0.14], { ...M, tiltY: -1.5, ridge: 1.2 }),
+  F('腰・横ブロック', [[-0.035, 0.07], [0.045, 0.06], [0.05, -0.07], [-0.035, -0.07]], 0.3, [0.235, 1.99, -0.02], { ...M, color: G2, taper: 0.85, ridge: 1.5 }),
+  F('腰の前フレーム', rect(0.14, 0.05), 0.1, [0, 2.02, 0.17], { color: G3 }),
+  F('股', [[-0.06, 0.05], [0.06, 0.05], [0.04, -0.08], [-0.04, -0.08]], 0.22, [0, 1.72, 0.02], { color: G3, ridge: 2 }),
+  F('股・フレーム', rect(0.08, 0.2), 0.14, [0, 1.84, 0], { color: G3 }),
+  joint('股関節', 0.1, 0.12, [0.22, 1.9, -0.02]),
+  F('スカート内側フレーム', [[0.1, 0.22], [0.25, 0.22], [0.3, -0.1], [0.12, -0.05]], 0.06, [0, 1.58, 0.16], { ...M, ...SK, color: G3, bone: 'leg' }),
+  F('スカートの支え', rect(0.1, 0.06), 0.12, [0.2, 1.74, 0.12], { ...M, color: G3, bone: 'leg' }),
+  F('スカート・ヒンジ', [[0.09, 0.235], [0.3, 0.24], [0.29, 0.2], [0.1, 0.2]], 0.08, [0, 1.58, 0.2], { ...M, ...SK, color: G3, bone: 'leg' }),
+  F('スカート・内側パネル', [[0.101, 0.195], [0.19, 0.195], [0.475, -0.2], [0.26, -0.21]], 0.06, [0, 1.58, 0.2], { ...M, ...SK, corner: 0.02, bone: 'leg' }),
+  F('スカート・外側パネル', [[0.215, 0.195], [0.335, 0.195], [0.599, -0.14], [0.455, -0.14]], 0.06, [0, 1.58, 0.2], { ...M, ...SK, corner: 0.02, bone: 'leg' }),
+  F('スカート・白', [[0.3, 0.13], [0.37, 0.12], [0.41, 0.06], [0.34, 0.07]], 0.075, [0, 1.58, 0.2], { ...M, ...W, ...SK, bone: 'leg' }),
+  F('スカート・先端', [[0.47, -0.155], [0.61, -0.155], [0.725, -0.3], [0.62, -0.27], [0.49, -0.215]], 0.07, [0, 1.58, 0.2], { ...M, ...SK, color: G2, bone: 'leg' }),
+  F('スカート・先端の金具', [[0.46, -0.12], [0.6, -0.12], [0.66, -0.22], [0.5, -0.22]], 0.04, [0, 1.58, 0.17], { ...M, ...SK, color: G3, bone: 'leg' }),
+  F('腰の中央', [[-0.05, 0.06], [0.05, 0.06], [0.045, -0.3], [0, -0.34], [-0.045, -0.3]], 0.07, [0, 1.95, 0.2], { color: G2, tiltY: 1.5, ridge: 2.0, rot: [-0.243, 0, 0] }),
+  F('腰の中央上', [[-0.06, 0.03], [0.06, 0.03], [0.04, -0.03], [-0.04, -0.03]], 0.08, [0, 1.99, 0.21], { tiltY: -3, ridge: 2 }),
+  F('サイドスカート・上', [[-0.14, 0.08], [0.14, 0.08], [0.125, -0.06], [-0.125, -0.06]], 0.05, [0.3, 1.86, -0.02], { ...M, rot: [0, deg(90), deg(-12)], ridge: 1.0 }),
+  F('サイドスカート・下', [[-0.12, -0.075], [0.12, -0.075], [0.11, -0.22], [-0.11, -0.22]], 0.05, [0.3, 1.86, -0.02], { ...M, rot: [0, deg(90), deg(-12)], ridge: 1.0, color: G2 }),
+  F('リアスカート', [[0.01, 0.13], [0.18, 0.13], [0.17, -0.13], [0.01, -0.13]], 0.05, [0, 1.86, -0.22], { ...M, rot: [deg(15), 0, 0], ridge: 1.0 }),
+  // torso
+  F('腹のフレーム', rect(0.3, 0.22), 0.22, [0, 2.13, -0.03], { color: G3, ridge: 0.8, scl: [1, 1.3, 1] }),
+  F('腹', rect(0.14, 0.2), 0.26, [0, 2.1, 0], { color: G2, ridge: 1.5, tiltY: -0.8, bone: 'hips' }),
+  F('腹のサイド', [[-0.04, -0.1], [0.05, -0.1], [0.06, 0.1], [-0.04, 0.1]], 0.24, [0.12, 2.1, -0.02], { ...M, ridge: 2, tiltY: -1, bone: 'hips' }),
+  // chest — no rough block: a centre spine block, upper/lower pectoral blocks meeting it along its edges,
+  // side blocks tying front to back, shoulder roots up to the shoulder joints, split back plates,
+  // and a smaller inner frame that only shows through the gaps
+  F('胸の内部フレーム', [[-0.17, -0.25], [0.17, -0.25], [0.25, -0.1], [0.28, 0.1], [0.25, 0.26], [-0.25, 0.26], [-0.28, 0.1], [-0.25, -0.1]], 0.3, CHEST, { color: G3 }),
+  F('胸の中央ブロック', [[-0.11, -0.2], [0.11, -0.2], [0.04, 0.18], [-0.12, 0.26]], 0.2, CFRONT, { ...M, ...CH, bevel: 0.015 }),
+  F('胸の上ブロック', [[0.13, 0.06], [0.31, 0.06], [0.32, 0.12], [0.29, 0.3], [0.13, 0.3]], 0.18, CFRONT, { ...M, ...CH, color: G2 }),
+  F('胸の下ブロック', [[0.125, -0.2], [0.2, -0.28], [0.28, -0.12], [0.3, 0.045], [0.13, 0.045]], 0.17, CFRONT, { ...M, ...CH }),
+  F('胸の脇ブロック', [[-0.035, -0.2], [0.035, -0.18], [0.035, -0.04], [-0.035, -0.06]], 0.36, [0.28, 2.42, -0.04], { ...M, color: G3, taper: 0.85, ridge: 1 }),
+  F('背中のプレート', [[0.01, -0.26], [0.19, -0.26], [0.28, -0.11], [0.34, 0.12], [0.28, 0.28], [0.01, 0.28]], 0.15, [0, 2.5, -0.125], { ...M, tiltY: 0.6, ridge: 1 }),
+  F('コクピットの縁', [[-0.1, -0.005], [0.1, -0.005], [0.1, -0.21], [0, -0.28], [-0.1, -0.21]], 0.205, CFRONT, { ...CH, color: G3 }),
+  F('コクピット', [[-0.085, -0.02], [0.085, -0.02], [0.085, -0.2], [0, -0.26], [-0.085, -0.2]], 0.215, CFRONT, { ...CH, color: PURPLE, bevel: 0.01 }),
+  F('胸センサーの台', [[0.23, 0.13], [0.31, 0.13], [0.31, 0.25], [0.23, 0.25]], 0.2, CFRONT, { ...M, ...CH, color: G3 }),
+  F('胸センサー', [[0.2475, 0.15], [0.2925, 0.15], [0.2925, 0.23], [0.2475, 0.23]], 0.23, CFRONT, { ...M, ...CH, color: MAGENTA, bevel: 0.004, corner: 0.006, metal: 0, rough: 0.2 }),
+  F('胸のダクト', [[0.15, 0], [0.27, 0.03], [0.28, 0.1], [0.16, 0.08]], 0.19, CFRONT, { ...M, ...CH, color: G3 }),
+  // head — the user's own design, made in this editor (saved as 「こんな感じ」):
+  // no protruding muzzle; a violet visor framed by raised cheek guards, a big white V on the forehead,
+  // glowing magenta eyes set behind the visor and the crest tilted up as an antenna
+  { ...DEFAULTS, ...{"name": "えり", "kind": "extrude", "op": "add", "color": "#383c43", "mirror": false, "pts": [[-0.18, -0.05], [0.18, -0.05], [0.14, 0.06], [-0.14, 0.06]], "depth": 0.3, "bevel": 0.015, "bevelSegs": 1, "corner": 0.02, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 1, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0, 2.72, -0.03], "rot": [0, 0, 0], "scl": [1, 1, 1]} },
+  { ...DEFAULTS, ...{"name": "頭・額の白V", "kind": "extrude", "op": "add", "color": "#e3e5e8", "mirror": false, "pts": [[-0.08, 0.02], [-0.055, 0.02], [0, 0.055], [0.055, 0.02], [0.08, 0.02], [0, -0.055]], "depth": 0.04, "bevel": 0.008, "bevelSegs": 1, "corner": 0.01, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 0, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.1, "rough": 0.5, "pos": [0, 2.9906, 0.1663], "rot": [-0.5995, 0, 0], "scl": [1.1146, 1.6004, 1.4219]} },
+  { ...DEFAULTS, ...{"name": "首", "kind": "lathe", "op": "add", "color": "#383c43", "mirror": false, "pts": [[0.05, -0.08], [0.05, 0.08]], "depth": 0.4, "bevel": 0.04, "bevelSegs": 1, "corner": 0, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 0, "segments": 12, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.4, "rough": 0.5, "pos": [0, 2.8, 0.02], "rot": [0, 0, 0], "scl": [1, 1, 1]} },
+  { ...DEFAULTS, ...{"name": "首のガード", "kind": "extrude", "op": "add", "color": "#383c43", "mirror": true, "pts": [[-0.03, 0.04], [0.03, 0.04], [0.035, -0.04], [-0.03, -0.04]], "depth": 0.1, "bevel": 0.015, "bevelSegs": 1, "corner": 0.02, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 0, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0.069, 2.7575, 0.0585], "rot": [0, 0.2618, 0], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・あご下フレーム", "kind": "extrude", "op": "add", "color": "#383c43", "mirror": false, "pts": [[-0.055, -0.015], [0.055, -0.015], [0.055, 0.015], [-0.055, 0.015]], "depth": 0.12, "bevel": 0.015, "bevelSegs": 1, "corner": 0.02, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 0, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0, 2.7863, 0.07], "rot": [0, 0, 0], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・芯", "kind": "extrude", "op": "add", "color": "#383c43", "mirror": true, "pts": [[-0.08, -0.04], [0.02, -0.1], [0.02, 0.08], [-0.1, 0.1]], "depth": 0.2, "bevel": 0.01, "bevelSegs": 1, "corner": 0.02, "cornerSegs": 1, "taper": 1, "tiltY": -2, "ridge": 2, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [-0.0038, 2.9008, 0.0585], "rot": [0.085, 0, 0], "scl": [0.6012, 0.9435, 1.15]} },
+  S('頭・頭頂の筋', [[-0.12, 0.05], [0.06, 0.05], [0.1, 0.065], [0.07, 0.115], [-0.03, 0.142], [-0.12, 0.105], [-0.14, 0.06]], 0.055, hp(0, 0, 0),
+    { ...HS, tiltY: -2, ridge: 1.5, bevel: 0.01, corner: 0.015 }),
+  S('頭・ヘルメット', [[-0.12, 0.02], [0.06, 0.03], [0.1, 0.055], [0.07, 0.1], [-0.03, 0.125], [-0.12, 0.09], [-0.14, 0.05]], 0.055, hp(0.052, 0, 0),
+    { ...M, ...HS, rot: yr(-90, 14), tiltY: -3, ridge: 1.5, bevel: 0.01, corner: 0.015 }),
+  { ...DEFAULTS, ...{"name": "頭・側頭部", "kind": "extrude", "op": "add", "color": "#4b5058", "mirror": true, "pts": [[-0.11, -0.07], [0.04, -0.06], [0.07, 0], [0.05, 0.05], [-0.1, 0.06], [-0.13, 0]], "depth": 0.035, "bevel": 0.008, "bevelSegs": 1, "corner": 0.02, "cornerSegs": 1, "taper": 0.8, "tiltY": -3, "ridge": 2.5, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0.0826, 2.93, 0.07], "rot": [0, -1.5708, 0], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・後頭部", "kind": "extrude", "op": "add", "color": "#5f656e", "mirror": false, "pts": [[-0.08, -0.09], [0.08, -0.09], [0.088, 0.04], [0.055, 0.09], [-0.055, 0.09], [-0.088, 0.04]], "depth": 0.08, "bevel": 0.015, "bevelSegs": 1, "corner": 0.02, "cornerSegs": 1, "taper": 1, "tiltY": -1, "ridge": 1.5, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0, 2.9185, -0.045], "rot": [0, 0, 0], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・後頭部の縁", "kind": "extrude", "op": "add", "color": "#383c43", "mirror": true, "pts": [[-0.14, -0.06], [-0.08, -0.07], [-0.07, 0.07], [-0.12, 0.08]], "depth": 0.03, "bevel": 0.015, "bevelSegs": 1, "corner": 0.02, "cornerSegs": 1, "taper": 1, "tiltY": -3, "ridge": 0, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0.0978, 2.93, 0.07], "rot": [0, -1.5708, 0], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・バイザーの溝", "kind": "extrude", "op": "sub", "color": "#4b5058", "mirror": false, "pts": [[-0.07, -0.01], [0.06, -0.01], [0.12, 0.015], [-0.12, 0.015]], "depth": 0.12, "bevel": 0, "bevelSegs": 1, "corner": 0, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 0, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0, 2.9127, 0.1965], "rot": [0, 0, 0], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・ひさし", "kind": "extrude", "op": "add", "color": "#4b5058", "mirror": false, "pts": [[0.05, -0.004], [0.12, -0.02], [0.11, 0.04], [0.05, 0.04]], "depth": 0.14, "bevel": 0.005, "bevelSegs": 1, "corner": 0.006, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 3.6, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0, 2.9438, 0.07], "rot": [0, -1.5708, 0], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・ひさしの横", "kind": "extrude", "op": "add", "color": "#4b5058", "mirror": true, "pts": [[0.045, -0.008], [0.088, 0], [0.088, 0.016], [0.045, 0.012]], "depth": 0.08, "bevel": 0.004, "bevelSegs": 1, "corner": 0.02, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 0, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0, 2.932, 0.1505], "rot": [0, 0.4363, 0], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・バイザー", "kind": "extrude", "op": "add", "color": "#6600ff", "mirror": false, "pts": [[-0.07, 0.012], [0, 0.005], [0.07, 0.012], [0.066, -0.01], [0, -0.015], [-0.066, -0.01]], "depth": 0.04, "bevel": 0.003, "bevelSegs": 1, "corner": 0.004, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 2.5, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.3, "rough": 0.2, "pos": [0, 2.9151, 0.1396], "rot": [0, 0, 0], "scl": [1.15, 1.1873, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・ほほガード", "kind": "extrude", "op": "add", "color": "#4b5058", "mirror": true, "pts": [[0.04, 0], [0.085, 0.005], [0.088, -0.06], [0.06, -0.1], [0.042, -0.07]], "depth": 0.07, "bevel": 0.006, "bevelSegs": 1, "corner": 0.008, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 0, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [-0.0218, 2.9013, 0.1447], "rot": [0.4536, 0.496, 0], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・側面カバー", "kind": "extrude", "op": "add", "color": "#5f656e", "mirror": true, "pts": [[-0.1, -0.07], [0.03, -0.065], [0.05, 0], [0.03, 0.04], [-0.09, 0.05], [-0.11, 0]], "depth": 0.015, "bevel": 0.004, "bevelSegs": 1, "corner": 0.02, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 3, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0.115, 2.9243, 0.07], "rot": [1.5708, -1.3614, 1.5708], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・耳", "kind": "lathe", "op": "add", "color": "#383c43", "mirror": true, "pts": [[0.026, -0.012], [0.026, 0.012]], "depth": 0.4, "bevel": 0.04, "bevelSegs": 1, "corner": 0, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 0, "segments": 6, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.4, "rough": 0.5, "pos": [0.115, 2.9243, 0.0528], "rot": [0, 0, 1.5708], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・耳のセンサー", "kind": "lathe", "op": "add", "color": "#5f656e", "mirror": true, "pts": [[0.012, -0.018], [0.012, 0.018]], "depth": 0.4, "bevel": 0.04, "bevelSegs": 1, "corner": 0, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 0, "segments": 12, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.4, "rough": 0.5, "pos": [0.1196, 2.9243, 0.0528], "rot": [0, 0, 1.5708], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・トサカ", "kind": "extrude", "op": "add", "color": "#4b5058", "mirror": false, "pts": [[-0.12, 0], [0.03, 0], [0.07, 0.02], [-0.02, 0.035], [-0.14, 0.018]], "depth": 0.025, "bevel": 0.004, "bevelSegs": 1, "corner": 0.02, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 3, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.25, "rough": 0.55, "pos": [0, 3.0737, 0.07], "rot": [0.5288, -1.5708, 0], "scl": [1.481, 1.3473, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・トサカの白", "kind": "extrude", "op": "add", "color": "#e3e5e8", "mirror": false, "pts": [[0.02, 0.004], [0.04, 0.004], [0.07, 0.02], [0.035, 0.026]], "depth": 0.028, "bevel": 0.003, "bevelSegs": 1, "corner": 0.01, "cornerSegs": 1, "taper": 1, "tiltY": 0, "ridge": 3, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.1, "rough": 0.5, "pos": [0, 3.0737, 0.07], "rot": [0.5051, -1.5708, 0], "scl": [1.15, 1.15, 1.15]} },
+  { ...DEFAULTS, ...{"name": "頭・目", "kind": "extrude", "op": "add", "color": "#ff006f", "mirror": true, "pts": [[-0.25, -0.3], [0.15, -0.3], [0.1, 0.3], [-0.25, 0.3]], "depth": 0.8, "bevel": 0.1, "bevelSegs": 4, "corner": 0.15, "cornerSegs": 4, "taper": 1, "tiltY": 0, "ridge": 0, "segments": 24, "arrayCount": 1, "arrayStep": [0, 0.15, 0], "metal": 0.55, "rough": 0.38, "pos": [-0.0433, 2.8948, 0.0298], "rot": [2.2403, 0, 0], "scl": [0.1364, 0.1361, 0.2153]} },
+  // shoulders — no rough block: an inner block on the shoulder joint, front and rear armour meeting at a
+  // centre seam, a top cap over both, an outer plate tying them together, the bottom frame the upper arm hangs from
+  joint('肩関節', 0.1, 0.16, [0.4, 2.6, -0.02]),
+  F('肩・内部ブロック', rect(0.3, 0.3), 0.3, SC, { ...M, color: G3 }),
+  F('肩・前面装甲', [[-0.18, -0.18], [0.18, -0.18], [0.24, -0.04], [0.225, 0.055], [-0.197, 0.075]], 0.18, [SC[0], SC[1], 0.11], { ...M, ...SP, corner: 0.03 }),
+  F('肩・後面装甲', [[-0.18, -0.18], [0.18, -0.18], [0.24, -0.04], [0.225, 0.055], [-0.197, 0.075]], 0.18, [SC[0], SC[1], -0.11], { ...M, ...SP, corner: 0.03 }),
+  F('肩・上面装甲', [[-0.2, 0.085], [0.225, 0.065], [0.08, 0.21], [-0.14, 0.22]], 0.42, SC, { ...M, color: G2, ridge: 1, bevel: 0.015, corner: 0.02 }),
+  F('肩・外側装甲', [[-0.15, -0.15], [0.15, -0.15], [0.13, 0.06], [-0.13, 0.08]], 0.03, [0.8, 2.56, 0], { ...M, rot: yr(90, 10), ridge: 2 }),
+  F('肩・白', [[0.1, 0], [0.2, -0.02], [0.215, 0.045], [0.11, 0.06]], 0.19, [SC[0], SC[1], 0.11], { ...M, ...SP, ...W }),
+  F('肩・センサーのくぼみ', [[-0.1, -0.1], [0.06, -0.1], [0.08, 0.04], [-0.1, 0.06]], 0.06, [SC[0], SC[1], 0.22], { ...M, ...CUT }),
+  L('肩・センサーの縁', [[0.065, -0.02], [0.065, 0.02]], [0.57, 2.58, 0.17], { ...M, segments: 24, rot: [deg(90), 0, 0], color: G3 }),
+  L('肩・センサー', [[0.045, -0.02], [0.045, 0.02]], [0.57, 2.58, 0.19], { ...M, segments: 24, rot: [deg(90), 0, 0], color: MAGENTA, metal: 0, rough: 0.2 }),
+  F('肩・下フレーム', rect(0.2, 0.06), 0.28, [0.58, 2.4, 0], { ...M, color: G3 }),
+  // upper arm — a core shaft from the shoulder frame to the elbow, front/rear half shells and an outer plate on it
+  L('上腕・芯', [[0.045, -0.13], [0.045, 0.13]], [0.63, 2.25, 0], { ...M, segments: 12 }),
+  F('上腕・前装甲', [[-0.065, 0.12], [0.065, 0.12], [0.07, -0.12], [-0.06, -0.12]], 0.075, [0.63, 2.25, 0.043], { ...M, ...UA }),
+  F('上腕・後装甲', [[-0.065, 0.12], [0.065, 0.12], [0.07, -0.12], [-0.06, -0.12]], 0.075, [0.63, 2.25, -0.043], { ...M, ...UA }),
+  F('上腕・外側装甲', [[-0.08, -0.11], [0.08, -0.11], [0.07, 0.11], [-0.07, 0.11]], 0.025, [0.705, 2.25, 0], { ...M, rot: yr(90, -4), ridge: 2, color: G2 }),
+  // elbow folds forward: its pivot (the ball's centre) is on the front edge, the forearm hangs behind it
+  L('ひじ', [[0.03, -0.052], [0.052, -0.03], [0.06, 0], [0.052, 0.03], [0.03, 0.052]], [0.65, 2.1, 0.07], { ...M, segments: 16 }),
+  F('ひじアーマー', [[-0.07, 0.04], [0.07, 0.04], [0.05, -0.06], [-0.05, -0.06]], 0.08, [0.65, 2.1, -0.09], { ...M, rot: [deg(20), 0, 0], ridge: 2 }),
+  // forearm — a frame from the elbow to the wrist, a cuff at the elbow end, front/rear shells, outer and inner plates
+  F('前腕・フレーム', rect(0.12, 0.24), 0.14, FC, { ...M, color: G3 }),
+  F('前腕・上リング', [[-0.1, 0.075], [0.1, 0.075], [0.1, 0.12], [-0.1, 0.12]], 0.24, FC, { ...M, ...FA, color: G2 }),
+  F('前腕・前装甲', [[-0.1, 0.062], [0.1, 0.062], [0.12, -0.12], [-0.09, -0.13]], 0.1, [FC[0], FC[1], 0.02], { ...M, ...FA }),
+  F('前腕・後装甲', [[-0.1, 0.062], [0.1, 0.062], [0.12, -0.12], [-0.09, -0.13]], 0.1, [FC[0], FC[1], -0.1], { ...M, ...FA }),
+  F('前腕・パネル', [[-0.06, -0.05], [0.06, -0.05], [0.06, 0.04], [-0.06, 0.04]], 0.105, [FC[0], FC[1], 0.02], { ...M, ...FA, color: G2 }),
+  F('前腕・外側装甲', [[-0.11, -0.11], [0.11, -0.11], [0.1, 0.09], [-0.09, 0.11]], 0.025, [0.8, 1.97, -0.04], { ...M, rot: yr(90, -6), ridge: 2 }),
+  F('前腕・白', rect(0.05, 0.035), 0.015, [0.815, 2.02, -0.02], { ...M, ...W, rot: yr(90, -6) }),
+  F('前腕・内側装甲', [[-0.1, -0.1], [0.1, -0.1], [0.09, 0.09], [-0.09, 0.09]], 0.02, [0.585, 1.97, -0.04], { ...M, rot: yr(90, 6), color: G3 }),
+  // hand
+  L('手首', [[0.04, -0.04], [0.04, 0.04]], [0.69, 1.84, -0.03], { ...M, rot: [0, 0, deg(90)], segments: 12 }),
+  F('手', rect(0.1, 0.1), 0.12, [0.69, 1.77, -0.03], { ...M, color: G3, bevel: 0.025, bevelSegs: 2 }),
+  F('手の甲', rect(0.1, 0.08), 0.03, [0.69, 1.78, 0.03], { ...M, tiltY: -2, bevel: 0.008 }),
+  F('指', [[-0.05, 0.02], [0.05, 0.02], [0.05, -0.035], [-0.05, -0.035]], 0.09, [0.69, 1.7, -0.02], { ...M, color: G3, bevel: 0.015, bevelSegs: 2 }),
+  F('指の間', rect(0.004, 0.06), 0.11, [0.668, 1.69, 0.04], { ...M, ...CUT, arrayCount: 3, arrayStep: [0.022, 0, -0.06] }),
+  F('親指', rect(0.025, 0.05), 0.045, [0.64, 1.75, 0.02], { ...M, color: G3, rot: [0, 0, deg(20)], bevel: 0.01 }),
+  // backpack — no rough block: a centre block the fin root sits on, left/right blocks, a top block,
+  // and housings that carry the thrusters
+  F('バックパック・中央ブロック', rect(0.16, 0.42), 0.22, [0, 2.45, -0.31], { color: G3, ridge: 1 }),
+  F('バックパック・左右ブロック', [[0.09, -0.2], [0.2, -0.2], [0.2, 0.2], [0.09, 0.2]], 0.2, [0, 2.45, -0.31], { ...M, ridge: 1, tiltY: -0.5 }),
+  F('バックパックの上部', rect(0.3, 0.1), 0.22, [0, 2.7, -0.31], { tiltY: -2, ridge: 1.5 }),
+  F('スラスターのハウジング', rect(0.1, 0.08), 0.14, [0.12, 2.24, -0.36], { ...M, color: G3, ridge: 1 }),
+  L('バックパックのスラスター', bell, [0.12, 2.18, -0.38], { ...M, scl: [0.3, 0.3, 0.3], rot: [deg(20), 0, 0], color: NOZZLE, metal: 0.8, rough: 0.3 }),
+  L('バックパックのスラスター内側', bellIn, [0.12, 2.18, -0.38], { ...M, ...CUT, scl: [0.3, 0.3, 0.3], rot: [deg(20), 0, 0] }),
+  // centre fin — a lower section on the fin root and an upper blade meeting it at a seam, the white set into the blade
+  F('フィンの付け根', rect(0.2, 0.25), 0.18, [0, 2.35, -0.46], { color: G3, ridge: 2 }),
+  F('フィン・下段', [[0, -0.45], [0.13, -0.3], [0.15, 0], [0.13, 0.12], [-0.13, 0.12], [-0.15, 0], [-0.13, -0.35]], 0.12, FIN, { ...FA2, bevel: 0.02, corner: 0.02 }),
+  F('フィン・芯', [[0, -0.4], [0.05, -0.3], [0.05, 0.9], [0, 1.2], [-0.05, 0.9], [-0.05, -0.3]], 0.08, FIN, { ...FA2, color: G3 }),
+  F('フィン・上の刃', [[0.125, 0.135], [0.06, 0.9], [0, 1.45], [-0.06, 0.9], [-0.125, 0.135]], 0.11, FIN, { ...FA2, bevel: 0.015, corner: 0.02 }),
+  F('フィン・白', [[0, 0.16], [0.06, 0.2], [0.05, 0.45], [0, 0.6], [-0.05, 0.45], [-0.06, 0.2]], 0.115, FIN, { ...FA2, ...W }),
+  // wings — an inner frame with upper-inner / upper-outer / middle / lower panels meeting at seams
+  F('ウイングの腕', rect(0.26, 0.1), 0.35, [0.29, 2.62, -0.55], { ...M, color: G3 }),
+  L('ウイングの関節', [[0.06, -0.05], [0.06, 0.05]], [0.4, 2.62, -0.6], { ...M, rot: [deg(90), 0, 0], segments: 16 }),
+  F('ウイング・フレーム', [[-0.17, 0.72], [0.19, 0.72], [0.21, 0.5], [0.17, -0.34], [0.1, -0.5], [-0.1, -0.48], [-0.19, 0.34]], 0.1, WING, { ...BA, color: G3 }),
+  F('ウイング・上内側', [[-0.2, 0.85], [0.09, 0.85], [0.09, 0.3], [-0.212, 0.3], [-0.22, 0.4]], 0.16, WING, { ...BA, bevel: 0.015, corner: 0.02 }),
+  F('ウイング・上外側', [[0.105, 0.85], [0.22, 0.85], [0.25, 0.6], [0.235, 0.3], [0.105, 0.3]], 0.16, WING, { ...BA, color: G2, bevel: 0.015, corner: 0.02 }),
+  F('ウイング・中段', [[-0.209, 0.285], [0.234, 0.285], [0.2, -0.4], [-0.147, -0.4]], 0.16, WING, { ...BA, bevel: 0.015, corner: 0.02 }),
+  F('ウイング・下段', [[-0.148, -0.415], [0.199, -0.415], [0.12, -0.6], [-0.12, -0.58]], 0.16, WING, { ...BA, color: G2, bevel: 0.015, corner: 0.02 }),
+  F('ウイング・白', [[-0.1, 0.72], [0.04, 0.72], [0.04, 0.55], [-0.1, 0.55]], 0.17, WING, { ...BA, ...W }),
+  L('スラスターの基部', [[0.06, -0.035], [0.06, 0.035]], [0.48, 2.24, -0.845], { ...M, rot: [deg(98), 0, 0] }),
+  L('ウイングのスラスター', bell, [0.48, 2.24, -0.905], { ...M, scl: [0.36, 0.36, 0.36], rot: [deg(98), 0, 0], color: NOZZLE, metal: 0.8, rough: 0.3 }),
+  L('スラスターの内側', bellIn, [0.48, 2.24, -0.905], { ...M, ...CUT, scl: [0.36, 0.36, 0.36], rot: [deg(98), 0, 0] }),
+];
+})();
+// same shape in the blue scheme of the user's first reference model
+const SAMPLE_WINGED_BLUE = (() => {
+  const map = { '#4b5058': '#2f7aa8', '#5f656e': '#3f90c0', '#383c43': '#2a3480', '#7d70b0': '#2a3480', '#ea3a86': '#e2323c' };
+  return SAMPLE_WINGED.map(p => ({ ...p, color: map[p.color] ?? p.color }));
+})();
+
+
+// ---------- sample collection ----------
+// Built-in samples ship with the page; the user's own samples live in this browser's localStorage
+// and can be moved between browsers as a JSON file.
+// the accent colour of each sample is what the faction colour paints in the game
+const teamed = (list, colors) => list.map(p => ({ ...p, team: p.team || colors.includes(p.color.toLowerCase()) }));
+const BUILTIN = [
+  { name: '可変翼型XS（グレー）', parts: teamed(SAMPLE_WINGED, ['#e3e5e8']), builtin: true },
+  { name: '可変翼型XS（青）', parts: teamed(SAMPLE_WINGED_BLUE, ['#e3e5e8']), builtin: true },
+  { name: '重装型XS', parts: teamed(SAMPLE_HEAVY, ['#e8781e']), builtin: true },
+];
+const USER_KEY = 'xs-part-editor-samples-v1';
+function readUserSamples() {
+  try { const v = JSON.parse(localStorage.getItem(USER_KEY)); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function writeUserSamples() {
+  try { localStorage.setItem(USER_KEY, JSON.stringify(userSamples)); return true; } catch { return false; }
+}
+let userSamples = readUserSamples();
+
+// Thumbnails use their own camera framing the whole model from the front-right,
+// rendered into a corner of the main canvas so tone mapping matches the viewport.
+const thumbCam = new THREE.PerspectiveCamera(30, 4 / 3, 0.05, 100);
+function captureThumb() {
+  const box = new THREE.Box3();
+  for (const o of resultGroup.children) if (o.isMesh) box.expandByObject(o);
+  if (box.isEmpty()) box.set(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2, 1));
+  const center = box.getCenter(new THREE.Vector3());
+  const radius = box.getSize(new THREE.Vector3()).length() / 2;
+  const dist = radius / Math.sin(deg(thumbCam.fov / 2)) * 0.8;
+  thumbCam.position.copy(center).addScaledVector(new THREE.Vector3(0.55, 0.22, 1).normalize(), dist);
+  thumbCam.lookAt(center);
+
+  const src = renderer.domElement, pr = renderer.getPixelRatio();
+  const H = Math.floor(Math.min(src.height, src.width * 3 / 4)), W = Math.floor(H * 4 / 3);
+  const ghostsWere = ghostGroup.visible, gizmoWas = gizmo.visible;
+  gizmo.visible = false; ghostGroup.visible = false;
+  renderer.setScissorTest(true);
+  renderer.setViewport(0, 0, W / pr, H / pr);
+  renderer.setScissor(0, 0, W / pr, H / pr);
+  renderer.render(scene, thumbCam);
+  const c = document.createElement('canvas');
+  c.width = 240; c.height = 180;
+  c.getContext('2d').drawImage(src, 0, src.height - H, W, H, 0, 0, 240, 180);
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, src.width / pr, src.height / pr);
+  gizmo.visible = gizmoWas; ghostGroup.visible = ghostsWere;
+  renderer.render(scene, camera);
+  return c.toDataURL('image/jpeg', 0.82);
+}
+
+const gallery = $('#gallery');
+const galleryOpen = () => !gallery.hidden;
+function ensureBuiltinThumbs() {
+  if (BUILTIN.every(s => s.thumb)) return;
+  const current = parts.map(serialize), selIndex = parts.findIndex(p => p.id === selectedId);
+  for (const s of BUILTIN.filter(s => !s.thumb)) { replaceParts(structuredClone(s.parts)); rebuild(); s.thumb = captureThumb(); }
+  replaceParts(current);
+  select(parts[selIndex] ? parts[selIndex].id : null);
+  rebuild();
+}
+function openGallery() { ensureBuiltinThumbs(); gallery.hidden = false; $('#gNote').textContent = ''; renderGallery(); }
+function closeGallery() { gallery.hidden = true; }
+$('#bSample').onclick = openGallery;
+$('#gClose').onclick = closeGallery;
+gallery.onclick = e => { if (e.target === gallery) closeGallery(); };
+
+function note(text) { $('#gNote').textContent = text; }
+
+function renderGallery() {
+  const grid = $('#gGrid');
+  grid.innerHTML = '';
+  const all = [...BUILTIN, ...userSamples];
+  for (const s of all) {
+    const card = document.createElement('div');
+    card.className = 'gcard';
+    card.innerHTML = `<div class="gthumb"></div><div class="gbody"><div class="gname"></div><div class="gmeta"></div><div class="gbtns"></div></div>`;
+    if (s.thumb) {
+      const img = document.createElement('img');
+      img.src = s.thumb; img.alt = '';
+      card.querySelector('.gthumb').appendChild(img);
+    } else card.querySelector('.gthumb').textContent = 'プレビューなし';
+    card.querySelector('.gname').textContent = s.name;
+    const date = s.savedAt ? new Date(s.savedAt).toLocaleDateString('ja-JP') + ' ・ ' : '';
+    card.querySelector('.gmeta').textContent = (s.builtin ? '標準 ・ ' : date) + `${s.parts.length} 部品`;
+    const btns = card.querySelector('.gbtns');
+    const button = (label, fn, cls) => {
+      const b = document.createElement('button');
+      b.textContent = label; if (cls) b.className = cls;
+      b.onclick = fn; btns.appendChild(b);
+    };
+    button('読み込む', () => { loadScene(structuredClone(s.parts)); closeGallery(); }, 'on');
+    if (!s.builtin) {
+      button('上書き', () => {
+        if (!confirm(`「${s.name}」を今の形で上書きしますか？`)) return;
+        Object.assign(s, { parts: parts.map(serialize), thumb: captureThumb(), savedAt: new Date().toISOString() });
+        persist(`「${s.name}」を上書きしました。`);
+      });
+      button('削除', () => {
+        if (!confirm(`「${s.name}」を削除しますか？（元に戻せません）`)) return;
+        userSamples = userSamples.filter(q => q !== s);
+        persist(`「${s.name}」を削除しました。`);
+      });
+    }
+    grid.appendChild(card);
+  }
+}
+
+function persist(message) {
+  const ok = writeUserSamples();
+  renderGallery();
+  note(ok ? message : message + ' ※ブラウザに保存できなかったので、閉じる前に「ファイルに書き出す」で残してください。');
+}
+
+$('#gSave').onclick = () => {
+  if (!parts.length) { note('部品がないので保存できません。'); return; }
+  const input = $('#gName');
+  const name = input.value.trim() || `作品 ${userSamples.length + 1}`;
+  const same = userSamples.find(s => s.name === name);
+  if (same && !confirm(`「${name}」はもうあります。上書きしますか？`)) return;
+  const entry = { id: Date.now(), name, parts: parts.map(serialize), thumb: captureThumb(), savedAt: new Date().toISOString() };
+  if (same) Object.assign(same, entry); else userSamples.push(entry);
+  input.value = '';
+  persist(`「${name}」を保存しました。`);
+};
+
+$('#gExport').onclick = () => {
+  if (!userSamples.length) { note('書き出せる自分のサンプルがまだありません。'); return; }
+  const data = { format: 'xs-part-editor-samples', version: 1, samples: userSamples };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+  a.download = 'robot-samples.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  note(`${userSamples.length} 件を robot-samples.json に書き出しました。`);
+};
+
+$('#gImport').onclick = () => $('#gFile').click();
+$('#gFile').onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  let list;
+  try {
+    const data = JSON.parse(await file.text());
+    list = Array.isArray(data) ? data : data.samples;
+    if (!Array.isArray(list)) throw new Error();
+  } catch { note('このファイルは読み込めませんでした。'); return; }
+  const clean = list
+    .filter(s => s && Array.isArray(s.parts))
+    .map((s, i) => ({
+      id: Date.now() + i,
+      name: String(s.name ?? '読み込んだ作品').slice(0, 60),
+      parts: s.parts.filter(p => p && typeof p === 'object' && Array.isArray(p.pts)),
+      thumb: typeof s.thumb === 'string' && s.thumb.startsWith('data:image/') ? s.thumb : null,
+      savedAt: typeof s.savedAt === 'string' ? s.savedAt : new Date().toISOString(),
+    }))
+    .filter(s => s.parts.length);
+  if (!clean.length) { note('読み込めるサンプルが入っていませんでした。'); return; }
+  userSamples.push(...clean);
+  persist(`${clean.length} 件を読み込みました。`);
+};
+
+buildPresetButtons();
+loadScene(structuredClone(BUILTIN[0].parts));
+</script>
+</body>
+</html>
