@@ -130,9 +130,9 @@ button.stcard:hover:not(:disabled) { border-color: var(--accent); }
 textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 6px; font: 12px/1.4 ui-monospace, Consolas, monospace; resize: vertical; }
 #aiBox .gbox { width: min(640px, 100%); }
 #aiBox .seg { margin: 6px 0; }
-#aMsg, #aAskMsg, #aCheckMsg { white-space: pre-wrap; }
-#aMsg.ng, #aAskMsg.ng, #aCheckMsg.ng { color: #ff9b9b; }
-#aMsg.ok, #aAskMsg.ok, #aCheckMsg.ok { color: #7ee2a8; }
+#aMsg { white-space: pre-wrap; }
+#aMsg.ng { color: #ff9b9b; }
+#aMsg.ok { color: #7ee2a8; }
 .aimeta { color: var(--dim); font-size: 11px; }
 .stabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
 .stabs select { width: auto; }
@@ -292,23 +292,20 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
   <div class="gbox">
     <div class="ghead"><h1>AIで作る</h1><button id="aClose">閉じる Esc</button></div>
     <h2>1. AI に頼む</h2>
+    <p class="hint">作りたい機体を書いて「頼み方をコピー」を押し、使っている AI に貼り付けます。AI は仕様書（<a id="aSpec" target="_blank" rel="noopener">ai.md</a>）を読んで JSON を出します。URL を開けない AI には「仕様ごとコピー」を使ってください。</p>
     <textarea id="aWish" rows="2" placeholder="どんな機体？（例：肩が大きい重装型。色は緑と白。背中に大きなブースター）"></textarea>
-    <div class="seg"><button id="aCopyFull" class="on">頼み方をコピー</button></div>
+    <div class="seg"><button id="aCopyUrl" class="on">頼み方をコピー</button><button id="aCopyFull">仕様ごとコピー</button></div>
     <textarea id="aManual" rows="6" readonly hidden></textarea>
-    <div id="aAskMsg" class="hint"></div>
-    <div id="aStep2" hidden>
-      <h2>2. AI の答えを貼り付ける</h2>
-      <textarea id="aJson" rows="6" placeholder="AI の答えをまるごと貼り付けてください"></textarea>
-      <div class="seg"><button id="aLoad" class="on">読み込む</button></div>
-      <div id="aMsg" class="hint"></div>
-      <div class="seg"><button id="aErrCopy" hidden>直してもらう文章をコピー</button></div>
-    </div>
-    <div id="aStep3" hidden>
-      <h2>3. ちゃんと組み立てられているか確かめる</h2>
-      <div class="seg"><button id="aCheck" class="on">確かめる</button></div>
-      <div id="aCheckMsg" class="hint"></div>
-      <div class="seg"><button id="aFixCopy" hidden>直してもらう文章をコピー</button></div>
-    </div>
+    <h2>2. AI の答えを貼り付ける</h2>
+    <textarea id="aJson" rows="6" placeholder='AI が出した JSON（{"format": "xs-editor-model", ...}）を貼り付け。前後に説明文があってもかまいません'></textarea>
+    <div class="row"><label>使ったAI</label><input type="text" id="aName" maxlength="40" placeholder="JSON から自動で入ります（例：サービス名 / モデル名）" style="grid-column: span 2"></div>
+    <div class="seg"><button id="aLoad" class="on">読み込む（今の形は消えます）</button></div>
+    <div id="aMsg" class="hint"></div>
+    <div class="seg"><button id="aErrCopy" hidden>読み込めなかった理由を AI に渡す用にコピー</button></div>
+    <h2>3. チェックして AI に直してもらう</h2>
+    <p class="hint">つながりチェックと関節チェックを行い、結果を文章でコピーします。AI に貼ると、直した JSON を出してくれます。2 に貼り直して読み込んでください。</p>
+    <div class="seg"><button id="aCheckCopy">チェックして結果をコピー</button></div>
+    <div id="aCheckMsg" class="hint"></div>
   </div>
 </div>
 
@@ -325,7 +322,7 @@ import { MeshBVH } from 'three-mesh-bvh';
 const $ = s => document.querySelector(s);
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '9325d68';
+const BUILD = 'c52c281';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -2406,6 +2403,7 @@ $('#share').onclick = e => { if (e.target === $('#share')) $('#share').hidden = 
 // ai.md lives next to the page; a local copy (localhost / file) points the AI at the public one it can reach
 const SPEC_URL = /^(localhost|127\.|\[::1\])/.test(location.hostname) || location.protocol === 'file:'
   ? 'https://n416.github.io/xs-editor/ai.md' : new URL('ai.md', location.href).href;
+$('#aSpec').href = SPEC_URL;
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); return true; } catch {
     const ta = document.createElement('textarea');
@@ -2416,9 +2414,8 @@ async function copyText(t) {
 }
 const say = (el, text, cls = '') => { const e = $(el); e.textContent = text; e.className = 'hint' + (cls ? ' ' + cls : ''); };
 const copied = ok => ok ? 'コピーしました。AI に貼り付けてください。' : 'コピーできませんでした（ブラウザがクリップボードを許可していません）。';
-// the steps open one at a time: 2 once the request has been copied, 3 once a model has been read in
-const reach = n => { $('#aStep2').hidden = false; if (n >= 3) $('#aStep3').hidden = false; };
 const askText = spec => `XS部品エディタ用の人型ロボット（XS）の機体データを作ってください。\n${spec}\n\n作りたい機体: ${$('#aWish').value.trim() || '（おまかせ）'}\n\n仕様どおりの JSON を 1 つだけ出力してください。"ai" にはあなた自身のサービス名とモデル名を書いてください。`;
+$('#aCopyUrl').onclick = async () => say('#aMsg', copied(await copyText(askText(`仕様書: ${SPEC_URL} （必ず読んでから作ってください）`))));
 // The spec is fetched when the screen opens: Safari only lets a click write the clipboard if nothing is awaited
 // before it, so the copy itself must not wait for the network. A 404 page must never be passed off as the spec.
 let specText = null, specLoading = null;
@@ -2434,14 +2431,13 @@ const fullAsk = md => askText('以下が仕様書です。\n\n' + md);
 function showManualCopy(text) {
   const ta = $('#aManual');
   ta.value = text; ta.hidden = false; ta.focus(); ta.select();
-  reach(2);
-  say('#aAskMsg', '自動でコピーできませんでした。下の欄の全文が選ばれているので、⌘C（Windows は Ctrl+C）でコピーしてください。', 'ng');
+  say('#aMsg', '自動でコピーできませんでした。下の欄の全文が選ばれているので、⌘C（Windows は Ctrl+C）でコピーしてください。', 'ng');
 }
 $('#aCopyFull').onclick = async () => {
   $('#aManual').hidden = true;
   if (specText) {   // already here: write straight away, still inside the click
     const text = fullAsk(specText);
-    if (await copyText(text)) { say('#aAskMsg', copied(true)); reach(2); } else showManualCopy(text);
+    if (await copyText(text)) say('#aMsg', copied(true)); else showManualCopy(text);
     return;
   }
   // not loaded yet: Safari accepts a clipboard item whose content is still on its way
@@ -2451,11 +2447,11 @@ $('#aCopyFull').onclick = async () => {
         if (!md) throw new Error('no spec');
         return new Blob([fullAsk(md)], { type: 'text/plain' });
       }) })]);
-      say('#aAskMsg', copied(true)); reach(2); return;
+      say('#aMsg', copied(true)); return;
     } catch { /* fall through */ }
   }
   const md = await loadSpec();
-  if (!md) { say('#aAskMsg', '頼み方を読み込めませんでした。通信を確かめて、もう一度押してください。', 'ng'); return; }
+  if (!md) { say('#aMsg', '仕様書を読み込めませんでした。通信を確かめるか、「頼み方をコピー」を使ってください。', 'ng'); return; }
   showManualCopy(fullAsk(md));
 };
 
@@ -2562,53 +2558,47 @@ function checkAiParts(list) {
   return { ok, errors, unknown: [...unknown] };
 }
 let importErrors = '';
+$('#aJson').oninput = () => { try { const m = parseAiText($('#aJson').value); if (m.ai && !$('#aName').value.trim()) $('#aName').value = String(m.ai).slice(0, 40); } catch { /* not complete yet */ } };
+$('#aName').onchange = () => { sceneAi = $('#aName').value.trim().slice(0, 40); writeCurrent(); };
 $('#aLoad').onclick = () => {
   let model;
   try { model = parseAiText($('#aJson').value); } catch (e) {
     const forAi = e instanceof AiTextError && !e.message.startsWith('貼り付けたのは');
     importErrors = forAi ? e.message : '';
     $('#aErrCopy').hidden = !forAi;
-    // a broken JSON is for the AI to fix: the parser's wording goes into the copied text, not on screen
-    say('#aMsg', e.message.startsWith('JSON の書き方') ? 'AI の答えをうまく読めませんでした。下のボタンでコピーして AI に貼ると、出し直してくれます。' : e.message, 'ng');
-    return;
+    say('#aMsg', e.message, 'ng'); return;
   }
-  const { ok, errors } = checkAiParts(model.parts.slice(0, 400));
+  const { ok, errors, unknown } = checkAiParts(model.parts.slice(0, 400));
   if (model.parts.length > 400) errors.push(`部品が ${model.parts.length} 個あります。400 個までしか読み込めません。`);
   importErrors = errors.join('\n');
   $('#aErrCopy').hidden = !importErrors;
   if (!ok.length) { say('#aMsg', '読み込める部品がありません。\n' + importErrors, 'ng'); return; }
   if (parts.length && !confirm('今の形を消して、AI の機体を読み込みますか？')) return;
-  // the AI names itself in the JSON ("ai"); the name can be corrected when posting
-  loadScene(ok, String(model.ai ?? '').trim().slice(0, 40));
-  reach(3);
-  $('#aCheckMsg').textContent = ''; $('#aFixCopy').hidden = true;
-  say('#aMsg', `読み込みました（部品 ${ok.length} 個）。` + (errors.length
-    ? `\n${errors.length} 個の部品は読み込めませんでした。下のボタンでコピーして AI に貼ると、直した答えを出してくれます。`
-    : '次は 3 で確かめてください。'), errors.length ? 'ng' : 'ok');
+  const ai = ($('#aName').value.trim() || String(model.ai ?? '').trim()).slice(0, 40);
+  $('#aName').value = ai;
+  loadScene(ok, ai);
+  const lines = [`${ok.length} 個の部品を読み込みました。` + (ai ? `（使ったAI: ${ai}）` : '')];
+  if (errors.length) lines.push(`読み込めなかった部品が ${errors.length} 個あります:`, ...errors);
+  if (unknown.length) lines.push(`知らない項目は無視しました: ${unknown.join(', ')}`);
+  if (!errors.length) lines.push('次は 3 のチェックをしてください。');
+  say('#aMsg', lines.join('\n'), errors.length ? 'ng' : 'ok');
 };
 const fixHead = () => `XS部品エディタで確かめた結果です。指摘された部品の位置や大きさを直して、機体全体の JSON をもう一度出力してください（差分ではなく全体）。\n仕様: ${SPEC_URL}\n座標は 1 単位 = 6 m、+Y が上、+Z が正面、+X が機体の左です。`;
 $('#aErrCopy').onclick = async () => say('#aMsg', copied(await copyText(`${fixHead()}\n\n【読み込めなかった理由】\n${importErrors}`)));
-// checks the parts are connected and the joints bend cleanly; the report itself is only copied for the AI
-// when something needs fixing
-let fixText = '';
-$('#aCheck').onclick = () => {
-  $('#aFixCopy').hidden = true;
-  if (!parts.some(p => p.op === 'add' && !p.blockout)) { say('#aCheckMsg', '確かめる部品がありません。', 'ng'); return; }
-  say('#aCheckMsg', '確かめています…（少しかかります）');
-  setTimeout(() => {
+$('#aCheckCopy').onclick = () => {
+  if (!parts.some(p => p.op === 'add' && !p.blockout)) { say('#aCheckMsg', 'チェックする部品がありません。', 'ng'); return; }
+  say('#aCheckMsg', 'チェック中…（姿勢ごとに調べるので少しかかります）');
+  setTimeout(async () => {
     showConnectionReport(); const conn = $('#checkResult').innerText.trim();
     showJointReport(); const joint = $('#checkResult').innerText.trim();
-    if (checksPassed()) { say('#aCheckMsg', '問題ありません。完成です！ 閉じて機体を見てみましょう。', 'ok'); return; }
-    fixText = `${fixHead()}\n\n【つながりチェック】\n${conn}\n\n【関節チェック】\n${joint}`;
-    say('#aCheckMsg', '離れている部品や、動かすとぶつかる所が見つかりました。下のボタンでコピーして AI に貼り付けてください。', 'ng');
-    $('#aFixCopy').hidden = false;
+    const text = `${fixHead()}\n\n【つながりチェック】\n${conn}\n\n【関節チェック】\n${joint}`;
+    say('#aCheckMsg', copied(await copyText(text)) + '\n\n' + conn + '\n' + joint);
   }, 30);
 };
-$('#aFixCopy').onclick = async () => say('#aCheckMsg', copied(await copyText(fixText)) + '\n返ってきた答えを 2 に貼り直して読み込んでください。', 'ng');
 $('#bCopyCheck').onclick = async () => { $('#bCopyCheck').textContent = (await copyText(`${fixHead()}\n\n${$('#checkResult').innerText.trim()}`)) ? 'コピーしました' : 'コピーできませんでした'; };
 new MutationObserver(() => { $('#bCopyCheck').hidden = !$('#checkResult .ng'); $('#bCopyCheck').textContent = '結果を AI に渡す用にコピー'; })
   .observe($('#checkResult'), { childList: true });
-function openAi() { $('#aiBox').hidden = false; loadSpec(); }
+function openAi() { $('#aiBox').hidden = false; $('#aName').value = sceneAi; loadSpec(); }
 $('#bAi').onclick = openAi;
 $('#aClose').onclick = () => { $('#aiBox').hidden = true; };
 $('#aiBox').onclick = e => { if (e.target === $('#aiBox')) $('#aiBox').hidden = true; };
