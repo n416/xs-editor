@@ -137,7 +137,7 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-  "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.3/build/index.module.js",
+  "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.15/build/index.module.js",
   "three-bvh-csg": "https://cdn.jsdelivr.net/npm/three-bvh-csg@0.0.16/build/index.module.js"
 } }
 </script>
@@ -1355,6 +1355,7 @@ function applyViewPose() {
 }
 
 // ---- range check: every pose, parts coming off the body and parts newly cutting into others
+const pieceLabel = pc => pc.part.name + (pc.bone.endsWith('_l') ? '（左）' : pc.bone.endsWith('_r') ? '（右）' : '');
 function jointCheck() {
   rebuild();
   const pieces = currentPieces();
@@ -1407,7 +1408,6 @@ function jointCheck() {
     }
     return deep;
   };
-  const label = pc => pc.part.name + (pc.bone.endsWith('_l') ? '（左）' : pc.bone.endsWith('_r') ? '（右）' : '');
   const report = {};
   // with the game's real frames loaded, those plus the basic poses; the hand-made extremes are for preview only
   const basic = Object.keys(MOVES).length ? ['構え', '歩き', 'ダッシュ'] : Object.keys(POSES).filter(k => k !== '待機');
@@ -1433,7 +1433,7 @@ function jointCheck() {
     }
     const sizes = new Array(c).fill(0); comp.forEach(k => sizes[k]++);
     const body = sizes.indexOf(Math.max(...sizes));
-    const off = [...new Set(pieces.filter((pc, k) => comp[k] !== body && !hidden(pc)).map(label))];
+    const off = [...new Set(pieces.filter((pc, k) => comp[k] !== body && !hidden(pc)).map(pieceLabel))];
     // 2) cutting in: pairs moving differently that intersect now but were apart at rest
     const cut = new Set();
     const boxes = pieces.map(pc => pc.geo.boundingBox.clone().applyMatrix4(moved(pc)));
@@ -1444,7 +1444,7 @@ function jointCheck() {
       if (!pa.bvh.intersectsGeometry(gb, I)) continue;
       // grazing contact at a joint's rim is fine; only real cutting-in counts
       const deep = Math.max(depthIn(pa, gb), depthIn(pb, into(pb, moved(pb), pa, moved(pa))));
-      if (deep > CUT_DEPTH * H / 3) { const key = `${label(pa)} ↔ ${label(pb)}`; cut.add(key); depths.set(key, Math.max(depths.get(key) || 0, deep * 18 / H)); }
+      if (deep > CUT_DEPTH * H / 3) { const key = `${pieceLabel(pa)} ↔ ${pieceLabel(pb)}`; cut.add(key); depths.set(key, Math.max(depths.get(key) || 0, deep * 18 / H)); }
     }
     const r = (report[name] ||= { off: new Set(), cut: new Set(), frames: [] });
     off.forEach(x => r.off.add(x)); cut.forEach(x => r.cut.add(x));
@@ -1538,7 +1538,9 @@ function buildGameModel() {
       const cls = key.split(':')[0];
       const P = [], N = [], C = [], SI = [], SW = [];
       let metal = 0, rough = 0, n = 0;
+      const partRanges = [];   // LOD0: which triangles belong to which part, for checks outside the editor (tools/jointcheck.ts)
       for (const pc of list) {
+        if (level === 0) partRanges.push([pieceLabel(pc), pc.bone, P.length / 9, pc.geo.attributes.position.count / 3, isGun(pc.part) ? 1 : 0]);
         const pos = pc.geo.attributes.position, nor = pc.geo.attributes.normal;
         const col = new THREE.Color(pc.part.color), bi = boneIndex[pc.bone];
         for (let i = 0; i < pos.count; i++) {
@@ -1564,6 +1566,7 @@ function buildGameModel() {
       });
       const mesh = new THREE.SkinnedMesh(merged, mat);
       mesh.name = `xs_${mat.name}${level ? '_lod' + level : ''}`;
+      if (level === 0) mesh.userData.xsParts = partRanges;   // glTF extras: [label, bone, first triangle, triangles, gun]
       if (cls === 'gun') {
         let gunNode = root.getObjectByName('gun');
         if (!gunNode) { gunNode = new THREE.Group(); gunNode.name = 'gun'; root.add(gunNode); }
@@ -1675,7 +1678,10 @@ return [
   // knee: it folds backward, so its pivot (this cylinder's axis) is on the BACK edge of the leg — thigh and shin both
   // sit in front of it and the shin folds up behind without meeting the thigh
   joint('ひざ', 0.07, 0.22, [0.3, 1.02, -0.13]),
-  S('太もも', [[-0.14, -0.25], [0.1, -0.25], [0.15, 0.2], [0.05, 0.27], [-0.15, 0.22]], 0.28, [0.28, 1.25, 0.01], { ...M, rot: [deg(-12), deg(-90), 0] }),
+  // the shin holds the knee from below and in front with a cup round its axis, so it stays on the knee however far it bends
+  S('ひざの受け', [[-0.095, -0.055], [-0.055, -0.095], [0, -0.11], [0.055, -0.095], [0.095, -0.055], [0.11, 0], [0.108, 0.019], [0.065, 0.011], [0.066, 0], [0.057, -0.033], [0.033, -0.057], [0, -0.066], [-0.033, -0.057], [-0.057, -0.033]], 0.2, [0.3, 1.02, -0.13], { ...M, bevel: 0.008, corner: 0.005 }),
+  S('すねの上端', [[0.06, -0.1], [0.2, -0.1], [0.2, -0.02], [0.09, 0.0]], 0.2, [0.3, 1.02, -0.13], { ...M, bevel: 0.01 }),
+  S('太もも',[[-0.14, -0.25], [0.1, -0.25], [0.15, 0.2], [0.05, 0.27], [-0.15, 0.22]], 0.28, [0.28, 1.25, 0.01], { ...M, rot: [deg(-12), deg(-90), 0] }),
   S('太もも装甲', [[-0.16, -0.1], [0.14, -0.12], [0.16, 0.18], [-0.1, 0.24]], 0.05, [0.44, 1.28, 0.01], { ...M, color: LIGHT, rot: [deg(-12), deg(-90), 0] }),
   // waist & core
   F('腰', [[-0.22, -0.1], [0.22, -0.1], [0.26, 0.08], [-0.26, 0.08]], 0.34, [0, 1.55, -0.02], { color: DARK }),
