@@ -175,6 +175,7 @@ textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1
 #aiBox .seg[hidden], #aiBox .seg button[hidden] { display: none; }
 #aiBox .askip { justify-content: flex-end; }
 #aReopen a { color: var(--accent); }
+#aiBox.aside { place-items: center start; }
 #aiBox .askip button { flex: none; font-size: 13px; padding: 6px 14px; }
 #aWhich { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 8px 0; }
 #aWhich .stcard { align-items: center; text-align: center; justify-content: center; min-height: 72px; }
@@ -391,10 +392,13 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
     </section>
     <section class="astep" hidden>
       <h2>5. AI の答えを貼り付ける</h2>
-      <textarea id="aJson" rows="8" placeholder="AI の答えをまるごと貼り付けてください"></textarea>
-      <div class="seg"><button id="aLoad" class="on">読み込む</button></div>
+      <p class="hint">AI の答えをまるごとコピーしてから、</p>
+      <div class="seg" id="aReadRow"><button id="aRead" class="on">コピーした答えを貼る</button></div>
+      <p class="hint" id="aOrPaste">または、下の欄に貼り付けてください。</p>
+      <textarea id="aJson" rows="5" placeholder="AI の答えをまるごと貼り付けてください"></textarea>
+      <div class="seg"><button id="aLoad">読み込む</button></div>
       <div id="aMsg" class="hint"></div>
-      <p class="hint" id="aReopen" hidden>AI のタブを閉じてしまったときは： <a target="_blank" rel="noopener"></a></p>
+      <p class="hint" id="aReopen" hidden>AI の画面を閉じてしまったときは： <a target="_blank" rel="noopener"></a></p>
       <div class="seg"><button id="aErrOpen" class="on" hidden></button><button id="aErrOn" hidden>このまま次へ</button></div>
     </section>
     <section class="astep" hidden>
@@ -445,7 +449,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '927177f';
+const BUILD = '312ecd0';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -2712,17 +2716,37 @@ function demoDone() {
 // step 4, after anything was copied for the AI: the example, then the button that opens the chosen AI; "the AI
 // answered" appears once that button has been used. Going on to 5 clears the previous answer.
 let sendImage = false;
+// On a computer the AI opens in a window of its own on the right half of the screen and the dialog moves to the
+// left, so both stay in sight: a page cannot bring another tab forward later, and the AI's site cuts the link to
+// the window it opened. A phone opens a tab as usual.
+let aiSide = false;
+function openAiWindow(url) {
+  if (PHONE) return false;
+  const w = Math.floor(screen.availWidth / 2), h = screen.availHeight;
+  const left = (screen.availLeft ?? 0) + screen.availWidth - w, top = screen.availTop ?? 0;
+  window.open(url, '_blank', `popup,noopener,width=${w},height=${h},left=${left},top=${top}`);
+  aiSide = true; placeAiBox();
+  return true;
+}
+// the dialog keeps to the part of this window left of the screen's middle
+function placeAiBox() {
+  $('#aiBox').classList.toggle('aside', aiSide);
+  const room = (screen.availLeft ?? 0) + screen.availWidth / 2 - window.screenX - (window.outerWidth - window.innerWidth);
+  $('#aiBox .gbox').style.width = aiSide ? `${Math.round(Math.max(360, Math.min(900, room - 32, innerWidth - 32)))}px` : '';
+}
+window.addEventListener('resize', () => { if (aiSide) placeAiBox(); });
 function showHandoff(kind, note) {
   sendImage = kind === 'ask' && byImage();
   const [name, url] = AI_SERVICES[aiService] ?? AI_SERVICES.other;
   const other = aiService === 'other' || !(aiService in AI_SERVICES);
   const box = $('#aSend'), a = box.querySelector('a.abtn');
-  a.href = url; a.textContent = other ? '新しいタブを開く' : `${name} を開く`;
-  box.querySelector('.anote').textContent = other
-    ? '新しいタブで使っている AI を開き、今の見本のとおりにしてください。'
-    : `${name} が新しいタブで開きます。今の見本のとおりにしてください。`;
+  a.href = url; a.textContent = other ? (PHONE ? '新しいタブを開く' : '新しい窓を開く') : `${name} を開く`;
+  box.querySelector('.anote').textContent = PHONE
+    ? (other ? '新しいタブで使っている AI を開き、今の見本のとおりにしてください。' : `${name} が新しいタブで開きます。今の見本のとおりにしてください。`)
+    : (other ? '画面の右半分に新しい窓が開きます。そこで使っている AI を開き、今の見本のとおりにしてください。'
+      : `${name} が画面の右半分に開きます。今の見本のとおりにしてください。`);
   $('#aGo5').hidden = true;
-  a.onclick = () => { $('#aGo5').hidden = false; };
+  a.onclick = e => { $('#aGo5').hidden = false; if (openAiWindow(url)) e.preventDefault(); };
   say('#aSendNote', note, 'ok');
   if (kind === 'ask') { aiCandidate = null; aiFixing = false; }
   aiReached = 4;
@@ -3005,12 +3029,17 @@ function fixButton(btn, text) {
     if (!copyNow(text())) { say(aiStep === 5 ? '#aMsg' : '#aCheckMsg', copied(false), 'ng'); return; }
     aiFixing = true;
     clearAnswer(); showStep(5);
-    say('#aMsg', `コピーしました。さっきの${other ? ' AI ' : ` ${name} `}の会話に戻って、そのまま貼り付けて送ってください。\n`
-      + '返ってきた答えをまるごとコピーして、下の欄に貼り付けると、自動で確かめます。', 'ok');
+    const who = other ? ' AI ' : ` ${name} `;
+    say('#aMsg', 'コピーしました。' + (aiSide ? `右に開いている${who}の会話に、そのまま貼り付けて送ってください。`
+      : PHONE ? `ブラウザのタブの一覧から${who}のタブに戻り、さっきの会話にそのまま貼り付けて送ってください。`
+      : `さっきの${who}の会話に戻って、そのまま貼り付けて送ってください。`)
+      + `\n返ってきた答えをまるごとコピーして、${canRead ? '「コピーした答えを貼る」を押す' : '下の欄に貼り付ける'}と、自動で確かめます。`, 'ok');
     const a = $('#aReopen a');
     $('#aReopen').hidden = other;
-    if (!other) { a.href = url; a.textContent = `${name} を開く（新しい会話になります）`; }
-    $('#aJson').focus();
+    if (!other) {
+      a.href = url; a.textContent = `${name} を開く（新しい会話になります）`;
+      a.onclick = e => { if (openAiWindow(url)) e.preventDefault(); };
+    }
   };
 }
 // 5: the answer becomes the candidate (nothing is loaded yet) and 6 shows it; a pasted answer is read at once
@@ -3049,6 +3078,19 @@ function goOn() {
   showStep(7); runCheck();
 }
 $('#aLoad').onclick = loadAnswer;
+// reads the answer the user copied in the AI, instead of clicking into the box and pasting (the browser asks
+// once whether the page may read the clipboard)
+const canRead = !!navigator.clipboard?.readText;
+$('#aReadRow').hidden = !canRead;
+$('#aOrPaste').textContent = canRead ? 'または、下の欄に貼り付けてください。' : '下の欄に貼り付けてください。';
+$('#aRead').onclick = async () => {
+  let t;
+  try { t = await navigator.clipboard.readText(); } catch {
+    say('#aMsg', 'クリップボードを読めませんでした（ブラウザが許可していません）。下の欄に貼り付けてください。', 'ng'); return;
+  }
+  if (!t.trim()) { say('#aMsg', 'クリップボードが空です。AI の答えをコピーしてから押してください。', 'ng'); return; }
+  $('#aJson').value = t; loadAnswer();
+};
 $('#aJson').addEventListener('paste', () => setTimeout(loadAnswer, 0));
 $('#aErrOn').onclick = goOn;
 const fixHead = () => `XS部品エディタで確かめた結果です。指摘された部品の位置や大きさを直して、機体全体の JSON をもう一度出力してください（差分ではなく全体）。\n仕様: ${SPEC_URL}\n座標は 1 単位 = 6 m、+Y が上、+Z が正面、+X が機体の左です。`;
