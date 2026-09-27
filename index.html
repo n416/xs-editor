@@ -80,6 +80,17 @@ input[type=text] { width: 100%; background: var(--panel2); color: var(--text); b
 .gbtns { display: flex; gap: 4px; margin-top: auto; padding-top: 4px; }
 .gbtns button { flex: 1; padding: 4px; white-space: nowrap; }
 .gfoot { display: flex; gap: 6px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+#share { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 10; padding: 16px; }
+#share[hidden] { display: none; }
+.stabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+.stabs select { width: auto; }
+.sauth { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.sauth input { flex: 1; min-width: 140px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font: inherit; }
+.sauth .who { color: var(--dim); flex: 1; }
+.gthumb { position: relative; }
+.srank { position: absolute; top: 6px; left: 6px; background: var(--accent); color: #1a1a1a; font-weight: 700; border-radius: 999px; min-width: 24px; height: 24px; display: grid; place-items: center; padding: 0 6px; }
+button.liked { border-color: #ff7a9a; color: #ff9ab2; }
+.shidden { color: var(--sub); }
 @media (max-width: 760px) {
   #app { flex-direction: column-reverse; }
   #side { width: 100%; height: 50%; border-right: none; border-top: 1px solid var(--line); }
@@ -132,6 +143,7 @@ input[type=text] { width: 100%; background: var(--panel2); color: var(--text); b
       <button id="bExport">GLB書き出し</button>
       <button id="bGame" title="docs/models.md の仕様（骨・向き・描画回数・陣営色・LOD）で書き出す">ゲーム用に書き出す</button>
       <button id="bSample">サンプル集</button>
+      <button id="bShare">みんなの機体</button>
       <button id="bClear">全消去</button>
     </div>
     <div id="help">クリックで選択 ・ ドラッグで回転 ・ 右ドラッグで平行移動 ・ Ctrl+D 複製 ・ Delete 削除</div>
@@ -149,6 +161,20 @@ input[type=text] { width: 100%; background: var(--panel2); color: var(--text); b
       <input type="file" id="gFile" accept=".json,application/json" hidden>
     </div>
     <p class="hint">自分のサンプルはこのブラウザに保存されます。別のPCやブラウザに持っていくときは「ファイルに書き出す」を使ってください。</p>
+  </div>
+</div>
+<div id="share" hidden>
+  <div class="gbox">
+    <div class="ghead"><h1>みんなの機体</h1><button id="sClose">閉じる Esc</button></div>
+    <div class="sauth" id="sAuth"></div>
+    <div class="gsave"><input type="text" id="sTitle" placeholder="機体名（40文字まで）" maxlength="40"><button id="sUpload" class="on">今の形を投稿</button></div>
+    <div class="stabs">
+      <button data-tab="rank" class="on">月間ランキング</button><select id="sMonth"></select>
+      <button data-tab="new">新着</button><button data-tab="likes">イイネ順</button><button data-tab="mine">自分の機体</button>
+    </div>
+    <div id="sGrid" class="ggrid"></div>
+    <div class="gfoot"><span class="hint" id="sNote"></span><span style="flex:1"></span><button id="sMore" hidden>もっと見る</button></div>
+    <p class="hint">投稿・イイネには XS オンラインのアカウントでログインします。月間ランキングは、その月に集まったイイネの数で並べます（日本時間）。原作の固有名詞を使った機体名や、ふさわしくない機体は通報してください。</p>
   </div>
 </div>
 
@@ -541,6 +567,7 @@ function setMode(m) {
 }
 window.addEventListener('keydown', e => {
   if (galleryOpen()) { if (e.key === 'Escape') closeGallery(); return; }
+  if (!$('#share').hidden) { if (e.key === 'Escape') $('#share').hidden = true; return; }
   if (e.target.matches?.('input[type=text], textarea')) return;
   const k = e.key.toLowerCase();
   if (k === 'w') setMode('translate');
@@ -1987,6 +2014,174 @@ $('#gFile').onchange = async e => {
   userSamples.push(...clean);
   persist(`${clean.length} 件を読み込みました。`);
 };
+
+// ---------- shared models (みんなの機体) ----------
+// Talks to the game's central server; pilots log in with their game account and the token stays in
+// this browser. Everything the server returns is shown with textContent.
+const CENTRAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? 'http://localhost:8787' : 'https://ex-online-central.tobira-sys.workers.dev';
+const TOKEN_KEY = 'xs_token';
+const share = { tab: 'rank', page: 0, me: null };
+const getTok = () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } };
+const setTok = t => { try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch { /* storage unavailable */ } };
+async function central(path, method = 'GET', body) {
+  const headers = { 'Content-Type': 'application/json' };
+  const tok = getTok();
+  if (tok) headers.Authorization = `Bearer ${tok}`;
+  let res;
+  try { res = await fetch(CENTRAL + path, { method, headers, body: body ? JSON.stringify(body) : undefined }); }
+  catch { throw new Error('サーバーに接続できません。ネットワークを確認してください。'); }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && tok) { setTok(null); share.me = null; renderAuth(); }
+  if (!res.ok) throw new Error(data.error ?? `エラー (${res.status})`);
+  return data;
+}
+const sNote = t => { $('#sNote').textContent = t; };
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+
+function renderAuth() {
+  const box = $('#sAuth');
+  box.innerHTML = '';
+  $('#sUpload').disabled = !share.me;
+  if (share.me) {
+    const out = el('button', '', 'ログアウト');
+    out.onclick = () => { setTok(null); share.me = null; renderAuth(); loadShare(); };
+    box.append(el('span', 'who', `ログイン中：${share.me.name}`), out);
+    return;
+  }
+  const mail = el('input'); mail.type = 'email'; mail.placeholder = 'メールアドレス'; mail.autocomplete = 'username';
+  const pass = el('input'); pass.type = 'password'; pass.placeholder = 'パスワード'; pass.autocomplete = 'current-password';
+  const go = el('button', 'on', 'ログイン');
+  go.onclick = async () => {
+    try {
+      const r = await central('/api/login', 'POST', { email: mail.value, password: pass.value });
+      setTok(r.token); await loadMe(); await loadShare(); sNote('ログインしました。');
+    } catch (e) { sNote(e.message); }
+  };
+  pass.onkeydown = e => { if (e.key === 'Enter') go.click(); };
+  const reg = el('a', 'hint', 'アカウントを作る'); reg.href = CENTRAL + '/'; reg.target = '_blank'; reg.rel = 'noopener';
+  box.append(mail, pass, go, reg);
+}
+async function loadMe() {
+  if (!getTok()) { share.me = null; renderAuth(); return; }
+  try { share.me = (await central('/api/me')).user; } catch { share.me = null; }
+  renderAuth();
+}
+
+// the last 12 months in Japan time, like the server's ranking
+function fillMonths() {
+  const sel = $('#sMonth');
+  if (sel.options.length) return;
+  const now = new Date(Date.now() + 9 * 3600_000);
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const v = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    sel.add(new Option(i === 0 ? `今月（${d.getUTCMonth() + 1}月）` : `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月`, v));
+  }
+  sel.onchange = () => setTab('rank');
+}
+function setTab(tab) {
+  share.tab = tab;
+  document.querySelectorAll('#share [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  return loadShare();
+}
+document.querySelectorAll('#share [data-tab]').forEach(b => { b.onclick = () => setTab(b.dataset.tab); });
+
+async function loadShare(append = false) {
+  if (!append) { share.page = 0; $('#sGrid').innerHTML = ''; }
+  $('#sMore').hidden = true;
+  if (share.tab === 'mine' && !share.me) { sNote('自分の機体を見るにはログインしてください。'); return; }
+  sNote('読み込み中…');
+  try {
+    const r = share.tab === 'rank'
+      ? await central(`/api/models/ranking?month=${$('#sMonth').value}`)
+      : await central(`/api/models?sort=${share.tab === 'likes' ? 'likes' : 'new'}&page=${share.page}${share.tab === 'mine' ? '&mine=1' : ''}`);
+    for (const m of r.models) $('#sGrid').appendChild(shareCard(m));
+    $('#sMore').hidden = !r.more;
+    sNote(r.models.length || append ? '' : share.tab === 'rank' ? 'この月のイイネはまだありません。' : 'まだ機体がありません。');
+  } catch (e) { sNote(e.message === '見つかりません。' ? 'みんなの機体は準備中です（サーバーがまだ対応していません）。' : e.message); }
+}
+$('#sMore').onclick = () => { share.page++; loadShare(true); };
+
+function shareCard(m) {
+  const card = el('div', 'gcard');
+  const th = el('div', 'gthumb');
+  const img = el('img'); img.alt = ''; img.loading = 'lazy';
+  img.src = `${CENTRAL}/api/models/${encodeURIComponent(m.id)}/thumb?v=${m.updated_at}`;
+  th.appendChild(img);
+  if (m.rank) th.appendChild(el('span', 'srank', String(m.rank)));
+  const body = el('div', 'gbody');
+  body.appendChild(el('div', 'gname', m.title));
+  const when = new Date(m.created_at).toLocaleDateString('ja-JP');
+  body.appendChild(el('div', 'gmeta', `${m.author} ・ ${when} ・ ${m.part_count} 部品` + (m.month_likes ? ` ・ この月 ${m.month_likes} イイネ` : '')));
+  if (m.hidden) body.appendChild(el('div', 'gmeta shidden', '通報により非表示中（管理者が確認します）'));
+  const btns = el('div', 'gbtns');
+  const button = (label, fn, cls) => { const b = el('button', cls || '', label); b.onclick = fn; btns.appendChild(b); return b; };
+  button('開く', () => openShared(m), 'on');
+  const heart = button(`♥ ${m.like_count}`, async () => {
+    if (!share.me) { sNote('イイネするにはログインしてください。'); return; }
+    try {
+      const r = await central(`/api/models/${m.id}/like`, m.liked ? 'DELETE' : 'POST');
+      m.liked = r.liked; m.like_count = r.likes;
+      heart.textContent = `♥ ${m.like_count}`; heart.classList.toggle('liked', m.liked);
+    } catch (e) { sNote(e.message); }
+  }, m.liked ? 'liked' : '');
+  if (m.mine) {
+    heart.disabled = true; heart.title = '自分の機体にはイイネできません';
+    button('上書き', async () => {
+      if (!confirm(`「${m.title}」を今の形で上書きしますか？`)) return;
+      try {
+        await central(`/api/models/${m.id}`, 'PUT', { scene: parts.filter(p => !p.blockout).map(serialize), thumb: captureThumb() });
+        await loadShare(); sNote(`「${m.title}」を上書きしました。`);
+      } catch (e) { sNote(e.message); }
+    });
+    button('削除', async () => {
+      if (!confirm(`「${m.title}」を削除しますか？集まったイイネも消えます（元に戻せません）`)) return;
+      try { await central(`/api/models/${m.id}`, 'DELETE'); card.remove(); sNote(`「${m.title}」を削除しました。`); }
+      catch (e) { sNote(e.message); }
+    });
+  } else button('通報', async () => {
+    if (!share.me) { sNote('通報するにはログインしてください。'); return; }
+    const reason = prompt(`「${m.title}」を通報します。理由を書いてください（原作の固有名詞、ふさわしくない形 など）`);
+    if (reason === null) return;
+    try { await central(`/api/models/${m.id}/report`, 'POST', { reason }); sNote('通報しました。ありがとうございます。'); }
+    catch (e) { sNote(e.message); }
+  });
+  body.appendChild(btns);
+  card.append(th, body);
+  return card;
+}
+
+async function openShared(m) {
+  try {
+    const r = await central(`/api/models/${m.id}`);
+    loadScene(r.scene);
+    $('#share').hidden = true;
+  } catch (e) { sNote(e.message); }
+}
+
+$('#sUpload').onclick = async () => {
+  if (!share.me) { sNote('投稿するにはログインしてください。'); return; }
+  const title = $('#sTitle').value.trim();
+  if (!title) { sNote('機体名を入れてください。'); return; }
+  const list = parts.filter(p => !p.blockout);
+  if (!list.length) { sNote('部品がないので投稿できません。'); return; }
+  if (list.length < parts.length && !confirm('あたり（下書き）の部品は投稿に含めません。よろしいですか？')) return;
+  if (!confirm(`「${title}」を公開します。だれでも見られるようになります。よろしいですか？`)) return;
+  try {
+    await central('/api/models', 'POST', { title, scene: list.map(serialize), thumb: captureThumb() });
+    $('#sTitle').value = '';
+    await setTab('mine');
+    sNote(`「${title}」を投稿しました。`);
+  } catch (e) { sNote(e.message); }
+};
+
+$('#bShare').onclick = async () => {
+  $('#share').hidden = false; fillMonths(); sNote('');
+  await loadMe();
+  loadShare();
+};
+$('#sClose').onclick = () => { $('#share').hidden = true; };
+$('#share').onclick = e => { if (e.target === $('#share')) $('#share').hidden = true; };
 
 buildPresetButtons();
 loadScene(structuredClone(BUILTIN[0].parts));
