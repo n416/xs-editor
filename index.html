@@ -449,7 +449,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '312ecd0';
+const BUILD = '30cfec0';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -3094,6 +3094,29 @@ $('#aRead').onclick = async () => {
 $('#aJson').addEventListener('paste', () => setTimeout(loadAnswer, 0));
 $('#aErrOn').onclick = goOn;
 const fixHead = () => `XS部品エディタで確かめた結果です。指摘された部品の位置や大きさを直して、機体全体の JSON をもう一度出力してください（差分ではなく全体）。\n仕様: ${SPEC_URL}\n座標は 1 単位 = 6 m、+Y が上、+Z が正面、+X が機体の左です。`;
+// The model as it is now, in the spec's format, for the AI to fix: it may differ from the AI's last answer (moved
+// by くっつける or by hand). Values equal to the defaults are left out and numbers rounded, one part per line.
+function modelJson() {
+  const round = v => (typeof v === 'number' ? Math.round(v * 1e4) / 1e4 : Array.isArray(v) ? v.map(round) : v);
+  const lines = parts.map(p => {
+    const d = serialize(p), out = { name: d.name };
+    for (const k of FIELDS) {
+      if (k === 'name') continue;
+      const v = round(d[k]);
+      if (k === 'pts' || JSON.stringify(v) !== JSON.stringify(DEFAULTS[k])) out[k] = v;
+    }
+    return '    ' + JSON.stringify(out);
+  });
+  const head = { format: 'xs-editor-model', version: 1, ai: sceneAi || undefined };
+  return JSON.stringify(head, null, 2).replace(/\n}$/, `,\n  "parts": [\n${lines.join(',\n')}\n  ]\n}`);
+}
+// the check window's report as text, without its buttons
+// (line by line from the elements: the window may be hidden, and then the browser gives no line breaks)
+const checkText = () => [...$('#checkResult').childNodes].filter(n => n.nodeName !== 'BUTTON')
+  .map(n => (n.nodeName === 'UL' ? [...n.children].map(li => '・' + li.textContent).join('\n') : n.textContent.trim()))
+  .filter(Boolean).join('\n');
+// a check report for the AI: what to do, what was found, and the model it was found in
+const fixReport = results => `${fixHead()}\n下の「今の機体」を元に直してください（前に出した JSON から変わっていることがあります）。\n\n${results}\n\n【今の機体】\n\`\`\`json\n${modelJson()}\n\`\`\``;
 // 7: checks whether the parts are connected and the joints bend cleanly, on the candidate; the report itself is
 // only copied for the AI when something needs fixing. この機体にする is the one place the model is loaded.
 let fixText = '', attachNote = '';
@@ -3102,10 +3125,10 @@ function runCheck() {
   if (!parts.some(p => p.op === 'add' && !p.blockout)) { say('#aCheckMsg', '確かめる部品がありません。', 'ng'); return; }
   say('#aCheckMsg', '確かめています…（少しかかります）');
   setTimeout(() => {
-    showConnectionReport(); const conn = $('#checkResult').innerText.trim();
-    showJointReport(); const joint = $('#checkResult').innerText.trim();
+    showConnectionReport(); const conn = checkText();
+    showJointReport(); const joint = checkText();
     const good = checksPassed();
-    fixText = `${fixHead()}\n\n【つながりチェック】\n${conn}\n\n【関節チェック】\n${joint}`;
+    fixText = fixReport(`【つながりチェック】\n${conn}\n\n【関節チェック】\n${joint}`);
     say('#aCheckMsg', attachNote + (good ? '問題ありません。この機体にしますか？'
       : '離れている部品や、動かすとぶつかる所が見つかりました。\nAI に直してもらうか、このままこの機体にするかを選んでください。'), good ? 'ok' : 'ng');
     attachNote = '';
@@ -3137,7 +3160,7 @@ $('#aUse').onclick = async () => {
   closeAi();
   if (!pasteOnly) { aiCandidate = null; aiReached = 3; showStep(3); }
 };
-$('#bCopyCheck').onclick = async () => { $('#bCopyCheck').textContent = (await copyText(`${fixHead()}\n\n${$('#checkResult').innerText.trim()}`)) ? 'コピーしました' : 'コピーできませんでした'; };
+$('#bCopyCheck').onclick = async () => { $('#bCopyCheck').textContent = (await copyText(fixReport(checkText()))) ? 'コピーしました' : 'コピーできませんでした'; };
 new MutationObserver(() => { $('#bCopyCheck').hidden = !$('#checkResult .ng'); $('#bCopyCheck').textContent = '結果を AI に渡す用にコピー'; })
   .observe($('#checkResult'), { childList: true });
 // The same dialog with only 貼る → チラ見 → 確かめる, for an answer the AI gave to the check results (from the
