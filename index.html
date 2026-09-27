@@ -127,6 +127,7 @@ textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1
 .sauth input { flex: 1; min-width: 140px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font: inherit; }
 .sauth .who { color: var(--dim); flex: 1; }
 .gthumb { position: relative; }
+.ssep { grid-column: 1 / -1; color: var(--dim); font-size: 12px; padding: 6px 2px 0; border-top: 1px solid var(--line); }
 .srank { position: absolute; top: 6px; left: 6px; background: var(--accent); color: #1a1a1a; font-weight: 700; border-radius: 999px; min-width: 24px; height: 24px; display: grid; place-items: center; padding: 0 6px; }
 button.liked { border-color: #ff7a9a; color: #ff9ab2; }
 .shidden { color: var(--sub); }
@@ -2264,16 +2265,28 @@ async function loadShare(append = false) {
   if (share.tab === 'mine' && !share.me) { sNote('自分の機体を見るにはログインしてください。'); return; }
   sNote('読み込み中…');
   try {
-    const r = share.tab === 'rank'
-      ? await central(`/api/models/ranking?month=${$('#sMonth').value}`)
-      : await central(`/api/models?sort=${share.tab === 'likes' ? 'likes' : 'new'}&page=${share.page}${share.tab === 'mine' ? '&mine=1' : ''}`);
-    // no likes yet this month: the ranking would look as if posted models had vanished, so show the newest instead
-    if (share.tab === 'rank' && !r.models.length && !append && $('#sMonth').selectedIndex === 0) { share.fromRank = true; return setTab('new'); }
+    if (share.tab === 'rank') {
+      // the ranking holds only models liked this month; this month's view goes on with every other model,
+      // newest first, so a model without likes can still be found and liked
+      const thisMonth = $('#sMonth').selectedIndex === 0;
+      if (!append) {
+        const r = await central(`/api/models/ranking?month=${$('#sMonth').value}`);
+        for (const m of r.models) $('#sGrid').appendChild(shareCard(m));
+        share.ranked = new Set(r.models.map(m => m.id)); share.restShown = false;
+        if (!thisMonth) { sNote(r.models.length ? '' : 'この月のイイネはありません。'); return; }
+      }
+      const n = await central(`/api/models?sort=new&page=${share.page}`);
+      const rest = n.models.filter(m => !share.ranked.has(m.id));
+      if (rest.length && !share.restShown) { $('#sGrid').appendChild(el('div', 'ssep', share.ranked.size ? 'ランキング外の機体（新しい順）' : '今月はまだイイネがありません。新しい順に並べています')); share.restShown = true; }
+      for (const m of rest) $('#sGrid').appendChild(shareCard(m));
+      $('#sMore').hidden = !n.more;
+      sNote($('#sGrid').children.length ? '' : 'まだ機体がありません。');
+      return;
+    }
+    const r = await central(`/api/models?sort=${share.tab === 'likes' ? 'likes' : 'new'}&page=${share.page}${share.tab === 'mine' ? '&mine=1' : ''}`);
     for (const m of r.models) $('#sGrid').appendChild(shareCard(m));
     $('#sMore').hidden = !r.more;
-    const fell = share.fromRank && share.tab === 'new'; share.fromRank = false;
-    sNote(fell ? '今月はまだイイネがないので、新着を表示しています（ランキングにはイイネが付いた機体だけが並びます）。'
-      : r.models.length || append ? '' : share.tab === 'rank' ? 'この月のイイネはまだありません（ランキングにはイイネが付いた機体だけが並びます。投稿した機体は「新着」「自分の機体」にあります）。' : 'まだ機体がありません。');
+    sNote(r.models.length || append ? '' : 'まだ機体がありません。');
   } catch (e) { sNote(e.message === '見つかりません。' ? 'みんなの機体は準備中です（サーバーがまだ対応していません）。' : e.message); }
 }
 $('#sMore').onclick = () => { share.page++; loadShare(true); };
