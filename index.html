@@ -427,7 +427,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { toCreasedNormals, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
+import { Brush, Evaluator, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
 import { MeshBVH } from 'three-mesh-bvh';
 
 const $ = s => document.querySelector(s);
@@ -452,7 +452,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '78860bc';
+const BUILD = '4b6263e';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -539,6 +539,7 @@ const DEFAULTS = {
   pts: rect(0.8, 0.8), depth: 0.4, bevel: 0.04, bevelSegs: 1, corner: 0, cornerSegs: 1, taper: 1, tiltY: 0, ridge: 0,
   segments: 24, arrayCount: 1, arrayStep: [0, 0.15, 0], metal: 0.55, rough: 0.38, blockout: false, bone: 'auto', team: false, glow: null, pivot: 'auto',
   pos: [0, 0, 0], rot: [0, 0, 0], scl: [1, 1, 1],
+  side: null, top: null,   // extrude only: outlines seen from the side [[z, y], ...] and from above [[x, z], ...]; null = none
 };
 const FIELDS = Object.keys(DEFAULTS);
 
@@ -612,7 +613,7 @@ function latheLoop(p) {
 }
 
 function buildLocalGeometry(p) {
-  const key = JSON.stringify([p.kind, p.pts, p.depth, p.bevel, p.bevelSegs, p.corner, p.cornerSegs, p.taper, p.tiltY, p.ridge, p.segments]);
+  const key = JSON.stringify([p.kind, p.pts, p.depth, p.bevel, p.bevelSegs, p.corner, p.cornerSegs, p.taper, p.tiltY, p.ridge, p.segments, p.side, p.top]);
   if (p._geoKey === key) return p._geo;
   let g;
   if (p.kind === 'extrude') {
@@ -643,6 +644,7 @@ function buildLocalGeometry(p) {
         pos.setZ(i, pos.getZ(i) * k);
       }
     }
+    if (p.side || p.top) g = carve(g, p);
   } else {
     g = new THREE.LatheGeometry(latheLoop(p).map(([x, y]) => new THREE.Vector2(x, y)), p.segments);
   }
@@ -651,6 +653,34 @@ function buildLocalGeometry(p) {
   p._geo?.dispose();
   p._geo = g; p._geoKey = key;
   return g;
+}
+
+// The side and top outlines: of the part pushed out from its front outline, keep only what also lies inside the
+// side outline (pushed out across x) and the top outline (pushed out up and down). Three views of one solid.
+const SIDE_TURN = new THREE.Matrix4().makeRotationY(-Math.PI / 2);   // outline x -> local z, extruded along x
+const TOP_TURN = new THREE.Matrix4().makeRotationX(Math.PI / 2);     // outline y -> local z, extruded along y
+let carveEval = null;
+function carve(g, p) {
+  carveEval ??= Object.assign(new Evaluator(), { attributes: ['position', 'normal'], useGroups: false });
+  g.deleteAttribute('uv'); g.clearGroups();
+  g.computeBoundingBox();
+  const reach = g.boundingBox.getSize(new THREE.Vector3()).length() + 1;
+  let brush = new Brush(g); brush.updateMatrixWorld();
+  for (const [pts, turn] of [[p.side, SIDE_TURN], [p.top, TOP_TURN]]) {
+    if (!Array.isArray(pts) || pts.length < 3) continue;
+    const loop = roundCorners(pts, p.corner, p.cornerSegs, true);
+    const prism = new THREE.ExtrudeGeometry(new THREE.Shape(loop.map(([a, b]) => new THREE.Vector2(a, b))), { depth: 2 * reach, bevelEnabled: false, curveSegments: 1 });
+    prism.translate(0, 0, -reach).applyMatrix4(turn);
+    prism.deleteAttribute('uv'); prism.clearGroups();
+    const cut = new Brush(prism); cut.updateMatrixWorld();
+    const next = carveEval.evaluate(brush, cut, INTERSECTION);
+    prism.dispose();
+    if (!next.geometry.attributes.position?.count) { next.geometry.dispose(); continue; }   // no overlap: leave the part whole
+    if (brush.geometry !== g) brush.geometry.dispose();
+    brush = next;
+  }
+  if (brush.geometry !== g) g.dispose();
+  return brush.geometry;
 }
 
 function flipWinding(g) {
@@ -985,10 +1015,13 @@ function renderProps() {
     <label class="check"><input type="checkbox" id="pTeam" ${p.team ? 'checked' : ''}> 陣営色で塗る（マテリアル team_color）</label>
     <label class="check"><input type="checkbox" id="pGlow" ${isGlow(p) ? 'checked' : ''}> 発光する（目・センサーなど）</label>
     <h2>断面 ${p.kind === 'extrude' ? '（押し出し）' : '（回転体：右半分を描く）'}</h2>
+    ${p.kind === 'extrude' ? `<div class="seg" id="pFace">${Object.entries(FACE_LABEL).map(([k, v]) => `<button data-face="${k}">${v}${k !== 'front' && p[FACE_KEY[k]] ? ' ●' : ''}</button>`).join('')}</div>
+    <p class="hint" id="pFaceNote"></p>` : ''}
     <canvas id="profile"></canvas>
     <p class="hint">点をドラッグ ・ 辺をクリックで点を追加 ・ 点をダブルクリックで削除 ・ 何もない所をドラッグで移動 ・ ホイールで拡大縮小</p>
     <div style="display:flex;align-items:center;gap:6px">
       <label class="check" style="flex:1"><input type="checkbox" id="pSnap" ${snap ? 'checked' : ''}> <span id="pSnapLabel">グリッドにスナップ</span></label>
+      ${p.kind === 'extrude' && profileFace !== 'front' && p[FACE_KEY[profileFace]] ? `<button id="pFaceClear">この向きの形を消す</button>` : ''}
       <button id="pFit">全体を表示</button>
     </div>
     <div id="sliders"></div>
@@ -1007,6 +1040,7 @@ function renderProps() {
   $('#pPivot').onchange = e => { p.pivot = e.target.value; save(); if (viewPose !== '待機') applyViewPose(); };
   $('#pGlow').onchange = e => { p.glow = e.target.checked; save(); };
   $('#pSnap').onchange = e => { snap = e.target.checked; };
+  for (const b of document.querySelectorAll('#pFace button')) b.onclick = () => { profileFace = b.dataset.face; renderProps(); };
   $('#bDup').onclick = () => duplicatePart(p.id);
   $('#bDel').onclick = () => deletePart(p.id);
 
@@ -1038,7 +1072,22 @@ function renderProps() {
 
 // ---------- 2D profile editor ----------
 let snap = true;
-let pe = null; // { p, canvas, ctx, size, drag, view: { cx, cy, span } }
+let pe = null; // { p, canvas, ctx, size, drag, face, draft, view: { cx, cy, span } }
+// Which outline the editor draws: the front (pts), the side (side: [z, y], front to the right) or the top (top:
+// [x, z], seen from above with the front at the bottom). Side and top start as a box round the part until edited.
+const FACE_KEY = { front: 'pts', side: 'side', top: 'top' };
+const FACE_LABEL = { front: '正面', side: '側面', top: '上面' };
+let profileFace = 'front';
+const facePts = () => pe.p[FACE_KEY[pe.face]] ?? pe.draft;
+const closedFace = () => pe.p.kind === 'extrude' || pe.face !== 'front';
+// the part's extent in the current view (x0, x1, y0, y1), from its front outline and thickness
+function faceBox(p, face) {
+  const xs = p.pts.map(q => q[0]), ys = p.pts.map(q => q[1]), h = p.depth / 2;
+  const t = Math.max(p.taper, 1);
+  if (face === 'side') return [-h, h, Math.min(...ys) * t, Math.max(...ys) * t];
+  if (face === 'top') return [Math.min(...xs) * t, Math.max(...xs) * t, -h, h];
+  return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+}
 
 // 1, 2, 5 × 10^k: the smallest "nice" number >= x
 function niceStep(x) {
@@ -1051,21 +1100,32 @@ function gridSteps() {
 }
 // Frame the profile so its points are comfortably large, whatever the part's size
 function fitView() {
-  const p = pe.p;
-  const xs = p.pts.map(q => q[0]), ys = p.pts.map(q => q[1]);
+  const p = pe.p, pts = facePts(), [bx0, bx1, by0, by1] = faceBox(p, pe.face);
+  const xs = [...pts.map(q => q[0]), bx0, bx1], ys = [...pts.map(q => q[1]), by0, by1];
   if (p.kind === 'lathe') { const r = Math.max(...xs); xs.push(0, -0.25 * r); }
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   pe.view = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, span: Math.max(x1 - x0, y1 - y0, 0.005) * 1.4 };
 }
 function pointsOutOfView() {
   const m = pe.view.span * 0.47;
-  return pe.p.pts.some(([x, y]) => Math.abs(x - pe.view.cx) > m || Math.abs(y - pe.view.cy) > m);
+  return facePts().some(([x, y]) => Math.abs(x - pe.view.cx) > m || Math.abs(y - pe.view.cy) > m);
 }
 
 function setupProfile(p) {
   const canvas = $('#profile');
   const ctx = canvas.getContext('2d');
-  pe = { p, canvas, ctx, size: 0, drag: -1, hover: -1, pan: null };
+  const face = p.kind === 'extrude' ? profileFace : 'front';
+  let draft = null;
+  if (face !== 'front' && !p[FACE_KEY[face]]) {   // a box a little larger than the part: no change until edited
+    const [x0, x1, y0, y1] = faceBox(p, face), m = 0.02 * Math.max(x1 - x0, y1 - y0, 0.05);
+    draft = [[x0 - m, y0 - m], [x1 + m, y0 - m], [x1 + m, y1 + m], [x0 - m, y1 + m]].map(q => q.map(v => +v.toFixed(4)));
+  }
+  pe = { p, canvas, ctx, size: 0, drag: -1, hover: -1, pan: null, face, draft };
+  for (const b of document.querySelectorAll('#pFace button')) b.classList.toggle('on', b.dataset.face === face);
+  const note = $('#pFaceNote');
+  if (note) note.textContent = face === 'front' ? '正面から見た形を押し出します。「側面」「上面」で横・上から見た形も描くと、3 つの形が重なる部分だけが残ります。'
+    : face === 'side' ? `横から見た形（右が前、上が上）。${p.side ? '' : '点を動かすと使い始めます。'}点線は部品の範囲です。`
+    : `上から見た形（下が前、右が機体の左）。${p.top ? '' : '点を動かすと使い始めます。'}点線は部品の範囲です。`;
   fitView();
   const resize = () => {
     const s = canvas.clientWidth;
@@ -1083,7 +1143,7 @@ function setupProfile(p) {
     if (i < 0) {
       const ed = hitEdge(m);
       if (ed) {
-        const pts = pe.p.pts;
+        const pts = facePts();
         // lathe: edges -1 (axis→first) and n-1 (last→axis) extend the ends
         const at = ed.index + 1;
         pts.splice(Math.max(0, at), 0, snapPt(toWorld(m)));
@@ -1096,7 +1156,7 @@ function setupProfile(p) {
   canvas.onpointermove = e => {
     const m = local(e);
     if (pe.drag >= 0) {
-      pe.p.pts[pe.drag] = snapPt(toWorld(m));
+      facePts()[pe.drag] = snapPt(toWorld(m));
       onProfileChange();
     } else if (pe.pan) {
       const k = pe.view.span / pe.size;
@@ -1112,6 +1172,7 @@ function setupProfile(p) {
   canvas.onpointerup = () => {
     pe.pan = null;
     if (pe.drag >= 0) { pe.drag = -1; if (pointsOutOfView()) fitView(); drawProfile(); save(); }
+    if (pe.created) renderProps();   // a side / top outline just began: show its mark and its 消す button
   };
   canvas.onwheel = e => {
     e.preventDefault();
@@ -1124,34 +1185,40 @@ function setupProfile(p) {
   $('#pFit').onclick = () => { fitView(); drawProfile(); };
   canvas.ondblclick = e => {
     const i = hitPoint(local(e));
-    const min = pe.p.kind === 'extrude' ? 3 : 1;
-    if (i >= 0 && pe.p.pts.length > min) { pe.p.pts.splice(i, 1); onProfileChange(); save(); }
+    const min = closedFace() ? 3 : 1;
+    if (i >= 0 && facePts().length > min) { facePts().splice(i, 1); onProfileChange(); save(); }
   };
+  if ($('#pFaceClear')) $('#pFaceClear').onclick = () => { pe.p[FACE_KEY[pe.face]] = null; scheduleRebuild(); save(); renderProps(); };
 }
 
-function onProfileChange() { drawProfile(); scheduleRebuild(); }
+// the first edit of a side / top box makes it the part's outline
+function onProfileChange() {
+  const key = FACE_KEY[pe.face];
+  if (!pe.p[key] && pe.draft) { pe.p[key] = pe.draft; pe.draft = null; pe.created = true; }
+  drawProfile(); scheduleRebuild();
+}
 
 const toCanvas = ([x, y]) => {
-  const { cx, cy, span } = pe.view, s = pe.size / span;
-  return [pe.size / 2 + (x - cx) * s, pe.size / 2 - (y - cy) * s];
+  const { cx, cy, span } = pe.view, s = pe.size / span, up = pe.face === 'top' ? -1 : 1;
+  return [pe.size / 2 + (x - cx) * s, pe.size / 2 - (y - cy) * s * up];
 };
 const toWorld = ([px, py]) => {
-  const { cx, cy, span } = pe.view, s = pe.size / span;
-  return [cx + (px - pe.size / 2) / s, cy - (py - pe.size / 2) / s];
+  const { cx, cy, span } = pe.view, s = pe.size / span, up = pe.face === 'top' ? -1 : 1;
+  return [cx + (px - pe.size / 2) / s, cy - (py - pe.size / 2) / s * up];
 };
 function snapPt([x, y]) {
   if (snap) { const g = gridSteps().snap; x = Math.round(x / g) * g; y = Math.round(y / g) * g; }
-  if (pe.p.kind === 'lathe') x = Math.max(0, x);
+  if (pe.p.kind === 'lathe' && pe.face === 'front') x = Math.max(0, x);
   return [+x.toFixed(5), +y.toFixed(5)];
 }
 function hitPoint(m) {
   let best = -1, bd = 9;
-  pe.p.pts.forEach((q, i) => { const c = toCanvas(q), d = Math.hypot(c[0] - m[0], c[1] - m[1]); if (d < bd) { bd = d; best = i; } });
+  facePts().forEach((q, i) => { const c = toCanvas(q), d = Math.hypot(c[0] - m[0], c[1] - m[1]); if (d < bd) { bd = d; best = i; } });
   return best;
 }
 function editEdges() {
-  const pts = pe.p.pts, e = [];
-  if (pe.p.kind === 'extrude') for (let i = 0; i < pts.length; i++) e.push([i, pts[i], pts[(i + 1) % pts.length]]);
+  const pts = facePts(), e = [];
+  if (closedFace()) for (let i = 0; i < pts.length; i++) e.push([i, pts[i], pts[(i + 1) % pts.length]]);
   else {
     e.push([-1, [0, pts[0][1]], pts[0]]);
     for (let i = 0; i < pts.length - 1; i++) e.push([i, pts[i], pts[i + 1]]);
@@ -1198,14 +1265,26 @@ function drawProfile() {
     ctx.fillStyle = '#6b7686'; ctx.font = '10px system-ui';
     ctx.fillText('回転軸', ox + 4, 12);
   }
+  const face = pe.face, pts = facePts();
+  if (face !== 'front') {
+    // the part's extent in this view, and which way is the front
+    const [x0, x1, y0, y1] = faceBox(p, face), a = toCanvas([x0, y0]), b = toCanvas([x1, y1]);
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = '#5d6878'; ctx.lineWidth = 1;
+    ctx.strokeRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#8b97a8'; ctx.font = '11px system-ui';
+    if (face === 'side') { ctx.fillText('前 →', size - 34, 14); ctx.fillText('← 後', 6, 14); }
+    else { ctx.fillText('↓ 前', 6, size - 8); ctx.fillText('↑ 後', 6, 14); }
+  }
 
   // filled silhouette (with corner rounding applied)
   const fill = p.op === 'sub' ? 'rgba(255,107,107,.18)' : 'rgba(240,169,59,.18)';
   const stroke = p.op === 'sub' ? '#ff8b8b' : '#f0a93b';
   const path = poly => { ctx.beginPath(); poly.forEach((q, i) => { const c = toCanvas(q); i ? ctx.lineTo(...c) : ctx.moveTo(...c); }); ctx.closePath(); };
-  if (p.kind === 'extrude') {
-    path(roundCorners(p.pts, p.corner, p.cornerSegs, true));
-    ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+  if (closedFace()) {
+    path(roundCorners(pts, p.corner, p.cornerSegs, true));
+    ctx.fillStyle = face !== 'front' && !p[FACE_KEY[face]] ? 'rgba(255,255,255,.04)' : fill; ctx.fill();
+    ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
   } else {
     const loop = latheLoop(p);
     path(loop.map(([x, y]) => [-x, y]));
@@ -1216,11 +1295,11 @@ function drawProfile() {
   // control polygon
   ctx.setLineDash([3, 3]); ctx.strokeStyle = '#7d8796'; ctx.lineWidth = 1;
   ctx.beginPath();
-  p.pts.forEach((q, i) => { const c = toCanvas(q); i ? ctx.lineTo(...c) : ctx.moveTo(...c); });
-  if (p.kind === 'extrude') ctx.closePath();
+  pts.forEach((q, i) => { const c = toCanvas(q); i ? ctx.lineTo(...c) : ctx.moveTo(...c); });
+  if (closedFace()) ctx.closePath();
   ctx.stroke(); ctx.setLineDash([]);
   // handles
-  p.pts.forEach((q, i) => {
+  pts.forEach((q, i) => {
     const [cx, cy] = toCanvas(q);
     ctx.beginPath(); ctx.arc(cx, cy, i === pe.drag || i === pe.hover ? 6 : 4.5, 0, Math.PI * 2);
     ctx.fillStyle = i === pe.drag || i === pe.hover ? '#ffffff' : '#dfe5ee';
@@ -3241,6 +3320,13 @@ function checkAiParts(list) {
     if (p.pivot !== undefined && !(p.pivot in PIVOT_CHOICES)) return bad(`pivot は ${Object.keys(PIVOT_CHOICES).join(' / ')} のどれかです`);
     for (const k of ['mirror', 'blockout', 'team', 'gun']) if (p[k] !== undefined && typeof p[k] !== 'boolean') return bad(`${k} は true か false です`);
     if (p.glow !== undefined && p.glow !== null && typeof p.glow !== 'boolean') return bad('glow は true か false です');
+    for (const k of ['side', 'top']) {
+      const v = p[k];
+      if (v === undefined || v === null) continue;
+      if (kind !== 'extrude') return bad(`${k} は押し出し（extrude）の部品だけに使えます`);
+      if (!Array.isArray(v) || !v.every(q => Array.isArray(q) && q.length === 2 && q.every(Number.isFinite)) || v.length < 3 || v.length > 128)
+        return bad(`${k} は [[${k === 'side' ? 'z, y' : 'x, z'}], ...] の 3〜128 個の数値の組です`);
+    }
     ok.push({ ...p, name: String(p.name ?? '部品').slice(0, 60) });
   });
   return { ok, errors, unknown: [...unknown] };
