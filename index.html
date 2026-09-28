@@ -452,7 +452,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '3b7d61b';
+const BUILD = '78860bc';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -2098,6 +2098,9 @@ $('#bGame').onclick = () => {
       (loose.length ? ` ✗ 関節で問題が出ます — ${loose.join(' ／ ')}` : ` 関節チェック（${Object.keys(joints).filter(k => !k.startsWith('__')).length} 姿勢${joints.__skipped ? '、この機体に起こる動きだけ' : ''}）✓ 外れ・めり込みなし。`) +
       // every XS can hold a hand weapon (a machine gun at least): without gun parts it would fire from the bare hand
       (parts.some(p => p.op === 'add' && !p.blockout && isGun(p) && !isBazooka(p)) ? '' : ' ✗ 手持ちの武器の部品（名前に「銃」「ライフル」、右手に持たせる）がありません。マシンガンなどが素手から撃たれます。') +
+      // the game aims a bazooka's shot along hand_r → muzzle and takes its far end
+      (parts.some(p => p.op === 'add' && !p.blockout && isBazooka(p)) && !(report.attach.includes('hand_r') && report.attach.includes('muzzle'))
+        ? ' ✗ バズーカの弾の出口を決めるには、右手（「手」）と銃口（「マズル」「銃口」）の部品が要ります。' : '') +
       (!XS_INFO[roleId()]?.bazooka || parts.some(p => p.op === 'add' && !p.blockout && isBazooka(p)) ? '' : ' ✗ バズーカの部品（名前に「バズーカ」）がありません。この用途はバズーカを持てるので、素手から撃たれます。') +
       ` public/models/ に置いたら、出す前のテスト（docs/models.md）を 3 つとも通してください: npx tsx tools/modelcheck.ts / jointcheck.ts / muzzlecheck.ts public/models/${name}.glb`;
     $('#checkResult').appendChild(div);
