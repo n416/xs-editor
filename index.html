@@ -452,7 +452,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = 'c0fd7b5';
+const BUILD = '3b7d61b';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -1410,7 +1410,7 @@ const BONE_RULES = [
   ['head', /頭|^首|目|バイザー|トサカ|顔|ヘルメット|ほほ|耳|カメラ|アンテナ|額/],   // ^首: not 足首 / 手首
   ['shin', /すね|ふくらはぎ|ひざ|足|つま先|かかと/],
   ['leg', /太もも|股関節/],
-  ['fore', /前腕|手|指|ライフル|銃|マガジン|マズル|パイル|杭|シールド/],
+  ['fore', /前腕|手|指|ライフル|銃|マガジン|マズル|パイル|杭|シールド|バズーカ/],
   ['arm', /肩|腕|ひじ/],
   ['hips', /腰|股|スカート/],
 ];
@@ -1418,6 +1418,10 @@ const GLOW_RE = /目|センサー|バイザー|アイ/;
 // hand weapons go to the `gun` node, which the game hides during saber and knife cuts, throws and the bazooka
 const GUN_RE = /ライフル|銃|マガジン|マズル/;
 const isGun = p => p.gun ?? GUN_RE.test(p.name);
+// the bazooka goes to the `bazooka` node, which the game shows only while a bazooka is selected (the gun is hidden then)
+const BAZOOKA_RE = /バズーカ/;
+const isBazooka = p => BAZOOKA_RE.test(p.name);
+const isHeld = p => isGun(p) || isBazooka(p);   // hand weapons the game hides for melee and throws
 const JOINT_PARENT = { arm: 'torso', fore: 'arm', leg: 'hips', shin: 'leg', head: 'torso', torso: 'hips', cannon: 'torso' };
 // Tracked XS (artillery, docs/models.md「キャタピラの XS」): a part named キャタピラ makes the model tracked. It has no
 // leg bones (leg and shin parts go on the hips with the chassis), its belts are exported as track_l / track_r with a
@@ -1773,7 +1777,7 @@ function jointCheck(id = roleId()) {
   for (const [name, pose, frame] of checks) {
     const M = poseMatrices(at, pose, H);
     const moved = pc => M[pc.bone];
-    const hidden = /^saber|^knife|^throw/.test(name) ? pc => isGun(pc.part) : () => false;   // the game hides the gun then
+    const hidden = /^saber|^knife|^throw/.test(name) ? pc => isHeld(pc.part) : () => false;   // the game hides the gun then
     const same = (a, b) => moved(a).equals(moved(b));
     // 1) off the body: keep the rest contacts that still hold in this pose, then look for islands
     const adj = pieces.map(() => []);
@@ -1991,12 +1995,13 @@ function buildGameModel() {
     // group by material class; glow keeps its own colour per material (emissive can't take vertex colours)
     const groups = new Map();
     for (const pc of pieces) {
-      const cls = isGun(pc.part) ? 'gun' : materialClass(pc.part);
+      const cls = isBazooka(pc.part) ? 'bazooka' : isGun(pc.part) ? 'gun' : materialClass(pc.part);
       const key = cls === 'glow' && level === 0 ? 'glow:' + pc.part.color : cls;
       (groups.get(key) || groups.set(key, []).get(key)).push(pc);
     }
-    // stay within the draw-call budget: fold extra glow colours into one, then (belts taking two) metal into body
-    const budget = GAME_LIMITS.drawCalls - beltCalls;
+    // stay within the draw-call budget (the belts come on top: a tracked XS may use 5 + 2, gltfrig.ts drawLimit):
+    // fold extra glow colours into one, then metal into body
+    const budget = GAME_LIMITS.drawCalls;
     if (level === 0 && groups.size > budget) {
       const glowKeys = [...groups.keys()].filter(k => k.startsWith('glow:'));
       const keep = glowKeys.shift();
@@ -2012,7 +2017,7 @@ function buildGameModel() {
       let metal = 0, rough = 0, n = 0;
       const partRanges = [];   // LOD0: which triangles belong to which part, for checks outside the editor (tools/jointcheck.ts)
       for (const pc of list) {
-        if (level === 0) partRanges.push([pieceLabel(pc), pc.bone, P.length / 9, pc.geo.attributes.position.count / 3, isGun(pc.part) ? 1 : 0]);
+        if (level === 0) partRanges.push([pieceLabel(pc), pc.bone, P.length / 9, pc.geo.attributes.position.count / 3, isHeld(pc.part) ? 1 : 0]);
         const pos = pc.geo.attributes.position, nor = pc.geo.attributes.normal;
         const col = new THREE.Color(pc.part.color), bi = boneIndex[pc.bone];
         for (let i = 0; i < pos.count; i++) {
@@ -2039,10 +2044,10 @@ function buildGameModel() {
       const mesh = new THREE.SkinnedMesh(merged, mat);
       mesh.name = `xs_${mat.name}${level ? '_lod' + level : ''}`;
       if (level === 0) mesh.userData.xsParts = partRanges;   // glTF extras: [label, bone, first triangle, triangles, gun]
-      if (cls === 'gun') {
-        let gunNode = root.getObjectByName('gun');
-        if (!gunNode) { gunNode = new THREE.Group(); gunNode.name = 'gun'; root.add(gunNode); }
-        gunNode.add(mesh);
+      if (cls === 'gun' || cls === 'bazooka') {   // gun / bazooka nodes the game shows and hides
+        let held = root.getObjectByName(cls);
+        if (!held) { held = new THREE.Group(); held.name = cls; root.add(held); }
+        held.add(mesh);
       } else root.add(mesh);
       mesh.bind(skeleton, new THREE.Matrix4());
       tris += P.length / 9;
@@ -2089,8 +2094,12 @@ $('#bGame').onclick = () => {
       (tankId && !report.tracked ? ' ✗ 砲撃の機体idですが、キャタピラの部品がありません（足の機体として書き出しました）。' : '') +
       (!tankId && report.tracked ? ' ✗ キャタピラ機ですが、機体idがキャタピラの砲撃（*_artillery）ではありません。' : '') +
       ` 三角形 LOD0 ${report.tris[0].toLocaleString()} ${ok(report.tris[0], GAME_LIMITS.tris[0])} / LOD1 ${report.tris[1].toLocaleString()} ${ok(report.tris[1], GAME_LIMITS.tris[1])} / LOD2 ${report.tris[2]} ${ok(report.tris[2], GAME_LIMITS.tris[2])}、` +
-      ` 描画回数 ${report.calls[0]} ${ok(report.calls[0], GAME_LIMITS.drawCalls)}（${report.materials.join(', ')}）。` +
-      (loose.length ? ` ✗ 関節で問題が出ます — ${loose.join(' ／ ')}` : ` 関節チェック（${Object.keys(joints).filter(k => !k.startsWith('__')).length} 姿勢${joints.__skipped ? '、この機体に起こる動きだけ' : ''}）✓ 外れ・めり込みなし。`) + ' public/models/ に置いてください。';
+      ` 描画回数 ${report.calls[0]} ${ok(report.calls[0], GAME_LIMITS.drawCalls + report.belts.length)}（${report.materials.join(', ')}）。` +
+      (loose.length ? ` ✗ 関節で問題が出ます — ${loose.join(' ／ ')}` : ` 関節チェック（${Object.keys(joints).filter(k => !k.startsWith('__')).length} 姿勢${joints.__skipped ? '、この機体に起こる動きだけ' : ''}）✓ 外れ・めり込みなし。`) +
+      // every XS can hold a hand weapon (a machine gun at least): without gun parts it would fire from the bare hand
+      (parts.some(p => p.op === 'add' && !p.blockout && isGun(p) && !isBazooka(p)) ? '' : ' ✗ 手持ちの武器の部品（名前に「銃」「ライフル」、右手に持たせる）がありません。マシンガンなどが素手から撃たれます。') +
+      (!XS_INFO[roleId()]?.bazooka || parts.some(p => p.op === 'add' && !p.blockout && isBazooka(p)) ? '' : ' ✗ バズーカの部品（名前に「バズーカ」）がありません。この用途はバズーカを持てるので、素手から撃たれます。') +
+      ` public/models/ に置いたら、出す前のテスト（docs/models.md）を 3 つとも通してください: npx tsx tools/modelcheck.ts / jointcheck.ts / muzzlecheck.ts public/models/${name}.glb`;
     $('#checkResult').appendChild(div);
   }, err => ask('書き出しに失敗しました: ' + err, { cancel: null }), { binary: true });
 };

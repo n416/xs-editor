@@ -6,73 +6,85 @@
    "name": "連合-強襲",
    "melee": "saber",
    "tracked": false,
-   "kneel": false
+   "kneel": false,
+   "bazooka": true
   },
   "a_heavy": {
    "name": "連合-重撃",
    "melee": null,
    "tracked": false,
-   "kneel": false
+   "kneel": false,
+   "bazooka": true
   },
   "a_support": {
    "name": "連合-支援",
    "melee": null,
    "tracked": false,
-   "kneel": false
+   "kneel": false,
+   "bazooka": false
   },
   "a_sniper": {
    "name": "連合-狙撃",
    "melee": "knife",
    "tracked": false,
-   "kneel": false
+   "kneel": false,
+   "bazooka": false
   },
   "a_artillery": {
    "name": "連合-砲撃",
    "melee": "ram",
    "tracked": true,
-   "kneel": false
+   "kneel": false,
+   "bazooka": false
   },
   "a_artillery_leg": {
    "name": "連合-砲撃（脚）",
    "melee": "ram",
    "tracked": false,
-   "kneel": true
+   "kneel": true,
+   "bazooka": false
   },
   "b_raid": {
    "name": "GIO-強襲",
    "melee": "saber",
    "tracked": false,
-   "kneel": false
+   "kneel": false,
+   "bazooka": true
   },
   "b_heavy": {
    "name": "GIO-重撃",
    "melee": null,
    "tracked": false,
-   "kneel": false
+   "kneel": false,
+   "bazooka": true
   },
   "b_support": {
    "name": "GIO-支援",
    "melee": null,
    "tracked": false,
-   "kneel": false
+   "kneel": false,
+   "bazooka": false
   },
   "b_sniper": {
    "name": "GIO-狙撃",
    "melee": "knife",
    "tracked": false,
-   "kneel": false
+   "kneel": false,
+   "bazooka": false
   },
   "b_artillery": {
    "name": "GIO-砲撃",
    "melee": "ram",
    "tracked": true,
-   "kneel": false
+   "kneel": false,
+   "bazooka": false
   },
   "b_artillery_leg": {
    "name": "GIO-砲撃（脚）",
    "melee": "ram",
    "tracked": false,
-   "kneel": true
+   "kneel": true,
+   "bazooka": false
   }
  },
  "moves": {
