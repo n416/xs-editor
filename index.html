@@ -455,7 +455,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = 'af51587';
+const BUILD = '2ee3353';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -1729,7 +1729,7 @@ const ROLES = { raid: '強襲', heavy: '重撃', support: '支援', sniper: '狙
 // deck the XS stand on, the four gun seats) come from the game — shared/data.ts TACTICS, server/battle/ships.ts
 // seatAt — and show as guides. 1 editor unit = 6 m, as for the XS (3 units = 18 m).
 const VEHICLES = {
-  battleship: { name: '戦艦', len: 220, width: 56, deckY: 14 },
+  battleship: { name: '戦艦', len: 340, width: 84, deckY: 20 },
   assault: { name: '強襲艦', len: 120, width: 30, deckY: 10 },
 };
 const KINDS = { ...ROLES, ...Object.fromEntries(Object.entries(VEHICLES).map(([k, v]) => [k, v.name])) };
@@ -3014,11 +3014,12 @@ const SAMPLE_WINGED_BLUE = (() => {
 // Built-in samples ship with the page; the user's own samples live in this browser's localStorage
 // and can be moved between browsers as a JSON file.
 // the accent colour of each sample is what the faction colour paints in the game
-// ---------- the game's ships as built in code (client/src/aircraft.ts: twinHull / roundHull / the assault ship), as
-// editor parts: the samples to start a ship from. Sizes in the model's metres (x right, y up, z aft: the game's model
-// faces -z), turned into editor units (1 = 6 m, facing +Z, +X its left). The gun seats' turrets are not here: the
+// ---------- the game's ships as editor parts: the samples to start a ship from. The battleships are written from the
+// game's models by tools/shipsamples.ts into ship-samples.json (loaded below); the assault ship is built here.
+// Sizes in the model's metres (x right, y up, z aft: the game's model faces -z), turned into editor units (1 = 6 m,
+// facing +Z, +X its left). The gun seats' turrets are not here: the
 // game adds them at the seats (they turn with their gunners).
-const SHIP_HULL = '#8b9186', SHIP_DARK = '#3a3f3b', SHIP_DECK = '#5d625c', SHIP_LINE = '#d8d27a', SHIP_GLASS = '#8fd8ff', SHIP_FIRE = '#ffb870', SHIP_TEAM = '#4a78c8';
+const SHIP_HULL = '#8b9186', SHIP_DARK = '#3a3f3b', SHIP_DECK = '#5d625c', SHIP_LINE = '#d8d27a', SHIP_FIRE = '#ffb870', SHIP_TEAM = '#4a78c8';
 const shipPos = (x, y, z) => [-x / 6, y / 6, -z / 6];
 const shipPart = (o) => ({ ...DEFAULTS, kind: 'extrude', bevel: 0.02, corner: 0, metal: 0.3, rough: 0.6, rot: [0, 0, 0], scl: [1, 1, 1], ...o });
 /** A box w × h × d m (across, up, along), its centre at model (x, y, z). */
@@ -3029,8 +3030,6 @@ const sPlan = (name, color, plan, depth, y, o = {}) => shipPart({ name, color, p
 const sLathe = (name, color, pts, segments, x, y, z, o = {}) => shipPart({ name, color, kind: 'lathe', pts: pts.map(([r, h]) => [r / 6, h / 6]), segments, pos: shipPos(x, y, z), ...o });
 /** A disc facing aft (an engine's glow), radius r m. */
 const sDisc = (name, color, r, x, y, z, o = {}) => shipPart({ name, color, pts: Array.from({ length: 16 }, (_, i) => [Math.cos(i / 16 * Math.PI * 2) * r / 6, Math.sin(i / 16 * Math.PI * 2) * r / 6]), depth: 0.2 / 6, bevel: 0, pos: shipPos(x, y, z), ...o });
-/** Points along a quadratic curve from a to b bending toward c (b included, a not). */
-const quad = (a, c, b, n = 8) => Array.from({ length: n }, (_, i) => { const t = (i + 1) / n, u = 1 - t; return [u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]; });
 
 /** What every battleship / assault ship has: engines at the stern, gun domes along the sides, missile boxes on the deck. */
 function shipCommon(len, width, deckY, hull, nEng, nGun) {
@@ -3048,50 +3047,6 @@ function shipCommon(len, width, deckY, hull, nEng, nGun) {
     out.push(sBox('ミサイル箱', hull, 3, 2.5, 5, W - 3, H + 0.7, -L * 0.55 + i * 6, { mirror: true }));
   }
   return out;
-}
-
-/** 連合の戦艦: the bow split in two with a gap between (a deck and a launch opening on each), the bridge on the centreline aft. */
-function shipSampleTwin() {
-  const len = 220, width = 56, H = 14, L = len / 2, W = width / 2, gap = width * 0.08, join = L * 0.15, a = gap, b = W, r = 8;
-  const aft = [[-W, -join], [W, -join], [W, L * 0.86], ...quad([W, L * 0.86], [W, L], [W * 0.84, L]), [-W * 0.84, L], ...quad([-W * 0.84, L], [-W, L], [-W, L * 0.86])];
-  const bowPlan = [[a, join + 4], [a, -L + r], ...quad([a, -L + r], [a, -L], [a + r, -L]), [b - r, -L], ...quad([b - r, -L], [b, -L], [b, -L + r]), [b, join + 4]];
-  const mid = (a + b) / 2, w = b - a, zb = L * 0.45;
-  return [
-    sPlan('船体（後ろ）', SHIP_HULL, aft, H * 1.4, H - 0.5 - H * 0.7),
-    sPlan('艦首', SHIP_HULL, bowPlan, H * 1.25, H - 0.5 - H * 0.625, { mirror: true }),
-    sBox('甲板', SHIP_DECK, w - 3, 0.5, L + join - 4, mid, H - 0.3, (-L + join) / 2 + 1, { mirror: true, metal: 0.2, rough: 0.85 }),
-    sBox('甲板の線', SHIP_LINE, 0.6, 0.3, L + join - 8, mid, H + 0.1, (-L + join) / 2 + 1, { mirror: true, bevel: 0 }),
-    sBox('発進口', SHIP_DARK, w * 0.62, H * 0.9, 1, mid, H * 0.15, -L - 0.3, { mirror: true }),
-    sBox('キール（前）', SHIP_DARK, w * 0.5, H * 0.8, L * 0.9, mid, H - 0.5 - H * 1.25 - H * 0.4 + 0.3, -L * 0.45, { mirror: true }),
-    sBox('陣営色の帯', SHIP_TEAM, 0.6, 2.4, len * 0.8, b + 0.2, H * 0.3, 0, { mirror: true, team: true }),
-    sBox('後部甲板', SHIP_DECK, width - 3, 0.5, L - join - 4, 0, H - 0.3, (L + join) / 2, { metal: 0.2, rough: 0.85 }),
-    sBox('キール（後ろ）', SHIP_DARK, width * 0.55, H, L * 0.8, 0, H - 0.5 - H * 1.4 - H / 2 + 0.3, L * 0.45),
-    sBox('艦橋の塔', SHIP_HULL, width * 0.26, 18, len * 0.12, 0, H + 8.8, zb),
-    sBox('艦橋', SHIP_DARK, width * 0.44, 5, len * 0.09, 0, H + 19.5, zb - 1),
-    sBox('艦橋の窓', SHIP_GLASS, width * 0.42, 1.4, 0.3, 0, H + 20, zb - 1 - len * 0.045 - 0.1, { glow: true, bevel: 0 }),
-    sLathe('マスト', SHIP_DARK, [[0.7, -7], [0.45, 7]], 6, 0, H + 28.8, zb + 3),
-    ...shipCommon(len, width, H, SHIP_HULL, 4, 3),
-  ];
-}
-
-/** GIO の戦艦: one rounded hull, a round bridge tower off to the right, aft. */
-function shipSampleRound() {
-  const len = 220, width = 56, H = 14, L = len / 2, W = width / 2;
-  const plan = [[0, -L], ...quad([0, -L], [W * 0.95, -L * 0.96], [W, -L * 0.42]), [W, L * 0.8], ...quad([W, L * 0.8], [W, L], [W * 0.72, L]),
-    [-W * 0.72, L], ...quad([-W * 0.72, L], [-W, L], [-W, L * 0.8]), [-W, -L * 0.42], ...quad([-W, -L * 0.42], [-W * 0.95, -L * 0.96], [0, -L]).slice(0, -1)];
-  const tx = W * 0.6;
-  return [
-    sPlan('船体', SHIP_HULL, plan, H * 1.35, H - 0.5 - H * 0.675, { bevel: 0.5, bevelSegs: 3 }),
-    sBox('キール', SHIP_DARK, W * 0.84, 12.9, len * 0.7, 0, H - 0.5 - H * 1.35 - 12.9 / 2 + 0.3, L * 0.05, { corner: 0.9, cornerSegs: 4, bevel: 0.3, bevelSegs: 3 }),
-    sBox('甲板', SHIP_DECK, width * 0.8, 0.5, len * 0.72, 0, H - 0.3, L * 0.1, { metal: 0.2, rough: 0.85 }),
-    sBox('甲板の線', SHIP_LINE, 0.6, 0.3, len * 0.68, W * 0.55, H + 0.1, L * 0.1, { mirror: true, bevel: 0 }),
-    sBox('陣営色の帯', SHIP_TEAM, 1.6, 1.6, len * 0.62, W + 0.2, H * 0.3, L * 0.1, { mirror: true, team: true, corner: 0.12, cornerSegs: 3 }),
-    sLathe('艦橋の塔', SHIP_HULL, [[width * 0.16, -9], [width * 0.13, 9]], 16, tx, H + 8.8, L * 0.62),
-    sBox('艦橋', SHIP_DARK, width * 0.26 + 6, 6, 6, tx, H + 19, L * 0.6, { corner: 0.45, cornerSegs: 4, bevel: 0.2, bevelSegs: 3 }),
-    sBox('艦橋の窓', SHIP_GLASS, width * 0.3, 1.3, 0.3, tx, H + 19.3, L * 0.6 - 3.1, { glow: true, bevel: 0 }),
-    sLathe('マスト', SHIP_DARK, [[0.7, -7], [0.45, 7]], 6, tx, H + 28, L * 0.6),
-    ...shipCommon(len, width, H, SHIP_HULL, 4, 3),
-  ];
 }
 
 /** 強襲艦 (both sides alike but for the side's colour): a pointed hull with a ram at the bow. */
@@ -3114,11 +3069,14 @@ const BUILTIN = [
   { name: '可変翼型XS（グレー）', parts: teamed(SAMPLE_WINGED, ['#e3e5e8']), builtin: true, role: 'raid' },
   { name: '可変翼型XS（青）', parts: teamed(SAMPLE_WINGED_BLUE, ['#e3e5e8']), builtin: true, role: 'raid' },
   { name: '重装型XS', parts: teamed(SAMPLE_HEAVY, ['#e8781e']), builtin: true, role: 'heavy' },
-  // the game's ships as they are now (built in code): to start a ship from
-  { name: '戦艦（連合・今の形）', parts: shipSampleTwin(), builtin: true, role: 'battleship' },
-  { name: '戦艦（GIO・今の形）', parts: shipSampleRound(), builtin: true, role: 'battleship' },
+  // the game's ships: to start a ship from (the battleships join from ship-samples.json, before the assault ship)
   { name: '強襲艦（今の形）', parts: shipSampleAssault(), builtin: true, role: 'assault' },
 ];
+const shipSamplesReady = fetch('ship-samples.json').then(r => (r.ok ? r.json() : null)).then(d => {
+  if (!Array.isArray(d?.samples)) return;
+  const at = BUILTIN.findIndex(x => x.role === 'assault');
+  BUILTIN.splice(at, 0, ...d.samples.map(x => ({ name: x.name, parts: x.parts.map(shipPart), builtin: true, role: x.role })));
+}).catch(() => {});
 const USER_KEY = 'xs-part-editor-samples-v1';
 function readUserSamples() {
   try { const v = JSON.parse(localStorage.getItem(USER_KEY)); return Array.isArray(v) ? v : []; } catch { return []; }
@@ -3169,7 +3127,7 @@ function ensureBuiltinThumbs() {
   select(parts[selIndex] ? parts[selIndex].id : null);
   rebuild();
 }
-function openGallery() { ensureBuiltinThumbs(); gallery.hidden = false; $('#gNote').textContent = ''; $('#gAi').value = sceneAi; renderGallery(); }
+async function openGallery() { await shipSamplesReady; ensureBuiltinThumbs(); gallery.hidden = false; $('#gNote').textContent = ''; $('#gAi').value = sceneAi; renderGallery(); }
 function closeGallery() { gallery.hidden = true; startRole = ''; }
 $('#bSample').onclick = openGallery;
 $('#gClose').onclick = closeGallery;
