@@ -336,7 +336,7 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
 <div id="start" hidden>
   <div class="gbox stbox">
     <div class="ghead"><h1>XS部品エディタ</h1><button id="stClose">閉じる</button></div>
-    <label class="strole">作る機体の用途 <select id="stRole"></select> <span class="hint">（あとからツールバーの「用途」で変えられます）</span></label>
+    <label class="strole">作る機体の用途（艦も選べます） <select id="stRole"></select> <span class="hint">（あとからツールバーの「用途」で変えられます）</span></label>
     <div class="stgrid">
       <button id="stResume" class="stcard"><b>つづきから</b><span id="stResumeInfo"></span></button>
       <div class="stcard"><b>0 から作る</b><span>あたり（大まかな箱）だけの機体から始めます</span>
@@ -452,7 +452,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '4b6263e';
+const BUILD = '6bd5755';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -486,7 +486,8 @@ const rim = new THREE.DirectionalLight(0x88aaff, 0.8);
 rim.position.set(-4, 3, -5);
 scene.add(rim);
 
-scene.add(new THREE.GridHelper(10, 40, 0x39414d, 0x262b33));
+const grid = new THREE.GridHelper(10, 40, 0x39414d, 0x262b33);
+scene.add(grid);
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.ShadowMaterial({ opacity: 0.35 }));
 ground.rotation.x = -Math.PI / 2;
 ground.position.y = -0.001;
@@ -497,6 +498,7 @@ const resultGroup = new THREE.Group(); scene.add(resultGroup);
 const ghostGroup = new THREE.Group(); scene.add(ghostGroup);
 const blockGroup = new THREE.Group(); scene.add(blockGroup);
 const proxyGroup = new THREE.Group(); scene.add(proxyGroup);
+const guideGroup = new THREE.Group(); scene.add(guideGroup);   // a vehicle's guides (the game's fixed sizes and places); never exported
 
 const gizmo = new TransformControls(camera, renderer.domElement);
 gizmo.setSize(0.8);
@@ -1673,14 +1675,69 @@ fetch(`poses.json?v=${BUILD}`).then(r => (r.ok ? r.json() : null)).then(j => { i
 // (that role's melee, the legged artillery's mortar kneel, no kneeling on tracks) and the game id on export
 // (a_<role> for 連合, b_<role> for GIO: both factions' XS of a role move alike). '' = not decided: every move is checked.
 const ROLES = { raid: '強襲', heavy: '重撃', support: '支援', sniper: '狙撃', artillery: '砲撃（キャタピラ）', artillery_leg: '砲撃（脚）' };
+// 乗り物: vehicles built in the same editor, without bones or joints (first the ships; aircraft and tanks later).
+// They sit in the same "用途" slot (saved, shared and restored alike). Their size and the places the game fixes (the
+// deck the XS stand on, the four gun seats) come from the game — shared/data.ts TACTICS, server/battle/ships.ts
+// seatAt — and show as guides. 1 editor unit = 6 m, as for the XS (3 units = 18 m).
+const VEHICLES = {
+  battleship: { name: '戦艦', len: 220, width: 56, deckY: 14 },
+  assault: { name: '強襲艦', len: 120, width: 30, deckY: 10 },
+};
+const KINDS = { ...ROLES, ...Object.fromEntries(Object.entries(VEHICLES).map(([k, v]) => [k, v.name])) };
+const UNIT_M = 6;
 let sceneRole = '';
+const isVehicle = (r = sceneRole) => !!VEHICLES[r];
 const roleId = (role = sceneRole) => (ROLES[role] ? `a_${role}` : '');
-const roleOptions = sel => { sel.innerHTML = '<option value="">未定（全部の動きを調べる）</option>' + Object.entries(ROLES).map(([k, v]) => `<option value="${k}">${v}</option>`).join(''); };
+const roleOptions = sel => {
+  sel.innerHTML = '<option value="">未定（全部の動きを調べる）</option><optgroup label="XS">' + Object.entries(ROLES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('') +
+    '</optgroup><optgroup label="艦（乗り物）">' + Object.entries(VEHICLES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('') + '</optgroup>';
+};
 roleOptions($('#roleSel')); roleOptions($('#stRole'));
 function setRole(role, persist = true) {
-  sceneRole = ROLES[role] ? role : '';
+  sceneRole = KINDS[role] ? role : '';
   $('#roleSel').value = sceneRole;
+  applyKindView();
   if (persist) { writeCurrent(); updateCheckBadge(); }   // the joint check result belongs to one role
+}
+/** A gun seat of a ship, in the game's frame [across (right +), up, along (forward +)] (server seatAt). */
+const shipSeat = (v, i) => i < 2 ? [(i ? 1 : -1) * (v.width / 2 + 3), -2, 0.12 * v.len] : [(i === 2 ? -1 : 1) * v.width * 0.22, -(v.deckY + 5), (i === 2 ? 0.28 : -0.22) * v.len];
+/** Game frame (m) to editor space: the vehicle faces +Z here, -Z in the game; its right is -X here (export flips x, z). */
+const gameToEditor = ([a, up, l]) => new THREE.Vector3(-a / UNIT_M, up / UNIT_M, l / UNIT_M);
+let kindView = '';
+/** The view for what is being made: an XS (as before), or a vehicle — room for its size, and its guides. */
+function applyKindView() {
+  const k = isVehicle() ? sceneRole : 'xs';
+  if (k === kindView) return;
+  kindView = k;
+  guideGroup.clear();
+  const v = VEHICLES[sceneRole];
+  $('#poseSel').parentElement.style.display = v ? 'none' : '';   // (no poses for a vehicle; the label's display beats [hidden])
+  if (v) $('#poseSel').value = $('#poseSel').options[0]?.value ?? ''; // (the rest pose: the next rebuild applies it)
+  if (!v) {
+    camera.far = 100; camera.position.set(3.0, 2.2, 6.0); orbit.target.set(0, 1.85, 0);
+    grid.scale.setScalar(1); grid.position.y = 0; ground.scale.setScalar(1); ground.position.y = -0.001;
+    Object.assign(sun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4 }); sun.position.set(3, 7, 5);
+    $('#help').textContent = 'クリックで選択 ・ ドラッグで回転 ・ 右ドラッグで平行移動 ・ Ctrl+D 複製 ・ Delete 削除';
+  } else {
+    const L = v.len / UNIT_M, W = v.width / UNIT_M, H = v.deckY / UNIT_M, floor = -H - 2;
+    camera.far = 1500; camera.position.set(W * 2.2, L * 0.55, L * 1.05); orbit.target.set(0, 0, 0);
+    grid.scale.setScalar(8); grid.position.y = floor; ground.scale.setScalar(8); ground.position.y = floor - 0.001;
+    Object.assign(sun.shadow.camera, { left: -L, right: L, top: L, bottom: -L }); sun.position.set(L * 0.4, L, L * 0.6);
+    // the hull the game hits and collides with (a box: across × keel..deck × bow..stern), the deck the XS stand on
+    const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W, H * 2, L)), new THREE.LineBasicMaterial({ color: 0x5fd8ff, transparent: true, opacity: 0.7 }));
+    const deck = new THREE.Mesh(new THREE.PlaneGeometry(W, L), new THREE.MeshBasicMaterial({ color: 0x7dff9a, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
+    deck.rotation.x = -Math.PI / 2; deck.position.y = H;
+    const bow = new THREE.Mesh(new THREE.ConeGeometry(W * 0.12, W * 0.3, 12), new THREE.MeshBasicMaterial({ color: 0xffd24a }));
+    bow.rotation.x = Math.PI / 2; bow.position.set(0, H, L / 2 + W * 0.25);
+    guideGroup.add(box, deck, bow);
+    for (let i = 0; i < 4; i++) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(3 / UNIT_M, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff8a3b, transparent: true, opacity: 0.8, depthTest: false }));
+      s.position.copy(gameToEditor(shipSeat(v, i))); s.renderOrder = 5;
+      guideGroup.add(s);
+    }
+    $('#help').textContent = `${v.name}（長さ ${v.len} m・幅 ${v.width} m）：水色の枠＝当たり判定の船体、緑の面＝甲板（XS が立つ高さ）、橙の玉＝砲座 4 つ（ゲームで決まった位置）、黄色＝艦首。「艦橋」という名前の部品の上が艦長の視点になります`;
+  }
+  camera.updateProjectionMatrix();
 }
 $('#roleSel').onchange = e => setRole(e.target.value);
 // the moves an XS makes: the melee moves (saber_ / knife_ / ram_) of its melee weapon, the mortar kneel (kneel_) for
@@ -2140,8 +2197,83 @@ function buildGameModel() {
   return { root, report };
 }
 
+/**
+ * A vehicle for the game: one static model (no bones), in metres, facing -Z, its origin the hull's centre as the game
+ * places it; one mesh per material class (as the XS: body / metal / team_color / glow_N). A part named 艦橋 marks
+ * the captain's view (a 'bridge' node on its front top). Goes to public/models/ship_<a|b>_<kind>.glb.
+ */
+function exportVehicle() {
+  const v = VEHICLES[sceneRole];
+  const f = prompt(`陣営を入れてください（連合 = a、GIO = b）\n「${v.name}」なので、public/models/ship_a_${sceneRole}.glb か ship_b_${sceneRole}.glb になります`, 'a');
+  if (f === null) return;
+  const name = `ship_${/^\s*(b|gio)/i.test(f) ? 'b' : 'a'}_${sceneRole}`;
+  const pieces = lodPieces(0);
+  const root = new THREE.Group(); root.name = 'ship';
+  const groups = new Map();
+  for (const pc of pieces) {
+    const cls = materialClass(pc.part), key = cls === 'glow' ? 'glow:' + pc.part.color : cls;
+    (groups.get(key) || groups.set(key, []).get(key)).push(pc);
+  }
+  let tris = 0, gi = 0;
+  const mats = [], box = new THREE.Box3();
+  for (const [key, list] of groups) {
+    const cls = key.split(':')[0];
+    const P = [], N = [], C = [];
+    let metal = 0, rough = 0, n = 0;
+    for (const pc of list) {
+      const pos = pc.geo.attributes.position, nor = pc.geo.attributes.normal, col = new THREE.Color(pc.part.color);
+      for (let i = 0; i < pos.count; i++) {
+        const x = -pos.getX(i) * UNIT_M, y = pos.getY(i) * UNIT_M, z = -pos.getZ(i) * UNIT_M;
+        P.push(x, y, z); box.expandByPoint(new THREE.Vector3(x, y, z));
+        if (nor) N.push(-nor.getX(i), nor.getY(i), -nor.getZ(i));
+        C.push(col.r, col.g, col.b);
+      }
+      metal += pc.part.metal * pos.count; rough += pc.part.rough * pos.count; n += pos.count;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    if (N.length === P.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); else g.computeVertexNormals();
+    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    const glowColor = cls === 'glow' ? new THREE.Color(list[0].part.color) : null;
+    const mat = new THREE.MeshStandardMaterial({
+      name: cls === 'team' ? 'team_color' : cls === 'glow' ? `glow_${gi++}` : cls, vertexColors: true,
+      metalness: n ? metal / n : 0.3, roughness: n ? rough / n : 0.5, emissive: glowColor || 0x000000, emissiveIntensity: glowColor ? 1 : 0,
+    });
+    const mesh = new THREE.Mesh(mergeVertices(g, 1e-5), mat);
+    mesh.name = `ship_${mat.name}`;
+    root.add(mesh);
+    tris += P.length / 9; mats.push(mat.name);
+  }
+  // the captain's view: over the front of the part named 艦橋
+  const br = parts.find(p => p.op === 'add' && !p.blockout && /艦橋|ブリッジ/.test(p.name));
+  if (br) {
+    const bb = new THREE.Box3();
+    for (const g of worldGeometries(br)) { g.computeBoundingBox(); bb.union(g.boundingBox); }
+    const node = new THREE.Object3D(); node.name = 'bridge';
+    node.position.set(-(bb.min.x + bb.max.x) / 2 * UNIT_M, bb.max.y * UNIT_M + 2, -bb.max.z * UNIT_M - 2);
+    root.add(node);
+  }
+  const size = box.getSize(new THREE.Vector3());
+  new GLTFExporter().parse(root, data => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: 'model/gltf-binary' }));
+    a.download = `${name}.glb`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    const near = (got, want) => Math.abs(got - want) <= want * 0.15 ? '✓' : '✗';
+    $('#checkResult').innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'hint';
+    div.textContent = `ゲーム用に ${name}.glb を書き出しました。長さ ${Math.round(size.z)} m ${near(size.z, v.len)}（ゲームの当たり判定 ${v.len} m）・幅 ${Math.round(size.x)} m ${near(size.x, v.width)}（${v.width} m）・高さ ${Math.round(size.y)} m、` +
+      `三角形 ${Math.round(tris).toLocaleString()}、描画回数 ${groups.size}（${mats.join(', ')}）。` +
+      (br ? '艦長の視点：艦橋の上 ✓。' : '✗ 「艦橋」という名前の部品が無いので、艦長の視点は船体の上になります。') +
+      ` public/models/${name}.glb に置くと、ゲームがこの形を使います（無ければ今までの形）。`;
+    $('#checkResult').appendChild(div);
+  }, err => ask('書き出しに失敗しました: ' + err, { cancel: null }), { binary: true });
+}
+
 $('#bGame').onclick = () => {
   if (!parts.some(p => p.op === 'add' && !p.blockout)) { ask('書き出す部品がありません。', { cancel: null }); return; }
+  if (isVehicle()) { exportVehicle(); return; }
   let id;
   if (ROLES[sceneRole]) {   // the role gives the id; only the faction is asked
     const f = prompt(`陣営を入れてください（連合 = a、GIO = b）\n用途「${ROLES[sceneRole]}」なので、public/models/a_${sceneRole}.glb か b_${sceneRole}.glb になります`, 'a');
@@ -2545,11 +2677,110 @@ const SAMPLE_WINGED_BLUE = (() => {
 // Built-in samples ship with the page; the user's own samples live in this browser's localStorage
 // and can be moved between browsers as a JSON file.
 // the accent colour of each sample is what the faction colour paints in the game
+// ---------- the game's ships as built in code (client/src/aircraft.ts: twinHull / roundHull / the assault ship), as
+// editor parts: the samples to start a ship from. Sizes in the model's metres (x right, y up, z aft: the game's model
+// faces -z), turned into editor units (1 = 6 m, facing +Z, +X its left). The gun seats' turrets are not here: the
+// game adds them at the seats (they turn with their gunners).
+const SHIP_HULL = '#8b9186', SHIP_DARK = '#3a3f3b', SHIP_DECK = '#5d625c', SHIP_LINE = '#d8d27a', SHIP_GLASS = '#8fd8ff', SHIP_FIRE = '#ffb870', SHIP_TEAM = '#4a78c8';
+const shipPos = (x, y, z) => [-x / 6, y / 6, -z / 6];
+const shipPart = (o) => ({ ...DEFAULTS, kind: 'extrude', bevel: 0.02, corner: 0, metal: 0.3, rough: 0.6, rot: [0, 0, 0], scl: [1, 1, 1], ...o });
+/** A box w × h × d m (across, up, along), its centre at model (x, y, z). */
+const sBox = (name, color, w, h, d, x, y, z, o = {}) => shipPart({ name, color, pts: rect(w / 6, h / 6), depth: d / 6, pos: shipPos(x, y, z), ...o });
+/** A slab from a plan (points [x, z] m of the model, seen from above), `depth` m thick, centred at height y. */
+const sPlan = (name, color, plan, depth, y, o = {}) => shipPart({ name, color, pts: plan.map(([x, z]) => [-x / 6, -z / 6]), depth: depth / 6, bevel: 0.15, pos: [0, y / 6, 0], rot: [Math.PI / 2, 0, 0], ...o });
+/** A turned part (profile [radius, height] m), upright, at model (x, y, z). */
+const sLathe = (name, color, pts, segments, x, y, z, o = {}) => shipPart({ name, color, kind: 'lathe', pts: pts.map(([r, h]) => [r / 6, h / 6]), segments, pos: shipPos(x, y, z), ...o });
+/** A disc facing aft (an engine's glow), radius r m. */
+const sDisc = (name, color, r, x, y, z, o = {}) => shipPart({ name, color, pts: Array.from({ length: 16 }, (_, i) => [Math.cos(i / 16 * Math.PI * 2) * r / 6, Math.sin(i / 16 * Math.PI * 2) * r / 6]), depth: 0.2 / 6, bevel: 0, pos: shipPos(x, y, z), ...o });
+/** Points along a quadratic curve from a to b bending toward c (b included, a not). */
+const quad = (a, c, b, n = 8) => Array.from({ length: n }, (_, i) => { const t = (i + 1) / n, u = 1 - t; return [u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]; });
+
+/** What every battleship / assault ship has: engines at the stern, gun domes along the sides, missile boxes on the deck. */
+function shipCommon(len, width, deckY, hull, nEng, nGun) {
+  const L = len / 2, W = width / 2, H = deckY, out = [];
+  for (let i = 0; i < nEng; i++) {
+    const x = (i - (nEng - 1) / 2) * (width / nEng);
+    if (x < -0.01) continue;   // (the left ones: mirrored)
+    const m = x > 0.01;
+    out.push(sBox('機関', SHIP_DARK, width / nEng * 0.8, H * 0.9, 10, x, 0, L + 4, { mirror: m }));
+    out.push(sDisc('噴射口', SHIP_FIRE, width / nEng * 0.3, x, 0, L + 9.05, { mirror: m, glow: true, metal: 0, rough: 0.4 }));
+  }
+  for (let i = 0; i < nGun; i++) {
+    const z = -L * 0.45 + i * (len * 0.7 / nGun);
+    out.push(sLathe('砲塔ドーム', SHIP_DARK, [[2.2, 0], [1.9, 1.1], [1.1, 1.9], [0.01, 2.2]], 12, W + 1.2, H * 0.2, z, { mirror: true }));
+    out.push(sBox('ミサイル箱', hull, 3, 2.5, 5, W - 3, H + 0.7, -L * 0.55 + i * 6, { mirror: true }));
+  }
+  return out;
+}
+
+/** 連合の戦艦: the bow split in two with a gap between (a deck and a launch opening on each), the bridge on the centreline aft. */
+function shipSampleTwin() {
+  const len = 220, width = 56, H = 14, L = len / 2, W = width / 2, gap = width * 0.08, join = L * 0.15, a = gap, b = W, r = 8;
+  const aft = [[-W, -join], [W, -join], [W, L * 0.86], ...quad([W, L * 0.86], [W, L], [W * 0.84, L]), [-W * 0.84, L], ...quad([-W * 0.84, L], [-W, L], [-W, L * 0.86])];
+  const bowPlan = [[a, join + 4], [a, -L + r], ...quad([a, -L + r], [a, -L], [a + r, -L]), [b - r, -L], ...quad([b - r, -L], [b, -L], [b, -L + r]), [b, join + 4]];
+  const mid = (a + b) / 2, w = b - a, zb = L * 0.45;
+  return [
+    sPlan('船体（後ろ）', SHIP_HULL, aft, H * 1.4, H - 0.5 - H * 0.7),
+    sPlan('艦首', SHIP_HULL, bowPlan, H * 1.25, H - 0.5 - H * 0.625, { mirror: true }),
+    sBox('甲板', SHIP_DECK, w - 3, 0.5, L + join - 4, mid, H - 0.3, (-L + join) / 2 + 1, { mirror: true, metal: 0.2, rough: 0.85 }),
+    sBox('甲板の線', SHIP_LINE, 0.6, 0.3, L + join - 8, mid, H + 0.1, (-L + join) / 2 + 1, { mirror: true, bevel: 0 }),
+    sBox('発進口', SHIP_DARK, w * 0.62, H * 0.9, 1, mid, H * 0.15, -L - 0.3, { mirror: true }),
+    sBox('キール（前）', SHIP_DARK, w * 0.5, H * 0.8, L * 0.9, mid, H - 0.5 - H * 1.25 - H * 0.4 + 0.3, -L * 0.45, { mirror: true }),
+    sBox('陣営色の帯', SHIP_TEAM, 0.6, 2.4, len * 0.8, b + 0.2, H * 0.3, 0, { mirror: true, team: true }),
+    sBox('後部甲板', SHIP_DECK, width - 3, 0.5, L - join - 4, 0, H - 0.3, (L + join) / 2, { metal: 0.2, rough: 0.85 }),
+    sBox('キール（後ろ）', SHIP_DARK, width * 0.55, H, L * 0.8, 0, H - 0.5 - H * 1.4 - H / 2 + 0.3, L * 0.45),
+    sBox('艦橋の塔', SHIP_HULL, width * 0.26, 18, len * 0.12, 0, H + 8.8, zb),
+    sBox('艦橋', SHIP_DARK, width * 0.44, 5, len * 0.09, 0, H + 19.5, zb - 1),
+    sBox('艦橋の窓', SHIP_GLASS, width * 0.42, 1.4, 0.3, 0, H + 20, zb - 1 - len * 0.045 - 0.1, { glow: true, bevel: 0 }),
+    sLathe('マスト', SHIP_DARK, [[0.7, -7], [0.45, 7]], 6, 0, H + 28.8, zb + 3),
+    ...shipCommon(len, width, H, SHIP_HULL, 4, 3),
+  ];
+}
+
+/** GIO の戦艦: one rounded hull, a round bridge tower off to the right, aft. */
+function shipSampleRound() {
+  const len = 220, width = 56, H = 14, L = len / 2, W = width / 2;
+  const plan = [[0, -L], ...quad([0, -L], [W * 0.95, -L * 0.96], [W, -L * 0.42]), [W, L * 0.8], ...quad([W, L * 0.8], [W, L], [W * 0.72, L]),
+    [-W * 0.72, L], ...quad([-W * 0.72, L], [-W, L], [-W, L * 0.8]), [-W, -L * 0.42], ...quad([-W, -L * 0.42], [-W * 0.95, -L * 0.96], [0, -L]).slice(0, -1)];
+  const tx = W * 0.6;
+  return [
+    sPlan('船体', SHIP_HULL, plan, H * 1.35, H - 0.5 - H * 0.675, { bevel: 0.5, bevelSegs: 3 }),
+    sBox('キール', SHIP_DARK, W * 0.84, 12.9, len * 0.7, 0, H - 0.5 - H * 1.35 - 12.9 / 2 + 0.3, L * 0.05, { corner: 0.9, cornerSegs: 4, bevel: 0.3, bevelSegs: 3 }),
+    sBox('甲板', SHIP_DECK, width * 0.8, 0.5, len * 0.72, 0, H - 0.3, L * 0.1, { metal: 0.2, rough: 0.85 }),
+    sBox('甲板の線', SHIP_LINE, 0.6, 0.3, len * 0.68, W * 0.55, H + 0.1, L * 0.1, { mirror: true, bevel: 0 }),
+    sBox('陣営色の帯', SHIP_TEAM, 1.6, 1.6, len * 0.62, W + 0.2, H * 0.3, L * 0.1, { mirror: true, team: true, corner: 0.12, cornerSegs: 3 }),
+    sLathe('艦橋の塔', SHIP_HULL, [[width * 0.16, -9], [width * 0.13, 9]], 16, tx, H + 8.8, L * 0.62),
+    sBox('艦橋', SHIP_DARK, width * 0.26 + 6, 6, 6, tx, H + 19, L * 0.6, { corner: 0.45, cornerSegs: 4, bevel: 0.2, bevelSegs: 3 }),
+    sBox('艦橋の窓', SHIP_GLASS, width * 0.3, 1.3, 0.3, tx, H + 19.3, L * 0.6 - 3.1, { glow: true, bevel: 0 }),
+    sLathe('マスト', SHIP_DARK, [[0.7, -7], [0.45, 7]], 6, tx, H + 28, L * 0.6),
+    ...shipCommon(len, width, H, SHIP_HULL, 4, 3),
+  ];
+}
+
+/** 強襲艦 (both sides alike but for the side's colour): a pointed hull with a ram at the bow. */
+function shipSampleAssault() {
+  const len = 120, width = 30, H = 10, L = len / 2, W = width / 2, hull = '#7d8390';
+  const plan = [[0, -L], [W, -L * 0.6], [W, L * 0.9], [W * 0.85, L], [-W * 0.85, L], [-W, L * 0.9], [-W, -L * 0.6]];
+  return [
+    sPlan('船体', hull, plan, H * 1.3, H - 0.5 - H * 0.65, { bevel: 0.2 }),
+    sBox('キール', SHIP_DARK, width * 0.5, H * 0.9, len * 0.7, 0, -H * 0.75, L * 0.05),
+    sBox('甲板', SHIP_DECK, width - 1, 0.6, len * 0.82, 0, H - 0.35, L * 0.12, { metal: 0.2, rough: 0.85 }),
+    sBox('甲板の線', SHIP_LINE, 0.5, 0.3, len * 0.78, W * 0.55, H + 0.05, L * 0.12, { mirror: true, bevel: 0 }),
+    sBox('陣営色の帯', SHIP_TEAM, 0.6, 2.2, len * 0.75, W + 0.2, H * 0.35, L * 0.1, { mirror: true, team: true }),
+    sLathe('衝角', SHIP_DARK, [[W * 0.5, -len * 0.09], [0.01, len * 0.09]], 4, 0, -H * 0.3, -L - len * 0.07, { rot: [Math.PI / 2, 0, 0] }),
+    ...shipCommon(len, width, H, hull, 3, 4),
+  ];
+}
+
 const teamed = (list, colors) => list.map(p => ({ ...p, team: p.team || colors.includes(p.color.toLowerCase()) }));
 const BUILTIN = [
   { name: '可変翼型XS（グレー）', parts: teamed(SAMPLE_WINGED, ['#e3e5e8']), builtin: true, role: 'raid' },
   { name: '可変翼型XS（青）', parts: teamed(SAMPLE_WINGED_BLUE, ['#e3e5e8']), builtin: true, role: 'raid' },
   { name: '重装型XS', parts: teamed(SAMPLE_HEAVY, ['#e8781e']), builtin: true, role: 'heavy' },
+  // the game's ships as they are now (built in code): to start a ship from
+  { name: '戦艦（連合・今の形）', parts: shipSampleTwin(), builtin: true, role: 'battleship' },
+  { name: '戦艦（GIO・今の形）', parts: shipSampleRound(), builtin: true, role: 'battleship' },
+  { name: '強襲艦（今の形）', parts: shipSampleAssault(), builtin: true, role: 'assault' },
 ];
 const USER_KEY = 'xs-part-editor-samples-v1';
 function readUserSamples() {
@@ -2624,7 +2855,7 @@ function renderGallery() {
     } else card.querySelector('.gthumb').textContent = 'プレビューなし';
     card.querySelector('.gname').textContent = s.name;
     const date = s.savedAt ? new Date(s.savedAt).toLocaleDateString('ja-JP') + ' ・ ' : '';
-    card.querySelector('.gmeta').textContent = (s.builtin ? '標準 ・ ' : date) + `${s.parts.length} 部品` + (ROLES[s.role] ? ` ・ ${ROLES[s.role]}` : '') + (s.ai ? ` ・ AI: ${s.ai}` : '');
+    card.querySelector('.gmeta').textContent = (s.builtin ? '標準 ・ ' : date) + `${s.parts.length} 部品` + (KINDS[s.role] ? ` ・ ${KINDS[s.role]}` : '') + (s.ai ? ` ・ AI: ${s.ai}` : '');
     const btns = card.querySelector('.gbtns');
     const button = (label, fn, cls) => {
       const b = document.createElement('button');
@@ -2695,7 +2926,7 @@ $('#gFile').onchange = async e => {
       id: Date.now() + i,
       name: String(s.name ?? '読み込んだ作品').slice(0, 60),
       ai: typeof s.ai === 'string' ? s.ai.slice(0, 40) : '',
-      role: ROLES[s.role] ? s.role : '',
+      role: KINDS[s.role] ? s.role : '',
       parts: s.parts.filter(p => p && typeof p === 'object' && Array.isArray(p.pts)),
       thumb: typeof s.thumb === 'string' && s.thumb.startsWith('data:image/') ? s.thumb : null,
       savedAt: typeof s.savedAt === 'string' ? s.savedAt : new Date().toISOString(),
@@ -2819,7 +3050,7 @@ function shareCard(m) {
   const body = el('div', 'gbody');
   body.appendChild(el('div', 'gname', m.title));
   const when = new Date(m.created_at).toLocaleDateString('ja-JP');
-  body.appendChild(el('div', 'gmeta', `${m.author} ・ ${when} ・ ${m.part_count} 部品` + (ROLES[m.role] ? ` ・ ${ROLES[m.role]}` : '') + (m.month_likes ? ` ・ この月 ${m.month_likes} イイネ` : '')));
+  body.appendChild(el('div', 'gmeta', `${m.author} ・ ${when} ・ ${m.part_count} 部品` + (KINDS[m.role] ? ` ・ ${KINDS[m.role]}` : '') + (m.month_likes ? ` ・ この月 ${m.month_likes} イイネ` : '')));
   if (m.ai) body.appendChild(el('div', 'gmeta', `AI: ${m.ai}`));
   if (m.hidden) body.appendChild(el('div', 'gmeta shidden', '通報により非表示中（管理者が確認します）'));
   const btns = el('div', 'gbtns');
@@ -3535,7 +3766,7 @@ function closeAi() {
     $('#aJson').value = aiWizard.json; aiWizard = null;
   }
 }
-$('#bAi').onclick = openAi;
+$('#bAi').onclick = () => { if (isVehicle()) ask('AI で作るのは、今は XS だけです（艦の頼み方はまだありません）。', { cancel: null }); else openAi(); };
 $('#aClose').onclick = closeAi;
 closeOnBackdrop($('#aiBox'), closeAi);
 
@@ -3559,26 +3790,27 @@ function checkStatus() {
   const same = checkState.sig === shapeSig();
   return { conn: same ? checkState.conn ?? null : null, joint: same ? checkState.joint ?? null : null };
 }
-const checksPassed = () => { const s = checkStatus(); return s.conn === 'ok' && s.joint === 'ok'; };
+const checksPassed = () => { const s = checkStatus(); return s.conn === 'ok' && (isVehicle() || s.joint === 'ok'); };
 function updateCheckBadge() {
   const s = checkStatus(), ok = checksPassed();
   const word = v => (v === 'ok' ? 'OK' : v === 'ng' ? '問題あり' : '未チェック');
-  const what = `つながり: ${word(s.conn)} ／ 関節: ${word(s.joint)}`;
+  const what = isVehicle() ? `つながり: ${word(s.conn)}` : `つながり: ${word(s.conn)} ／ 関節: ${word(s.joint)}`;
   const b = $('#checkBadge');
   b.hidden = !parts.some(p => p.op === 'add' && !p.blockout);
   b.className = ok ? 'ok' : 'ng';
-  $('#checkBadgeText').textContent = ok ? '✓ つながり・関節チェック OK' : `チェック未完了（${what}）。このままでは「みんなの機体」に投稿できません`;
+  $('#checkBadgeText').textContent = isVehicle() ? (ok ? '✓ つながりチェック OK（艦は「みんなの機体」にはまだ投稿できません）' : `チェック未完了（${what}）`)
+    : ok ? '✓ つながり・関節チェック OK' : `チェック未完了（${what}）。このままでは「みんなの機体」に投稿できません`;
   $('#bRunChecks').hidden = ok;
   $('#sCheck').hidden = ok;
   $('#sCheck').textContent = `投稿するには、つながりチェックと関節チェックの両方を OK にしてください（いま ${what}）。形を変えるとやり直しになります。`;
-  $('#sUpload').disabled = !share.me || !ok;
+  $('#sUpload').disabled = !share.me || !ok || isVehicle();
 }
 // both checks in a row; the joint check only when everything is connected
 $('#bRunChecks').onclick = () => {
   $('#checkResult').innerHTML = '<span class="hint">つながりチェック中…</span>';
   setTimeout(() => {
     showConnectionReport();
-    if (checkStatus().conn !== 'ok') return;
+    if (checkStatus().conn !== 'ok' || isVehicle()) return;   // (a vehicle has no joints)
     const conn = $('#checkResult').innerHTML;
     $('#checkResult').innerHTML = conn + '<span class="hint">関節チェック中…（姿勢ごとに調べるので少しかかります）</span>';
     setTimeout(() => { showJointReport(); $('#checkResult').insertAdjacentHTML('afterbegin', conn); }, 30);
@@ -3610,7 +3842,7 @@ function roughBody(k) {   // k: width/thickness scale
 function openStart() {
   const cur = readCurrent();
   $('#stResume').disabled = !cur;
-  $('#stResumeInfo').textContent = cur ? `${new Date(cur.savedAt).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' })} ・ ${cur.parts.length} 部品` + (ROLES[cur.role] ? ` ・ ${ROLES[cur.role]}` : '') + (cur.ai ? ` ・ AI: ${cur.ai}` : '') : '前回の機体はありません';
+  $('#stResumeInfo').textContent = cur ? `${new Date(cur.savedAt).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' })} ・ ${cur.parts.length} 部品` + (KINDS[cur.role] ? ` ・ ${KINDS[cur.role]}` : '') + (cur.ai ? ` ・ AI: ${cur.ai}` : '') : '前回の機体はありません';
   $('#stRole').value = '';
   try { $('#stSkip').checked = localStorage.getItem(SKIP_START_KEY) === '1'; } catch { /* storage blocked */ }
   $('#start').hidden = false;
@@ -3620,7 +3852,22 @@ $('#stSkip').onchange = e => { try { if (e.target.checked) localStorage.setItem(
 $('#stResume').onclick = () => { const cur = readCurrent(); if (cur) loadScene(cur.parts, cur.ai, $('#stRole').value || cur.role); closeStart(); };
 // build 1 (slimmest) .. 10 (broadest): widths and thicknesses x0.85 .. x1.6
 $('#stBuild').oninput = e => { $('#stBuildOut').textContent = e.target.value; };
-$('#stRough').onclick = () => { loadScene(roughBody(0.85 + (Number($('#stBuild').value) - 1) * 0.75 / 9), '', $('#stRole').value); closeStart(); openSteps(); };
+$('#stRough').onclick = () => {
+  const r = $('#stRole').value;
+  loadScene(VEHICLES[r] ? roughShip(r) : roughBody(0.85 + (Number($('#stBuild').value) - 1) * 0.75 / 9), '', r);
+  closeStart(); openSteps();
+};
+/** A ship's rough blocks (blockout), to its game size: the hull, the bow, the bridge, the engines. */
+function roughShip(kind) {
+  const v = VEHICLES[kind], L = v.len / UNIT_M, W = v.width / UNIT_M, H = v.deckY / UNIT_M;
+  const box = (name, w, h, d, x, y, z) => ({ ...DEFAULTS, name, kind: 'extrude', pts: rect(w, h), depth: d, bevel: 0, corner: 0, blockout: true, mirror: false, pos: [x, y, z], rot: [0, 0, 0], scl: [1, 1, 1] });
+  return [
+    box('あたり・船体', W, H * 2, L * 0.8, 0, 0, -L * 0.08),
+    box('あたり・艦首', W * 0.7, H * 1.6, L * 0.14, 0, 0.1 * H, L * 0.4),
+    box('あたり・艦橋', W * 0.3, 18 / UNIT_M, L * 0.12, 0, H + 9 / UNIT_M, -L * 0.28),
+    box('あたり・機関', W * 0.8, H * 1.2, L * 0.08, 0, 0, -L * 0.52),
+  ];
+}
 // from a sample: the role chosen here, or else the sample's own
 let startRole = '';
 $('#stSample').onclick = () => { startRole = $('#stRole').value; closeStart(); openGallery(); };
