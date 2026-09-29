@@ -455,7 +455,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = 'eab0695';
+const BUILD = '13077bf';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -2460,8 +2460,11 @@ async function readModel(buf) {
   gltf.scene.updateMatrixWorld(true);
   const list = [];
   let map = null;
-  gltf.scene.traverse(o => { if (o.isMesh) { list.push(o); map ??= [o.material].flat().find(m => m.map)?.map ?? null; } });
+  // only the nearest level of detail: a game .glb also carries lighter copies (_lod1, _lod2: boxes) of the same XS
+  gltf.scene.traverse(o => { if (o.isMesh && !/lod[12]$/i.test(o.name.replace(/[^a-z0-9]/gi, ''))) { list.push(o); map ??= [o.material].flat().find(m => m.map)?.map ?? null; } });
   if (!list.length) throw new Error('形（メッシュ）が入っていません');
+  // a model made for the game faces -Z (its right hand on +X, docs/models.md); glTF and the editor face +Z
+  const hand = gltf.scene.getObjectByName('hand_r'), turn = !!hand && hand.getWorldPosition(new THREE.Vector3()).x > 0;
   const pos = [], nor = [], uv = [], index = [];
   for (const o of list) {
     const g = o.geometry, base = pos.length / 3, nm = new THREE.Matrix3().getNormalMatrix(o.matrixWorld), v = new THREE.Vector3();
@@ -2476,8 +2479,9 @@ async function readModel(buf) {
   }
   const P = new Float32Array(pos), box = new THREE.Box3().setFromArray(P), s = 3 / Math.max(1e-6, box.max.y - box.min.y);
   const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
-  for (let i = 0; i < P.length; i += 3) { P[i] = (P[i] - cx) * s; P[i + 1] = (P[i + 1] - box.min.y) * s; P[i + 2] = (P[i + 2] - cz) * s; }
-  return { pos: P, nor: new Float32Array(nor), uv: new Float32Array(uv), index: new Uint32Array(index), map };
+  const k = turn ? -1 : 1, N = new Float32Array(nor);
+  for (let i = 0; i < P.length; i += 3) { P[i] = (P[i] - cx) * s * k; P[i + 1] = (P[i + 1] - box.min.y) * s; P[i + 2] = (P[i + 2] - cz) * s * k; N[i] *= k; N[i + 2] *= k; }
+  return { pos: P, nor: N, uv: new Float32Array(uv), index: new Uint32Array(index), map };
 }
 // the colour map as a JPEG no larger than 2048 (the game's limit)
 async function textureBlob(map) {
