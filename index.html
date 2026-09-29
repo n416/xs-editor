@@ -489,7 +489,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '3834e16';
+const BUILD = '5009a01';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -3525,6 +3525,7 @@ function loadScene(list, ai = '', role = '', hit = null) {
   kindView = '';   // (redraw the guides: another ship of the same kind may have other hull boxes)
   replaceParts(list);
   ensureMeshes(parts.filter(p => p.kind === 'mesh').map(p => p.mesh));
+  for (const p of parts) if (p.kind === 'mesh' && p.joints && MESHES.has(p.mesh)) applyJoints(p);   // (a shape already loaded: cut it as this scene says)
   sceneAi = String(ai ?? '').slice(0, 40);
   setRole(role, false);
   select(null); save(); writeCurrent();
@@ -3916,6 +3917,35 @@ const BUILTIN = [
   // the game's ships: to start a ship from (the battleships join from ship-samples.json, before the assault ship)
   { name: '強襲艦（今の形）', parts: shipSampleAssault(), builtin: true, role: 'assault' },
 ];
+// samples made from an imported shape (samples/*.json: the part with its joints and cut, and a mesh pack: the shape as
+// the editor keeps it, so the cut fits it exactly). They join the XS samples, before the ships.
+const MESH_SAMPLES = ['samples/wings-import.json'];
+const meshSamplesReady = Promise.all(MESH_SAMPLES.map(url => fetch(url).then(r => (r.ok ? r.json() : null)).then(d => {
+  if (!d?.part || !d.meshId) return;
+  let at = BUILTIN.findIndex(x => VEHICLES[x.role]);
+  if (at < 0) at = BUILTIN.length;
+  BUILTIN.splice(at, 0, { name: d.name, parts: [{ ...DEFAULTS, ...d.part, mesh: d.meshId }], builtin: true, role: d.role,
+    pack: new URL(d.mesh, new URL(url, location.href)).href, meshId: d.meshId });
+}).catch(() => {})));
+// A mesh pack into the editor's store (once): 'XSMP', version, header length, a JSON header, then the arrays and the
+// texture (written from the store by the same layout: see samples/)
+async function installPack(s) {
+  if (!s.pack || await dbGet('mesh', s.meshId)) return;
+  const buf = await (await fetch(s.pack)).arrayBuffer(), dv = new DataView(buf);
+  if (dv.getUint32(0, true) !== 0x504d5358) throw new Error('形のファイルが読めません');
+  const hl = dv.getUint32(8, true), h = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 12, hl))), base = 12 + hl;
+  const T = { Float32Array, Uint32Array, Uint16Array }, rec = {};
+  for (const [k, a] of Object.entries(h.arrays)) rec[k] = new T[a.type](buf.slice(base + a.offset, base + a.offset + a.length * T[a.type].BYTES_PER_ELEMENT));
+  const texId = s.meshId + '-tex';
+  await dbPut('tex', texId, new Blob([new Uint8Array(buf, base + h.tex.offset, h.tex.bytes)], { type: h.tex.type }));
+  await dbPut('mesh', s.meshId, { ...rec, texId });
+}
+// ready to draw: the pack stored and the mesh loaded
+async function meshSampleReady(s) {
+  await installPack(s);
+  ensureMeshes([s.meshId]);
+  for (let i = 0; i < 100 && !MESHES.has(s.meshId); i++) await new Promise(r => setTimeout(r, 100));
+}
 const shipSamplesReady = fetch('ship-samples.json').then(r => (r.ok ? r.json() : null)).then(d => {
   if (!Array.isArray(d?.samples)) return;
   const at = BUILTIN.findIndex(x => x.role === 'assault');
@@ -3963,15 +3993,16 @@ function captureThumb() {
 
 const gallery = $('#gallery');
 const galleryOpen = () => !gallery.hidden;
-function ensureBuiltinThumbs() {
+async function ensureBuiltinThumbs() {
   if (BUILTIN.every(s => s.thumb)) return;
+  for (const s of BUILTIN) if (s.pack && !s.thumb) { try { await meshSampleReady(s); } catch { /* drawn without its shape */ } }
   const current = parts.map(serialize), selIndex = parts.findIndex(p => p.id === selectedId);
   for (const s of BUILTIN.filter(s => !s.thumb)) { replaceParts(structuredClone(s.parts)); rebuild(); s.thumb = captureThumb(); }
   replaceParts(current);
   select(parts[selIndex] ? parts[selIndex].id : null);
   rebuild();
 }
-async function openGallery() { await shipSamplesReady; ensureBuiltinThumbs(); gallery.hidden = false; $('#gNote').textContent = ''; $('#gAi').value = sceneAi; renderGallery(); }
+async function openGallery() { await shipSamplesReady; await meshSamplesReady; await ensureBuiltinThumbs(); gallery.hidden = false; $('#gNote').textContent = ''; $('#gAi').value = sceneAi; renderGallery(); }
 function closeGallery() { gallery.hidden = true; startRole = ''; }
 $('#bSample').onclick = openGallery;
 $('#gClose').onclick = closeGallery;
@@ -4001,7 +4032,10 @@ function renderGallery() {
       b.textContent = label; if (cls) b.className = cls;
       b.onclick = fn; btns.appendChild(b);
     };
-    button('読み込む', () => { const role = startRole || s.role; loadScene(structuredClone(s.parts), s.ai, role, role === s.role ? s.hit : null); startRole = ''; closeGallery(); }, 'on');
+    button('読み込む', async () => {
+      if (s.pack) try { await meshSampleReady(s); } catch (err) { ask('読み込めませんでした: ' + (err?.message ?? err), { cancel: null }); return; }
+      const role = startRole || s.role; loadScene(structuredClone(s.parts), s.ai, role, role === s.role ? s.hit : null); startRole = ''; closeGallery();
+    }, 'on');
     if (!s.builtin) {
       button('上書き', async () => {
         if (!await ask(`「${s.name}」を今の形で上書きしますか？`, { ok: '上書き' })) return;
