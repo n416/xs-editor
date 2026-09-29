@@ -285,6 +285,8 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
           <button id="bSample">サンプル集</button>
           <button id="bShare">みんなの機体</button>
           <button id="bAi">AIで作る</button>
+          <button id="bImport" title="Blender などで作った .glb を、部位ごとの部品に分けて取り込む（スキン）">外の形を取り込む（glb）</button>
+          <input type="file" id="importFile" accept=".glb,.gltf,model/gltf-binary" hidden>
           <hr>
           <button id="bExport">GLB書き出し</button>
           <button id="bGame" title="docs/models.md の仕様（骨・向き・描画回数・陣営色・LOD）で書き出す">ゲーム用に書き出す</button>
@@ -426,6 +428,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { toCreasedNormals, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Brush, Evaluator, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
 import { MeshBVH } from 'three-mesh-bvh';
@@ -452,7 +455,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '26d0062';
+const BUILD = '274a19e';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -542,6 +545,7 @@ const DEFAULTS = {
   segments: 24, arrayCount: 1, arrayStep: [0, 0.15, 0], metal: 0.55, rough: 0.38, blockout: false, bone: 'auto', team: false, glow: null, pivot: 'auto',
   pos: [0, 0, 0], rot: [0, 0, 0], scl: [1, 1, 1],
   side: null, top: null,   // extrude only: outlines seen from the side [[z, y], ...] and from above [[x, z], ...]; null = none
+  mesh: null,              // kind 'mesh' only: the id of an imported mesh (IndexedDB), shown instead of an outline
 };
 const FIELDS = Object.keys(DEFAULTS);
 
@@ -615,6 +619,7 @@ function latheLoop(p) {
 }
 
 function buildLocalGeometry(p) {
+  if (p.kind === 'mesh') return meshGeometry(p);
   const key = JSON.stringify([p.kind, p.pts, p.depth, p.bevel, p.bevelSegs, p.corner, p.cornerSegs, p.taper, p.tiltY, p.ridge, p.segments, p.side, p.top]);
   if (p._geoKey === key) return p._geo;
   let g;
@@ -811,6 +816,17 @@ function rebuild() {
   }
 
   for (const p of parts.filter(p => p.op === 'add' && !p.blockout)) {
+    if (p.kind === 'mesh') {   // an imported mesh: its own texture, never cut
+      const mat = new THREE.MeshStandardMaterial({ map: MESHES.get(p.mesh)?.tex ?? null, color: MESHES.get(p.mesh) ? 0xffffff : p.color, metalness: p.metal, roughness: p.rough });
+      worldGeometries(p).forEach((g, i) => {
+        const mesh = new THREE.Mesh(g, mat);
+        mesh.castShadow = mesh.receiveShadow = true;
+        mesh.userData.partId = p.id; mesh.userData.ownMaterial = i === 0;
+        resultGroup.add(mesh);
+        tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
+      });
+      continue;
+    }
     const mat = new THREE.MeshStandardMaterial({ color: p.color, metalness: p.metal, roughness: p.rough });
     let first = true;
     for (const g of worldGeometries(p)) {
@@ -994,9 +1010,9 @@ function renderProps() {
     ['エッジ（厚み方向）', [slider('面取り幅', 'bevel', 0, 0.3, 0.005), slider('段数', 'bevelSegs', 1, 8, 1)]],
     ['面の角度（正面を斜めにする）', [slider('厚みの傾き（上下）', 'tiltY', -3, 3, 0.05), slider('中央の盛り上がり', 'ridge', 0, 4, 0.05)]],
   );
-  else sliders.push(['回転体', [slider('分割数', 'segments', 3, 64, 1)]]);
+  else if (p.kind === 'lathe') sliders.push(['回転体', [slider('分割数', 'segments', 3, 64, 1)]]);
+  if (p.kind !== 'mesh') sliders.push(['角（断面の頂点）', [slider('面取り幅', 'corner', 0, 0.5, 0.005), slider('段数', 'cornerSegs', 1, 8, 1)]]);
   sliders.push(
-    ['角（断面の頂点）', [slider('面取り幅', 'corner', 0, 0.5, 0.005), slider('段数', 'cornerSegs', 1, 8, 1)]],
     ['繰り返し', [slider('個数', 'arrayCount', 1, 16, 1), slider('間隔 X', 'arrayStep', -1, 1, 0.01, 0),
       slider('間隔 Y', 'arrayStep', -1, 1, 0.01, 1), slider('間隔 Z', 'arrayStep', -1, 1, 0.01, 2)]],
   );
@@ -1016,6 +1032,8 @@ function renderProps() {
     <div class="row"><label>回転の中心</label><select id="pPivot" style="grid-column: span 2">${Object.entries(PIVOT_CHOICES).map(([k, v]) => `<option value="${k}" ${p.pivot === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + (PIVOT_CHOICES[pivotOf({ ...p, pivot: 'auto' })] ?? 'なし') : ''}</option>`).join('')}</select></div>
     <label class="check"><input type="checkbox" id="pTeam" ${p.team ? 'checked' : ''}> 陣営色で塗る（マテリアル team_color）</label>
     <label class="check"><input type="checkbox" id="pGlow" ${isGlow(p) ? 'checked' : ''}> 発光する（目・センサーなど）</label>
+    ${p.kind === 'mesh' ? `<h2>取り込んだ形</h2><p class="hint">外から取り込んだ形（スキン用）です。形は描き直せませんが、位置・回転・拡大、付く骨、質感は変えられます。${MESHES.has(p.mesh) ? '' : '（形を読み込み中、またはこのブラウザに形がありません）'}</p>` : ''}
+    <div ${p.kind === 'mesh' ? 'hidden' : ''}>
     <h2>断面 ${p.kind === 'extrude' ? '（押し出し）' : '（回転体：右半分を描く）'}</h2>
     ${p.kind === 'extrude' ? `<div class="seg" id="pFace">${Object.entries(FACE_LABEL).map(([k, v]) => `<button data-face="${k}">${v}${k !== 'front' && p[FACE_KEY[k]] ? ' ●' : ''}</button>`).join('')}</div>
     <p class="hint" id="pFaceNote"></p>` : ''}
@@ -1025,6 +1043,7 @@ function renderProps() {
       <label class="check" style="flex:1"><input type="checkbox" id="pSnap" ${snap ? 'checked' : ''}> <span id="pSnapLabel">グリッドにスナップ</span></label>
       ${p.kind === 'extrude' && profileFace !== 'front' && p[FACE_KEY[profileFace]] ? `<button id="pFaceClear">この向きの形を消す</button>` : ''}
       <button id="pFit">全体を表示</button>
+    </div>
     </div>
     <div id="sliders"></div>
     <div class="seg" style="margin-top:12px"><button id="bDup">複製 Ctrl+D</button><button id="bDel">削除 Del</button></div>
@@ -1530,6 +1549,7 @@ const GAME_BONES = [['hips', null], ['torso', 'hips'], ['head', 'torso'], ['arm_
   ['cannon', 'torso']];                               // tracked XS: the cannon mount (only exported when it carries barrels)
 
 function materialClass(p) {
+  if (p.kind === 'mesh') return 'skin:' + (MESHES.get(p.mesh)?.texId ?? '');
   if (p.team) return 'team';
   if (isGlow(p)) return 'glow';
   if (p.metal >= 0.7) return 'metal';
@@ -1543,7 +1563,9 @@ function lodPieces(level) {
     for (const g of geos) {
       g.computeBoundingBox();
       const cx = (g.boundingBox.min.x + g.boundingBox.max.x) / 2;
-      out.push({ geo: g.index ? g.toNonIndexed() : g, part: p, bone: sided(boneGroupOf(p), cx) });
+      const geo = g.index ? g.toNonIndexed() : g;   // imported meshes are indexed
+      geo.computeBoundingBox();
+      out.push({ geo, part: p, bone: sided(boneGroupOf(p), cx) });
     }
   };
   const solid = parts.filter(p => p.op === 'add' && !p.blockout);
@@ -1556,7 +1578,7 @@ function lodPieces(level) {
     return out;
   }
   // LOD1: no cuts, no bevels, coarse lathes; drop the smallest parts until it fits
-  const simple = p => ({ ...p, bevel: 0, bevelSegs: 1, cornerSegs: 1, corner: Math.min(p.corner, 0.01), segments: Math.min(p.segments, 8), _geo: null, _geoKey: null });
+  const simple = p => ({ ...p, bevel: 0, bevelSegs: 1, cornerSegs: 1, corner: Math.min(p.corner, 0.01), segments: Math.min(p.segments, 8), _geo: null, _geoKey: null, _lod: 1 });
   const all = solid.flatMap(p => worldGeometries(simple(p)).map(g => ({ g, p })));
   const diag = g => { g.computeBoundingBox(); return g.boundingBox.getSize(new THREE.Vector3()).length(); };
   all.sort((a, b) => diag(b.g) - diag(a.g));
@@ -2131,7 +2153,8 @@ function buildGameModel() {
     // group by material class; glow keeps its own colour per material (emissive can't take vertex colours)
     const groups = new Map();
     for (const pc of pieces) {
-      const cls = isBazooka(pc.part) ? 'bazooka' : isGun(pc.part) ? 'gun' : materialClass(pc.part);
+      let cls = isBazooka(pc.part) ? 'bazooka' : isGun(pc.part) ? 'gun' : materialClass(pc.part);
+      if (cls.startsWith('skin') && !pc.geo.attributes.uv) cls = 'body';
       const key = cls === 'glow' && level === 0 ? 'glow:' + pc.part.color : cls;
       (groups.get(key) || groups.set(key, []).get(key)).push(pc);
     }
@@ -2149,14 +2172,17 @@ function buildGameModel() {
     }
     for (const [key, list] of groups) {
       const cls = key.split(':')[0];
-      const P = [], N = [], C = [], SI = [], SW = [];
+      const P = [], N = [], C = [], SI = [], SW = [], UV = [];
+      const skinTex = cls === 'skin' ? MESHES.get(list[0].part.mesh)?.tex : null;
       let metal = 0, rough = 0, n = 0;
       const partRanges = [];   // LOD0: which triangles belong to which part, for checks outside the editor (tools/jointcheck.ts)
       for (const pc of list) {
         if (level === 0) partRanges.push([pieceLabel(pc), pc.bone, P.length / 9, pc.geo.attributes.position.count / 3, isHeld(pc.part) ? 1 : 0]);
         const pos = pc.geo.attributes.position, nor = pc.geo.attributes.normal;
-        const col = new THREE.Color(pc.part.color), bi = boneIndex[pc.bone];
+        const col = cls === 'skin' ? new THREE.Color(0xffffff) : new THREE.Color(pc.part.color), bi = boneIndex[pc.bone];
+        const uv = cls === 'skin' ? pc.geo.attributes.uv : null;
         for (let i = 0; i < pos.count; i++) {
+          if (uv) UV.push(uv.getX(i), uv.getY(i));
           P.push(-pos.getX(i), pos.getY(i) - floor, -pos.getZ(i));
           if (nor) N.push(-nor.getX(i), nor.getY(i), -nor.getZ(i));
           C.push(col.r, col.g, col.b);
@@ -2168,13 +2194,14 @@ function buildGameModel() {
       g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
       if (N.length === P.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); else g.computeVertexNormals();
       g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+      if (UV.length) g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
       g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
       g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
       const merged = mergeVertices(g, 1e-5);   // share identical corners: same look, far smaller file
       const glowColor = cls === 'glow' ? new THREE.Color(list[0].part.color) : null;
       const mat = new THREE.MeshStandardMaterial({
         name: cls === 'team' ? 'team_color' : cls === 'glow' ? `glow_${[...groups.keys()].indexOf(key)}` : cls,
-        vertexColors: true, metalness: n ? metal / n : 0.3, roughness: n ? rough / n : 0.5,
+        vertexColors: !skinTex, map: skinTex ?? null, metalness: n ? metal / n : 0.3, roughness: n ? rough / n : 0.5,
         emissive: glowColor || 0x000000, emissiveIntensity: glowColor ? 1 : 0,
       });
       const mesh = new THREE.SkinnedMesh(merged, mat);
@@ -2287,7 +2314,9 @@ $('#bGame').onclick = () => {
   const role = name.replace(/^[ab]_/, '');
   if (!sceneRole && XS_INFO[name] && ROLES[role]) setRole(role);
   const { root, report } = buildGameModel();
-  const joints = jointCheck(XS_INFO[name] ? name : '');
+  // a model with imported meshes is a skin: its joints are not fitted, and checking its dense meshes would take minutes
+  const skin = parts.some(p => p.kind === 'mesh' && p.op === 'add' && !p.blockout);
+  const joints = skin ? {} : jointCheck(XS_INFO[name] ? name : '');
   const loose = Object.entries(joints).filter(([k, r]) => !k.startsWith('__') && (r.off.length || r.cut.length))
     .map(([name, r]) => `${name}: ${[...r.off.map(x => x + ' が外れる'), ...r.cut.slice(0, 2).map(x => x + ' がめり込む')].join('、')}`);
   new GLTFExporter().parse(root, data => {
@@ -2306,7 +2335,7 @@ $('#bGame').onclick = () => {
       (!tankId && report.tracked ? ' ✗ キャタピラ機ですが、機体idがキャタピラの砲撃（*_artillery）ではありません。' : '') +
       ` 三角形 LOD0 ${report.tris[0].toLocaleString()} ${ok(report.tris[0], GAME_LIMITS.tris[0])} / LOD1 ${report.tris[1].toLocaleString()} ${ok(report.tris[1], GAME_LIMITS.tris[1])} / LOD2 ${report.tris[2]} ${ok(report.tris[2], GAME_LIMITS.tris[2])}、` +
       ` 描画回数 ${report.calls[0]} ${ok(report.calls[0], GAME_LIMITS.drawCalls + report.belts.length)}（${report.materials.join(', ')}）。` +
-      (loose.length ? ` ✗ 関節で問題が出ます — ${loose.join(' ／ ')}` : ` 関節チェック（${Object.keys(joints).filter(k => !k.startsWith('__')).length} 姿勢${joints.__skipped ? '、この機体に起こる動きだけ' : ''}）✓ 外れ・めり込みなし。`) +
+      (skin ? ' 取り込んだ形（スキン）なので、関節チェックはしていません。' : loose.length ? ` ✗ 関節で問題が出ます — ${loose.join(' ／ ')}` : ` 関節チェック（${Object.keys(joints).filter(k => !k.startsWith('__')).length} 姿勢${joints.__skipped ? '、この機体に起こる動きだけ' : ''}）✓ 外れ・めり込みなし。`) +
       // every XS can hold a hand weapon (a machine gun at least): without gun parts it would fire from the bare hand
       (parts.some(p => p.op === 'add' && !p.blockout && isGun(p) && !isBazooka(p)) ? '' : ' ✗ 手持ちの武器の部品（名前に「銃」「ライフル」、右手に持たせる）がありません。マシンガンなどが素手から撃たれます。') +
       // the game aims a bazooka's shot along hand_r → muzzle and takes its far end
@@ -2316,6 +2345,204 @@ $('#bGame').onclick = () => {
       ` public/models/ に置いたら、出す前のテスト（docs/models.md）を 3 つとも通してください: npx tsx tools/modelcheck.ts / jointcheck.ts / muzzlecheck.ts public/models/${name}.glb`;
     $('#checkResult').appendChild(div);
   }, err => ask('書き出しに失敗しました: ' + err, { cancel: null }), { binary: true });
+};
+
+// ---------- imported meshes: a model made elsewhere, cut into parts ----------
+// A 'mesh' part shows a stored mesh (in the part's own frame: position, normal, uv, index, and a lighter LOD1) with a
+// colour texture, instead of a drawn outline. Meshes and textures are too big for localStorage, so they live in
+// IndexedDB by id and are loaded when a scene uses them; until then the part shows as a small grey box.
+const MESHES = new Map();          // id -> { geo, lod1, tex, texId }
+const MESH_DB = 'xs-editor-meshes';
+function meshDb() {
+  return new Promise((ok, ng) => {
+    const r = indexedDB.open(MESH_DB, 1);
+    r.onupgradeneeded = () => { r.result.createObjectStore('mesh'); r.result.createObjectStore('tex'); };
+    r.onsuccess = () => ok(r.result); r.onerror = () => ng(r.error);
+  });
+}
+async function dbPut(store, key, value) {
+  const db = await meshDb();
+  await new Promise((ok, ng) => { const t = db.transaction(store, 'readwrite'); t.objectStore(store).put(value, key); t.oncomplete = ok; t.onerror = () => ng(t.error); });
+}
+async function dbGet(store, key) {
+  const db = await meshDb();
+  return new Promise((ok, ng) => { const r = db.transaction(store).objectStore(store).get(key); r.onsuccess = () => ok(r.result); r.onerror = () => ng(r.error); });
+}
+const meshGeo = (m, index) => {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(m.nor, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(m.uv, 2));
+  g.setIndex(new THREE.BufferAttribute(index, 1));
+  g.computeBoundingBox();
+  return g;
+};
+const textureCache = new Map();    // texture id -> Promise<THREE.Texture>
+function textureOf(texId) {
+  if (!textureCache.has(texId)) textureCache.set(texId, dbGet('tex', texId).then(async blob => {
+    if (!blob) return null;
+    const t = new THREE.Texture(await createImageBitmap(blob, { imageOrientation: 'none' }));
+    t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.userData.mimeType = 'image/jpeg'; t.needsUpdate = true;
+    return t;
+  }));
+  return textureCache.get(texId);
+}
+const meshLoading = new Set();
+function ensureMeshes(ids) {
+  for (const id of ids) {
+    if (!id || MESHES.has(id) || meshLoading.has(id)) continue;
+    meshLoading.add(id);
+    dbGet('mesh', id).then(async m => {
+      if (!m) return;
+      MESHES.set(id, { geo: meshGeo(m, m.index), lod1: meshGeo(m, m.lod1), tex: await textureOf(m.texId), texId: m.texId });
+      for (const p of parts) if (p.mesh === id) { p._geo = null; p._geoKey = null; }
+      scheduleRebuild();
+    }).catch(() => {}).finally(() => meshLoading.delete(id));
+  }
+}
+const MESH_PLACEHOLDER = new THREE.BoxGeometry(0.1, 0.1, 0.1).toNonIndexed();
+function meshGeometry(p) {
+  const m = MESHES.get(p.mesh);
+  if (!m) { ensureMeshes([p.mesh]); return MESH_PLACEHOLDER; }
+  return p._lod ? m.lod1 : m.geo;
+}
+
+// Where each triangle goes: the nearest bone of a standard figure 3 units tall (front +Z, +X = the XS's left),
+// measured from the capsule of each bone. What rides on the body rather than the limbs stays on the torso / hips:
+// anything well behind the back above the knees (wings, packs), anything above the shoulders off the centre line
+// (shoulder tops, wing tips), and anything far from every limb (hip guns, big fins).
+const FIGURE = [
+  ['head', 'head', [0, 2.7, 0], [0, 2.95, 0], 0.13],
+  ['torso', 'torso', [0, 2.0, 0], [0, 2.6, 0], 0.26],
+  ['hips', 'hips', [0, 1.72, 0], [0, 1.95, 0], 0.2],
+  ['arm', '上腕', [0.42, 2.55, 0], [0.5, 2.02, 0], 0.1],
+  ['fore', '前腕・手', [0.5, 1.98, 0], [0.53, 1.25, 0], 0.1],
+  ['leg', '太もも', [0.2, 1.8, 0], [0.28, 1.05, 0], 0.13],
+  ['shin', 'すね・足', [0.29, 1.0, 0], [0.32, 0.03, 0.05], 0.14],
+];
+const FIGURE_NAME = { head: '頭', torso: '胴', hips: '腰' };
+function regionOf(x, y, z, a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Vector3(), seg = new THREE.Line3(), c = new THREE.Vector3()) {
+  if (z < -0.28 && y > 1.1) return 'torso';
+  if (y > 2.58 && Math.abs(x) > 0.24) return 'torso';
+  let best = null, bd = Infinity;
+  for (const [bone, , p0, p1, r] of FIGURE) {
+    const sx = bone === 'head' || bone === 'torso' || bone === 'hips' ? 1 : Math.sign(x) || 1;
+    seg.set(a.set(p0[0] * sx, p0[1], p0[2]), b.set(p1[0] * sx, p1[1], p1[2]));
+    const d = seg.closestPointToPoint(q.set(x, y, z), true, c).distanceTo(q) - r;
+    if (d < bd) { bd = d; best = bone + (sx > 0 && !FIGURE_NAME[bone] ? '_l' : !FIGURE_NAME[bone] ? '_r' : ''); }
+  }
+  return bd > 0.22 ? (y > 1.9 ? 'torso' : 'hips') : best;
+}
+
+// .glb -> one indexed mesh (position, normal, uv) in editor space: 3 units tall, feet at 0, centred; its colour map
+async function readModel(buf) {
+  const gltf = await new GLTFLoader().parseAsync(buf, '');
+  gltf.scene.updateMatrixWorld(true);
+  const list = [];
+  let map = null;
+  gltf.scene.traverse(o => { if (o.isMesh) { list.push(o); map ??= [o.material].flat().find(m => m.map)?.map ?? null; } });
+  if (!list.length) throw new Error('形（メッシュ）が入っていません');
+  const pos = [], nor = [], uv = [], index = [];
+  for (const o of list) {
+    const g = o.geometry, base = pos.length / 3, nm = new THREE.Matrix3().getNormalMatrix(o.matrixWorld), v = new THREE.Vector3();
+    const P = g.attributes.position, N = g.attributes.normal, T = g.attributes.uv;
+    for (let i = 0; i < P.count; i++) {
+      v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld); pos.push(v.x, v.y, v.z);
+      if (N) { v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nor.push(v.x, v.y, v.z); } else nor.push(0, 1, 0);
+      uv.push(T ? T.getX(i) : 0, T ? T.getY(i) : 0);
+    }
+    if (g.index) for (let i = 0; i < g.index.count; i++) index.push(base + g.index.getX(i));
+    else for (let i = 0; i < P.count; i++) index.push(base + i);
+  }
+  const P = new Float32Array(pos), box = new THREE.Box3().setFromArray(P), s = 3 / Math.max(1e-6, box.max.y - box.min.y);
+  const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
+  for (let i = 0; i < P.length; i += 3) { P[i] = (P[i] - cx) * s; P[i + 1] = (P[i + 1] - box.min.y) * s; P[i + 2] = (P[i + 2] - cz) * s; }
+  return { pos: P, nor: new Float32Array(nor), uv: new Float32Array(uv), index: new Uint32Array(index), map };
+}
+// the colour map as a JPEG no larger than 2048 (the game's limit)
+async function textureBlob(map) {
+  if (!map?.image) return null;
+  const img = map.image, k = Math.min(1, 2048 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.9));
+}
+// the triangles of one region as a compact mesh in its own frame (centred on its box)
+function regionMesh(src, tris) {
+  const remap = new Map(), pos = [], nor = [], uv = [], index = [];
+  for (const t of tris) for (let k = 0; k < 3; k++) {
+    const v = src.index[t * 3 + k];
+    let n = remap.get(v);
+    if (n === undefined) { n = remap.size; remap.set(v, n); pos.push(src.pos[v * 3], src.pos[v * 3 + 1], src.pos[v * 3 + 2]); nor.push(src.nor[v * 3], src.nor[v * 3 + 1], src.nor[v * 3 + 2]); uv.push(src.uv[v * 2], src.uv[v * 2 + 1]); }
+    index.push(n);
+  }
+  return { pos: new Float32Array(pos), nor: new Float32Array(nor), uv: new Float32Array(uv), index: new Uint32Array(index) };
+}
+function splitRegions(src) {
+  const by = new Map();
+  for (let t = 0; t < src.index.length / 3; t++) {
+    let x = 0, y = 0, z = 0;
+    for (let k = 0; k < 3; k++) { const v = src.index[t * 3 + k] * 3; x += src.pos[v]; y += src.pos[v + 1]; z += src.pos[v + 2]; }
+    const r = regionOf(x / 3, y / 3, z / 3);
+    (by.get(r) || by.set(r, []).get(r)).push(t);
+  }
+  return by;
+}
+async function importModel(file) {
+  const note = m => { $('#checkResult').innerHTML = ''; $('#checkResult').append(Object.assign(document.createElement('span'), { className: 'hint', textContent: m })); };
+  note(`「${file.name}」を読み込んでいます…`);
+  const { MeshoptSimplifier: S } = await import('https://cdn.jsdelivr.net/npm/meshoptimizer@0.22.0/meshopt_simplifier.module.js');
+  await S.ready;
+  const src = await readModel(await file.arrayBuffer());
+  const inTris = src.index.length / 3;
+  note(`三角形 ${inTris.toLocaleString()} 個を減らしています…`);
+  await new Promise(r => setTimeout(r, 30));
+  // LOD0 within the game's 30,000 (a little under); LOD1 about 5,000 over all the parts
+  const simplify = (index, n) => (index.length / 3 <= n ? index : S.simplify(index, src.pos, 3, n * 3, 0.05, [])[0]);
+  const lod0 = simplify(src.index, 27000), lod1 = simplify(lod0, 4500);
+  const texId = 't' + Date.now().toString(36);
+  const blob = await textureBlob(src.map);
+  if (blob) await dbPut('tex', texId, blob);
+  const r0 = splitRegions({ ...src, index: lod0 }), r1 = splitRegions({ ...src, index: lod1 });
+  const made = [];
+  for (const [region, tris] of r0) {
+    const m = regionMesh({ ...src, index: lod0 }, tris);
+    const box = new THREE.Box3().setFromArray(m.pos), c = box.getCenter(new THREE.Vector3());
+    for (let i = 0; i < m.pos.length; i += 3) { m.pos[i] -= c.x; m.pos[i + 1] -= c.y; m.pos[i + 2] -= c.z; }
+    // LOD1 of the same region, in the same frame, re-indexed onto its own vertices
+    const l = regionMesh({ ...src, index: lod1 }, r1.get(region) ?? []);
+    for (let i = 0; i < l.pos.length; i += 3) { l.pos[i] -= c.x; l.pos[i + 1] -= c.y; l.pos[i + 2] -= c.z; }
+    const lpos = new Float32Array(m.pos.length + l.pos.length); lpos.set(m.pos); lpos.set(l.pos, m.pos.length);
+    const lnor = new Float32Array(m.nor.length + l.nor.length); lnor.set(m.nor); lnor.set(l.nor, m.nor.length);
+    const luv = new Float32Array(m.uv.length + l.uv.length); luv.set(m.uv); luv.set(l.uv, m.uv.length);
+    const base = m.pos.length / 3, lidx = l.index.map(i => i + base);
+    const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    await dbPut('mesh', id, { pos: lpos, nor: lnor, uv: luv, index: m.index, lod1: new Uint32Array(lidx), texId: blob ? texId : null });
+    const bone = region.replace(/_[lr]$/, ''), side = region.endsWith('_l') ? '（左）' : region.endsWith('_r') ? '（右）' : '';
+    const label = FIGURE_NAME[bone] ?? FIGURE.find(f => f[0] === bone)[1];
+    made.push({ ...DEFAULTS, name: `取り込み・${label}${side}`, kind: 'mesh', mesh: id, bone, color: '#c8ccd4', metal: 0.3, rough: 0.6, pos: c.toArray().map(v => +v.toFixed(5)) });
+  }
+  const order = ['head', 'torso', 'hips', 'arm', 'fore', 'leg', 'shin'];
+  made.sort((a, b) => order.indexOf(a.bone) - order.indexOf(b.bone));
+  return { made, inTris, outTris: lod0.length / 3 };
+}
+$('#bImport').onclick = () => { $('#menuPop').hidden = true; $('#importFile').click(); };
+$('#importFile').onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const keep = parts.length && await ask(`「${file.name}」を部位ごとの部品に分けて取り込みます。
+今の部品はどうしますか？`, { ok: '消して取り込む', cancel: '残したまま足す' });
+  try {
+    const { made, inTris, outTris } = await importModel(file);
+    if (keep !== false && parts.length && keep) loadScene(made, '', sceneRole);
+    else if (!parts.length) loadScene(made, '', sceneRole);
+    else { for (const d of made) parts.push(makePart(d)); select(null); save(); }
+    $('#checkResult').innerHTML = '';
+    $('#checkResult').append(Object.assign(document.createElement('div'), { className: 'hint', textContent:
+      `「${file.name}」を ${made.length} 個の部品（頭・胴・腰・腕・脚）に分けて取り込みました。三角形 ${inTris.toLocaleString()} → ${outTris.toLocaleString()}。` +
+      '分け方は標準の体型で決めています。部品の「付く骨」を変えたり、位置を動かしたりできます。関節やつながりは合わせていません（スキン用）。' }));
+  } catch (err) { ask('取り込めませんでした: ' + (err?.message ?? err), { cancel: null }); }
 };
 
 // ---------- undo history ----------
@@ -2344,6 +2571,7 @@ function replaceParts(list) {
 }
 function loadScene(list, ai = '', role = '') {
   replaceParts(list);
+  ensureMeshes(parts.filter(p => p.kind === 'mesh').map(p => p.mesh));
   sceneAi = String(ai ?? '').slice(0, 40);
   setRole(role, false);
   select(null); save(); writeCurrent();
@@ -3219,6 +3447,7 @@ function shareCard(m) {
   if (m.mine) {
     heart.disabled = true; heart.title = '自分の機体にはイイネできません';
     button('上書き', async () => {
+      if (parts.some(p => p.kind === 'mesh')) { sNote('取り込んだ形（スキン）の部品がある機体は投稿できません。'); return; }
       if (!checksPassed()) { sNote('つながりチェックと関節チェックの両方が OK になってから上書きしてください。'); return; }
       if (!await ask(`「${m.title}」を今の形で上書きしますか？`, { ok: '上書き' })) return;
       try {
@@ -3254,6 +3483,7 @@ async function openShared(m) {
 
 $('#sUpload').onclick = async () => {
   if (!share.me) { sNote('投稿するにはログインしてください。'); return; }
+  if (parts.some(p => p.kind === 'mesh')) { sNote('取り込んだ形（スキン）の部品がある機体は投稿できません。'); return; }
   if (!checksPassed()) { sNote('つながりチェックと関節チェックの両方が OK になってから投稿してください。'); return; }
   const title = $('#sTitle').value.trim();
   if (!title) { sNote('機体名を入れてください。'); return; }
@@ -3808,7 +4038,7 @@ const fixHead = () => `XS部品エディタで確かめた結果です。指摘�
 // by くっつける or by hand). Values equal to the defaults are left out and numbers rounded, one part per line.
 function modelJson() {
   const round = v => (typeof v === 'number' ? Math.round(v * 1e4) / 1e4 : Array.isArray(v) ? v.map(round) : v);
-  const lines = parts.map(p => {
+  const lines = parts.filter(p => p.kind !== 'mesh').map(p => {
     const d = serialize(p), out = { name: d.name };
     for (const k of FIELDS) {
       if (k === 'name') continue;
