@@ -455,7 +455,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '13077bf';
+const BUILD = 'af51587';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -547,6 +547,7 @@ const DEFAULTS = {
   side: null, top: null,   // extrude only: outlines seen from the side [[z, y], ...] and from above [[x, z], ...]; null = none
   mesh: null,              // kind 'mesh' only: the id of an imported mesh (IndexedDB), shown instead of an outline
   joint: null,             // imported meshes: where the bone this part rides on turns, in the part's own frame
+  rig: null,               // a skinned imported mesh: { bone name: [x, y, z] } where each bone turns, in the part's frame
 };
 const FIELDS = Object.keys(DEFAULTS);
 
@@ -1588,7 +1589,7 @@ function lodPieces(level) {
   if (level === 1) {
     let tris = 0;
     for (const { g, p } of all) {
-      const t = g.attributes.position.count / 3;
+      const t = (g.index ? g.index.count : g.attributes.position.count) / 3;   // an imported mesh is indexed
       if (tris + t > GAME_LIMITS.tris[1] * 0.95) continue;
       tris += t; addParts([g], p);
     }
@@ -1658,6 +1659,12 @@ function jointPositions(pieces) {
     at[pc.bone] = cut[pc.bone] = new THREE.Vector3(...p.joint).applyMatrix4(p.proxy.matrixWorld);
   }
   if (cut.leg_l && cut.leg_r) at.hips = new THREE.Vector3(0, (cut.leg_l.y + cut.leg_r.y) / 2, (cut.leg_l.z + cut.leg_r.z) / 2);
+  // a skinned import: its rig says where every bone turns
+  const rigged = pieces.find(pc => pc.part.rig && !pc.part.mirror)?.part;
+  if (rigged) {
+    rigged.proxy.updateMatrixWorld();
+    for (const [name, p] of Object.entries(rigged.rig)) at[name] = new THREE.Vector3(...p).applyMatrix4(rigged.proxy.matrixWorld);
+  }
   return { at, whole };
 }
 
@@ -1673,6 +1680,9 @@ function attachPoints(pieces) {
   };
   const out = {};
   out.hand_r = find(/^手$|^手の甲$/, 'forearm_r') || find(/手/, 'forearm_r');
+  // a skinned import: its right hand is in its rig
+  const rigged = pieces.find(pc => pc.part.rig?.hand_r)?.part;
+  if (!out.hand_r && rigged) { rigged.proxy.updateMatrixWorld(); out.hand_r = { pos: new THREE.Vector3(...rigged.rig.hand_r).applyMatrix4(rigged.proxy.matrixWorld), bone: 'forearm_r' }; }
   out.muzzle = find(/マズル|銃口/, null);
   const thr = s => pieces.filter(pc => /スラスター|ブースター|バーニア/.test(pc.part.name) && pc.part.kind === 'lathe' && pc.bone === 'torso'
     && (s === 'l' ? pc.geo.boundingBox.max.x > 0.02 : pc.geo.boundingBox.min.x < -0.02))
@@ -1881,11 +1891,38 @@ function applyViewPose() {
   }
   let bone = null;
   for (const o of resultGroup.children) {
+    if (o.isMesh && o.geometry.attributes.skinIndex) { skinPose(o, moving ? M : null); continue; }
     if (o.isMesh) bone = pieces.find(pc => pc.mesh === o)?.bone;   // edges follow the mesh they were made from
     o.matrixAutoUpdate = !moving;
     if (moving && bone) { o.matrix.copy(M[bone]); o.matrixWorldNeedsUpdate = true; }
     else if (!moving) o.updateMatrix();
   }
+}
+
+// a skinned import in a pose: each vertex moved by its bones' pose matrices, blended by weight (M = null: rest)
+const _sv = new THREE.Vector3(), _sa = new THREE.Vector3(), _sn = new THREE.Vector3(), _sm = new THREE.Matrix3();
+function skinPose(mesh, M) {
+  const g = mesh.geometry, pos = g.attributes.position, nor = g.attributes.normal, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
+  mesh.userData.restPos ??= pos.array.slice();
+  mesh.userData.restNor ??= nor.array.slice();
+  const rp = mesh.userData.restPos, rn = mesh.userData.restNor;
+  if (!M) { pos.array.set(rp); nor.array.set(rn); }
+  else {
+    const mats = IMPORT_BONES.map(n => M[n] ?? M.torso), nm = IMPORT_BONES.map((n, k) => new THREE.Matrix3().getNormalMatrix(mats[k]));
+    for (let v = 0; v < pos.count; v++) {
+      _sa.set(0, 0, 0); _sn.set(0, 0, 0);
+      for (let k = 0; k < 4; k++) {
+        const w = sw.getComponent(v, k);
+        if (!w) continue;
+        const b = si.getComponent(v, k);
+        _sa.addScaledVector(_sv.fromArray(rp, v * 3).applyMatrix4(mats[b]), w);
+        _sn.addScaledVector(_sv.fromArray(rn, v * 3).applyMatrix3(nm[b]), w);
+      }
+      pos.setXYZ(v, _sa.x, _sa.y, _sa.z); _sn.normalize(); nor.setXYZ(v, _sn.x, _sn.y, _sn.z);
+    }
+  }
+  pos.needsUpdate = nor.needsUpdate = true;
+  g.computeBoundingSphere();
 }
 
 // ---- range check: every pose, parts coming off the body and parts newly cutting into others
@@ -2118,7 +2155,7 @@ function buildGameModel() {
   const tracked = isTracked();
   const root = new THREE.Group(); root.name = 'xs';
   // skeleton: a tracked XS has no leg bones; the cannon mount only when barrels ride on it
-  const gameBones = GAME_BONES.filter(([n]) => !(tracked && /^(leg|shin)_/.test(n)) && (!OPTIONAL_BONES.has(n) || lods[0].some(pc => pc.bone === n)));
+  const gameBones = GAME_BONES.filter(([n]) => !(tracked && /^(leg|shin)_/.test(n)) && (!OPTIONAL_BONES.has(n) || lods[0].some(pc => pc.bone === n || pc.part.rig?.[n])));
   const bones = {};
   for (const [name, parent] of gameBones) {
     const b = new THREE.Bone(); b.name = name;
@@ -2198,12 +2235,15 @@ function buildGameModel() {
         const pos = pc.geo.attributes.position, nor = pc.geo.attributes.normal;
         const col = cls === 'skin' ? new THREE.Color(0xffffff) : new THREE.Color(pc.part.color), bi = boneIndex[pc.bone];
         const uv = cls === 'skin' ? pc.geo.attributes.uv : null;
+        const si = pc.part.rig ? pc.geo.attributes.skinIndex : null, sw = si ? pc.geo.attributes.skinWeight : null;
+        const map = si ? IMPORT_BONES.map(n => boneIndex[n] ?? boneIndex.torso) : null;
         for (let i = 0; i < pos.count; i++) {
           if (uv) UV.push(uv.getX(i), uv.getY(i));
           P.push(-pos.getX(i), pos.getY(i) - floor, -pos.getZ(i));
           if (nor) N.push(-nor.getX(i), nor.getY(i), -nor.getZ(i));
           C.push(col.r, col.g, col.b);
-          SI.push(bi, 0, 0, 0); SW.push(1, 0, 0, 0);
+          if (si) for (let k = 0; k < 4; k++) { SI.push(map[si.getComponent(i, k)]); SW.push(sw.getComponent(i, k)); }
+          else { SI.push(bi, 0, 0, 0); SW.push(1, 0, 0, 0); }
         }
         metal += pc.part.metal * pos.count; rough += pc.part.rough * pos.count; n += pos.count;
       }
@@ -2390,6 +2430,10 @@ const meshGeo = (m, index) => {
   g.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(m.nor, 3));
   g.setAttribute('uv', new THREE.BufferAttribute(m.uv, 2));
+  if (m.skinI) {   // a skinned import: up to 4 bones per vertex (indices into IMPORT_BONES) and their weights
+    g.setAttribute('skinIndex', new THREE.BufferAttribute(m.skinI, 4));
+    g.setAttribute('skinWeight', new THREE.BufferAttribute(m.skinW, 4));
+  }
   g.setIndex(new THREE.BufferAttribute(index, 1));
   g.computeBoundingBox();
   return g;
@@ -2440,18 +2484,35 @@ const FIGURE = [
 const FIGURE_NAME = { head: '頭', torso: '胴', hips: '腰', wing: '翼' };
 // where each bone turns (x for the left side; the right is mirrored): neck, waist, hip root, shoulder, elbow, hip, knee
 const FIGURE_PIVOT = { head: [0, 2.66, 0], torso: [0, 1.98, 0], hips: [0, 1.84, 0], arm: [0.42, 2.55, 0], fore: [0.5, 2.0, 0], leg: [0.2, 1.84, 0], shin: [0.29, 1.02, 0], wing: [0.22, 2.4, -0.3] };
-function regionOf(x, y, z, a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Vector3(), seg = new THREE.Line3(), c = new THREE.Vector3()) {
-  // behind the back off the centre line, and above the shoulders behind them: wings (packs on the centre stay torso)
-  if (z < -0.28 && y > 1.1) return Math.abs(x) > 0.18 ? (x > 0 ? 'wing_l' : 'wing_r') : 'torso';
-  if (y > 2.58 && Math.abs(x) > 0.24) return z < -0.12 ? (x > 0 ? 'wing_l' : 'wing_r') : 'torso';
-  let best = null, bd = Infinity;
-  for (const [bone, , p0, p1, r] of FIGURE) {
-    const sx = bone === 'head' || bone === 'torso' || bone === 'hips' ? 1 : Math.sign(x) || 1;
+// The bones an import is skinned to, and each vertex's weights: the wings (behind the back off the centre line, or
+// above the shoulders behind them) go wholly on their wing; everything else on the nearest bones of the figure,
+// measured from each bone's capsule, blended smoothly where two meet (a joint bends the surface instead of tearing it).
+const IMPORT_BONES = ['hips', 'torso', 'head', 'arm_l', 'arm_r', 'forearm_l', 'forearm_r', 'leg_l', 'leg_r', 'shin_l', 'shin_r', 'wing_l', 'wing_r'];
+const IMPORT_PARENT = { torso: 'hips', head: 'torso', arm_l: 'torso', arm_r: 'torso', forearm_l: 'arm_l', forearm_r: 'arm_r', leg_l: 'hips', leg_r: 'hips', shin_l: 'leg_l', shin_r: 'leg_r', wing_l: 'torso', wing_r: 'torso' };
+const BLEND = 0.035;   // how wide the blend across a joint is (units; the figure is 3 tall)
+function weightsAt(x, y, z, a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Vector3(), seg = new THREE.Line3(), c = new THREE.Vector3()) {
+  const wing = x > 0 ? 'wing_l' : 'wing_r';
+  if ((z < -0.28 && y > 1.1 && Math.abs(x) > 0.18) || (y > 2.58 && Math.abs(x) > 0.24 && z < -0.12)) return [[IMPORT_BONES.indexOf(wing), 1]];
+  const ds = [];
+  for (const [group, , p0, p1, r] of FIGURE) {
+    const center = group === 'head' || group === 'torso' || group === 'hips', sx = center ? 1 : Math.sign(x) || 1;
     seg.set(a.set(p0[0] * sx, p0[1], p0[2]), b.set(p1[0] * sx, p1[1], p1[2]));
-    const d = seg.closestPointToPoint(q.set(x, y, z), true, c).distanceTo(q) - r;
-    if (d < bd) { bd = d; best = bone + (sx > 0 && !FIGURE_NAME[bone] ? '_l' : !FIGURE_NAME[bone] ? '_r' : ''); }
+    const name = center ? group : `${group === 'fore' ? 'forearm' : group}_${sx > 0 ? 'l' : 'r'}`;
+    ds.push([IMPORT_BONES.indexOf(name), seg.closestPointToPoint(q.set(x, y, z), true, c).distanceTo(q) - r]);
   }
-  return bd > 0.22 ? (y > 1.9 ? 'torso' : 'hips') : best;
+  // blend only across a real joint: the nearest bone with its parent or children (a thigh beside the hand must
+  // not follow the arm, or turning the upper body drags the legs along)
+  const best = ds.reduce((m, d) => (d[1] < m[1] ? d : m)), bn = IMPORT_BONES[best[0]];
+  const near = new Set([bn, IMPORT_PARENT[bn], ...IMPORT_BONES.filter(n => IMPORT_PARENT[n] === bn)]);
+  const dmin = best[1];
+  const w = ds.filter(([k]) => near.has(IMPORT_BONES[k])).map(([k, d]) => [k, Math.exp(-(d - dmin) / BLEND)]).sort((m, n) => n[1] - m[1]).slice(0, 3).filter(([, v]) => v > 0.03);
+  const sum = w.reduce((t, [, v]) => t + v, 0);
+  return w.map(([k, v]) => [k, v / sum]);
+}
+function skinWeights(pos) {
+  const n = pos.length / 3, skinI = new Uint16Array(n * 4), skinW = new Float32Array(n * 4);
+  for (let v = 0; v < n; v++) weightsAt(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]).forEach(([k, w], i) => { skinI[v * 4 + i] = k; skinW[v * 4 + i] = w; });
+  return { skinI, skinW };
 }
 
 // .glb -> one indexed mesh (position, normal, uv) in editor space: 3 units tall, feet at 0, centred; its colour map
@@ -2465,11 +2526,27 @@ async function readModel(buf) {
   if (!list.length) throw new Error('形（メッシュ）が入っていません');
   // a model made for the game faces -Z (its right hand on +X, docs/models.md); glTF and the editor face +Z
   const hand = gltf.scene.getObjectByName('hand_r'), turn = !!hand && hand.getWorldPosition(new THREE.Vector3()).x > 0;
-  const pos = [], nor = [], uv = [], index = [];
+  // a model already rigged (Blender: an armature with automatic weights, bones named as docs/models.md) keeps its
+  // weights: each vertex's bones by name onto IMPORT_BONES (other bones fall to the torso), and the bones' positions
+  const boneKey = n => n.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const known = Object.fromEntries(IMPORT_BONES.map((n, i) => [boneKey(n), i]));
+  const rigged = list.some(o => o.isSkinnedMesh && o.skeleton?.bones.some(b => boneKey(b.name) in known));
+  const pos = [], nor = [], uv = [], index = [], skinI = [], skinW = [];
+  const pivots = {};
+  if (rigged) for (const o of list) if (o.isSkinnedMesh) for (const b of o.skeleton.bones) {
+    const k = known[boneKey(b.name)];
+    if (k !== undefined) pivots[IMPORT_BONES[k]] ??= b.getWorldPosition(new THREE.Vector3());
+  }
   for (const o of list) {
     const g = o.geometry, base = pos.length / 3, nm = new THREE.Matrix3().getNormalMatrix(o.matrixWorld), v = new THREE.Vector3();
     const P = g.attributes.position, N = g.attributes.normal, T = g.attributes.uv;
+    const SI = rigged && o.isSkinnedMesh ? g.attributes.skinIndex : null, SW = SI ? g.attributes.skinWeight : null;
+    const toImport = SI ? o.skeleton.bones.map(b => known[boneKey(b.name)] ?? IMPORT_BONES.indexOf('torso')) : null;
     for (let i = 0; i < P.count; i++) {
+      if (rigged) for (let k = 0; k < 4; k++) {
+        skinI.push(SI ? toImport[SI.getComponent(i, k)] ?? 1 : k ? 0 : IMPORT_BONES.indexOf('torso'));
+        skinW.push(SI ? SW.getComponent(i, k) : k ? 0 : 1);
+      }
       v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld); pos.push(v.x, v.y, v.z);
       if (N) { v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nor.push(v.x, v.y, v.z); } else nor.push(0, 1, 0);
       uv.push(T ? T.getX(i) : 0, T ? T.getY(i) : 0);
@@ -2481,7 +2558,9 @@ async function readModel(buf) {
   const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
   const k = turn ? -1 : 1, N = new Float32Array(nor);
   for (let i = 0; i < P.length; i += 3) { P[i] = (P[i] - cx) * s * k; P[i + 1] = (P[i + 1] - box.min.y) * s; P[i + 2] = (P[i + 2] - cz) * s * k; N[i] *= k; N[i + 2] *= k; }
-  return { pos: P, nor: N, uv: new Float32Array(uv), index: new Uint32Array(index), map };
+  const rig = rigged ? Object.fromEntries(Object.entries(pivots).map(([n, p]) => [n, [(p.x - cx) * s * k, (p.y - box.min.y) * s, (p.z - cz) * s * k]])) : null;
+  return { pos: P, nor: N, uv: new Float32Array(uv), index: new Uint32Array(index), map,
+    skinI: rigged ? new Uint16Array(skinI) : null, skinW: rigged ? new Float32Array(skinW) : null, rig };
 }
 // the colour map as a JPEG no larger than 2048 (the game's limit)
 async function textureBlob(map) {
@@ -2493,24 +2572,17 @@ async function textureBlob(map) {
 }
 // the triangles of one region as a compact mesh in its own frame (centred on its box)
 function regionMesh(src, tris) {
-  const remap = new Map(), pos = [], nor = [], uv = [], index = [];
+  const remap = new Map(), pos = [], nor = [], uv = [], index = [], skinI = [], skinW = [];
   for (const t of tris) for (let k = 0; k < 3; k++) {
     const v = src.index[t * 3 + k];
     let n = remap.get(v);
-    if (n === undefined) { n = remap.size; remap.set(v, n); pos.push(src.pos[v * 3], src.pos[v * 3 + 1], src.pos[v * 3 + 2]); nor.push(src.nor[v * 3], src.nor[v * 3 + 1], src.nor[v * 3 + 2]); uv.push(src.uv[v * 2], src.uv[v * 2 + 1]); }
+    if (n === undefined) {
+      n = remap.size; remap.set(v, n); pos.push(src.pos[v * 3], src.pos[v * 3 + 1], src.pos[v * 3 + 2]); nor.push(src.nor[v * 3], src.nor[v * 3 + 1], src.nor[v * 3 + 2]); uv.push(src.uv[v * 2], src.uv[v * 2 + 1]);
+      if (src.skinI) for (let k = 0; k < 4; k++) { skinI.push(src.skinI[v * 4 + k]); skinW.push(src.skinW[v * 4 + k]); }
+    }
     index.push(n);
   }
-  return { pos: new Float32Array(pos), nor: new Float32Array(nor), uv: new Float32Array(uv), index: new Uint32Array(index) };
-}
-function splitRegions(src) {
-  const by = new Map();
-  for (let t = 0; t < src.index.length / 3; t++) {
-    let x = 0, y = 0, z = 0;
-    for (let k = 0; k < 3; k++) { const v = src.index[t * 3 + k] * 3; x += src.pos[v]; y += src.pos[v + 1]; z += src.pos[v + 2]; }
-    const r = regionOf(x / 3, y / 3, z / 3);
-    (by.get(r) || by.set(r, []).get(r)).push(t);
-  }
-  return by;
+  return { pos: new Float32Array(pos), nor: new Float32Array(nor), uv: new Float32Array(uv), index: new Uint32Array(index), skinI: src.skinI ? new Uint16Array(skinI) : null, skinW: src.skinW ? new Float32Array(skinW) : null };
 }
 async function importModel(file) {
   const note = m => { $('#checkResult').innerHTML = ''; $('#checkResult').append(Object.assign(document.createElement('span'), { className: 'hint', textContent: m })); };
@@ -2527,48 +2599,58 @@ async function importModel(file) {
   const texId = 't' + Date.now().toString(36);
   const blob = await textureBlob(src.map);
   if (blob) await dbPut('tex', texId, blob);
-  const r0 = splitRegions({ ...src, index: lod0 }), r1 = splitRegions({ ...src, index: lod1 });
-  const made = [];
-  for (const [region, tris] of r0) {
-    const m = regionMesh({ ...src, index: lod0 }, tris);
-    const box = new THREE.Box3().setFromArray(m.pos), c = box.getCenter(new THREE.Vector3());
-    for (let i = 0; i < m.pos.length; i += 3) { m.pos[i] -= c.x; m.pos[i + 1] -= c.y; m.pos[i + 2] -= c.z; }
-    // LOD1 of the same region, in the same frame, re-indexed onto its own vertices
-    const l = regionMesh({ ...src, index: lod1 }, r1.get(region) ?? []);
-    for (let i = 0; i < l.pos.length; i += 3) { l.pos[i] -= c.x; l.pos[i + 1] -= c.y; l.pos[i + 2] -= c.z; }
-    const lpos = new Float32Array(m.pos.length + l.pos.length); lpos.set(m.pos); lpos.set(l.pos, m.pos.length);
-    const lnor = new Float32Array(m.nor.length + l.nor.length); lnor.set(m.nor); lnor.set(l.nor, m.nor.length);
-    const luv = new Float32Array(m.uv.length + l.uv.length); luv.set(m.uv); luv.set(l.uv, m.uv.length);
-    const base = m.pos.length / 3, lidx = l.index.map(i => i + base);
-    const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    await dbPut('mesh', id, { pos: lpos, nor: lnor, uv: luv, index: m.index, lod1: new Uint32Array(lidx), texId: blob ? texId : null });
-    const bone = region.replace(/_[lr]$/, ''), side = region.endsWith('_l') ? '（左）' : region.endsWith('_r') ? '（右）' : '';
-    const label = FIGURE_NAME[bone] ?? FIGURE.find(f => f[0] === bone)[1];   // wing parts: bone 'wing', sided by x
-    const pv = FIGURE_PIVOT[bone], sx = region.endsWith('_r') ? -1 : 1;
-    const joint = [pv[0] * sx - c.x, pv[1] - c.y, pv[2] - c.z].map(v => +v.toFixed(5));
-    made.push({ ...DEFAULTS, name: `取り込み・${label}${side}`, kind: 'mesh', mesh: id, bone, joint, color: '#c8ccd4', metal: 0.3, rough: 0.6, pos: c.toArray().map(v => +v.toFixed(5)) });
+  // one mesh: LOD0 and LOD1 on their own vertices, centred on the model's box; weights from the rest shape
+  const tris = idx => [...Array(idx.length / 3).keys()];
+  const m = regionMesh({ ...src, index: lod0 }, tris(lod0)), l = regionMesh({ ...src, index: lod1 }, tris(lod1));
+  const wm = m.skinI ? { skinI: m.skinI, skinW: m.skinW } : skinWeights(m.pos), wl = l.skinI ? { skinI: l.skinI, skinW: l.skinW } : skinWeights(l.pos);
+  const c = new THREE.Box3().setFromArray(m.pos).getCenter(new THREE.Vector3());
+  for (const a of [m.pos, l.pos]) for (let i = 0; i < a.length; i += 3) { a[i] -= c.x; a[i + 1] -= c.y; a[i + 2] -= c.z; }
+  const join = (A, B, T) => { const o = new T(A.length + B.length); o.set(A); o.set(B, A.length); return o; };
+  const base = m.pos.length / 3;
+  const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  await dbPut('mesh', id, {
+    pos: join(m.pos, l.pos, Float32Array), nor: join(m.nor, l.nor, Float32Array), uv: join(m.uv, l.uv, Float32Array),
+    index: m.index, lod1: new Uint32Array(l.index.map(i => i + base)), texId: blob ? texId : null,
+    skinI: join(wm.skinI, wl.skinI, Uint16Array), skinW: join(wm.skinW, wl.skinW, Float32Array),
+  });
+  // where each bone turns, in the part's frame
+  const rig = {};
+  for (const name of IMPORT_BONES) {
+    const group = name.replace(/_[lr]$/, '').replace('forearm', 'fore'), sx = name.endsWith('_r') ? -1 : 1, pv = FIGURE_PIVOT[group];
+    const p = src.rig?.[name] ?? [pv[0] * sx, pv[1], pv[2]];   // a rigged model's own bones, else the standard figure
+    rig[name] = [p[0] - c.x, p[1] - c.y, p[2] - c.z].map(v => +v.toFixed(5));
   }
-  const order = ['head', 'torso', 'hips', 'wing', 'arm', 'fore', 'leg', 'shin'];
-  made.sort((a, b) => order.indexOf(a.bone) - order.indexOf(b.bone));
-  return { made, inTris, outTris: lod0.length / 3 };
+  const usesWings = [...wm.skinI].some(k => IMPORT_BONES[k]?.startsWith('wing'));
+  // the right hand (where the game puts the saber's grip and the grenade): the lower end of what rides on forearm_r
+  const fr = IMPORT_BONES.indexOf('forearm_r'), ys = [];
+  for (let v = 0; v < m.pos.length / 3; v++) if (wm.skinI[v * 4] === fr && wm.skinW[v * 4] > 0.6) ys.push(v);
+  if (ys.length) {
+    const lo = Math.min(...ys.map(v => m.pos[v * 3 + 1])), hi = Math.max(...ys.map(v => m.pos[v * 3 + 1])), cut = lo + 0.15 * (hi - lo);
+    const hand = new THREE.Vector3(); let n = 0;
+    for (const v of ys) if (m.pos[v * 3 + 1] <= cut) { hand.add(new THREE.Vector3(m.pos[v * 3], m.pos[v * 3 + 1], m.pos[v * 3 + 2])); n++; }
+    rig.hand_r = hand.multiplyScalar(1 / n).toArray().map(v => +v.toFixed(5));   // m.pos is already centred
+  }
+  if (!usesWings) { delete rig.wing_l; delete rig.wing_r; }
+  const made = [{ ...DEFAULTS, name: '取り込んだ形', kind: 'mesh', mesh: id, bone: 'torso', rig, color: '#c8ccd4', metal: 0.3, rough: 0.6, pos: c.toArray().map(v => +v.toFixed(5)) }];
+  return { made, inTris, outTris: lod0.length / 3, usesWings, rigged: !!src.skinI };
 }
 $('#bImport').onclick = () => { $('#menuPop').hidden = true; $('#importFile').click(); };
 $('#importFile').onchange = async e => {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  const keep = parts.length && await ask(`「${file.name}」を部位ごとの部品に分けて取り込みます。
+  const keep = parts.length && await ask(`「${file.name}」を取り込みます（骨に合わせて曲がるスキン）。
 今の部品はどうしますか？`, { ok: '消して取り込む', cancel: '残したまま足す' });
   try {
-    const { made, inTris, outTris } = await importModel(file);
+    const { made, inTris, outTris, usesWings, rigged } = await importModel(file);
     if (keep !== false && parts.length && keep) loadScene(made, '', sceneRole);
     else if (!parts.length) loadScene(made, '', sceneRole);
     else { for (const d of made) parts.push(makePart(d)); select(null); save(); }
     $('#checkResult').innerHTML = '';
     $('#checkResult').append(Object.assign(document.createElement('div'), { className: 'hint', textContent:
-      `「${file.name}」を ${made.length} 個の部品（頭・胴・腰・腕・脚${made.some(p => p.bone === 'wing') ? '・翼' : ''}）に分けて取り込みました。三角形 ${inTris.toLocaleString()} → ${outTris.toLocaleString()}。` +
-      '分け方は標準の体型で決めています。部品の「付く骨」を変えたり、位置を動かしたりできます。関節やつながりは合わせていません（スキン用）。' +
-      (made.some(p => p.bone === 'wing') ? '背中の翼は左右の「翼」の骨に付けたので、ゲームではブースト・ダッシュ・ジャンプで開きます。' : '') }));
+      `「${file.name}」を取り込みました。三角形 ${inTris.toLocaleString()} → ${outTris.toLocaleString()}。` +
+      (rigged ? 'この形に付いていた骨（Blender などで付けたもの）と、その付け方をそのまま使いました。' : '頂点ごとに近い骨へ付け、関節のまわりは 2 つの骨にまたがせたので、曲げても面がつながったまま伸び縮みします。骨の位置は標準の体型です（Blender で骨を付けた .glb なら、その付け方を使います）。') + '上の「姿勢」で動きを確かめられます。' +
+      (usesWings ? '背中の翼は左右の「翼」の骨に付けたので、ゲームではブースト・ダッシュ・ジャンプで開きます。' : '') }));
   } catch (err) { ask('取り込めませんでした: ' + (err?.message ?? err), { cancel: null }); }
 };
 
