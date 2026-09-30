@@ -65,8 +65,12 @@ export function ellipsoid(r, c, n, lats, th0 = 0, thetas = null) {
   }
   return out;
 }
-export const MAIN = '#c3c9d2', DARK = '#6b727d', BLACK = '#23262c', GLOW = '#ffd257';
+export const MAIN = '#c3c9d2', DARK = '#6b727d', BLACK = '#23262c', GLOW = '#ffd257', ACCENT = '#b8483e';
 export const piece = (name, planes, o = {}) => ({ name, kind: 'hull', planes, bevel: 0, bevelSegs: 1, color: MAIN, pos: [0, 0, 0], ...o });
 /** 左右の対：面を x で鏡像にした 2 個 */
 export const pair = (name, planes, o = {}) => [piece(name + '（右）', planes, o), piece(name + '（左）', planes.map(mir), o)];
 
+/** 縦（y）の n 角柱の側面 n 枚：中心から面までの距離 a、th0（度、0 が前）から等間隔。上下の面は YL/YH で足す */
+export const prismY = (a, n, th0 = 0) => Array.from({ length: n }, (_, k) => { const t = (th0 + k * 360 / n) * Math.PI / 180; return P([Math.sin(t), 0, Math.cos(t)], [a * Math.sin(t), 0, a * Math.cos(t)]); });
+/** 横（x）の n 角柱の側面 n 枚：中心 (*, cy, cz) の横線から面までの距離 a、th0（度、0 が前）から等間隔。端の面は XL/XH で足す */
+export const prismX = (a, n, th0 = 0, cy = 0, cz = 0) => Array.from({ length: n }, (_, k) => { const t = (th0 + k * 360 / n) * Math.PI / 180; return P([0, Math.sin(t), Math.cos(t)], [0, cy + a * Math.sin(t), cz + a * Math.cos(t)]); });

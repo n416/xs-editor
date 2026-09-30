@@ -1,0 +1,22 @@
+// 下半身（腰の骨）の部品の目次。1 部品 1 ファイル。前・後ろのスカートは蝶番（hinge）で腰に付き、脚に押されて開く
+import waist from './waist.js';
+import belly from './belly.js';
+import hipjoint from './hipjoint.js';
+import hipbase from './hipbase.js';
+import skirtfront from './skirtfront.js';
+import skirtside from './skirtside.js';
+import skirtrear from './skirtrear.js';
+import skirtback from './skirtback.js';
+import maekake from './maekake.js';
+export const LOWER = [waist, belly, hipjoint, hipbase, skirtfront, skirtside, skirtrear, skirtback, maekake].flat();
+export const lowerById = Object.fromEntries(LOWER.map(p => [p.id, p]));
+
+/** 見本の組み立て：骨格図の標準の寸法（xsbody.js の makeSheet()）の置き場所に置く。左右の対は +x 側を置き、反対側は x の拡大 −1 */
+const HIP = [0.175, 1.6, 0];
+export const SAMPLE = [
+  { part: 'waist', mov: [0, 1.77, 0] },
+  { part: 'belly', mov: [0, 2.0, 0] },
+  { part: 'skirtrear', mov: [0, 1.77, 0] },
+  { part: 'maekake', mov: [0, 1.77, 0] },
+  ...[1, -1].flatMap(s => ['hipjoint', 'hipbase', 'skirtfront', 'skirtside', 'skirtback'].map(part => ({ part, mov: [s * HIP[0], HIP[1], HIP[2]], scal: [s, 1, 1] }))),
+];
