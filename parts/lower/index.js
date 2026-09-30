@@ -11,9 +11,15 @@ import maekake from './maekake.js';
 export const LOWER = [waist, belly, hipjoint, hipbase, skirtfront, skirtside, skirtrear, skirtback, maekake].flat();
 export const lowerById = Object.fromEntries(LOWER.map(p => [p.id, p]));
 
+/** 部品を置く決まった場所（骨格図の標準の寸法）。pair は左右の対（+x 側に置き、反対側は x の拡大 −1 で置く） */
+const HIP = [0.175, 1.6, 0];
+const AT_CAT = { 腰: [0, 1.77, 0], 後ろ腰: [0, 1.77, 0], 前掛け: [0, 1.77, 0], 腹: [0, 2.0, 0] };
+export function placementOf(def) {
+  return AT_CAT[def.cat] ? { mov: AT_CAT[def.cat].slice(), pair: false } : { mov: HIP.slice(), pair: true };
+}
+
 /** 見本の組み立て：骨格図の標準の寸法（xsbody.js の makeSheet()）の置き場所に置く。左右の対は +x 側を置き、反対側は x の拡大 −1。
  *  skirts: [前, 横, 後ろ] のスカートの部品 id */
-const HIP = [0.175, 1.6, 0];
 const sample = (skirts = ['skirtfront', 'skirtside', 'skirtback']) => [
   { part: 'waist', mov: [0, 1.77, 0] },
   { part: 'belly', mov: [0, 2.0, 0] },
