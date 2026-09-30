@@ -7,7 +7,7 @@ import { P, YH, YL, ZL, both, piece, DARK, ACCENT } from '../../xsasm-lib.js';
 import { crown, steps } from './shape.js';
 
 const M = (id, name, pieces) => ({ id, name, cat: '前掛け', size: [0.2, 0.4, 0.15], pieces });
-const center = lift => (x, y) => 0.255 + 0.12 * (-0.015 - y) - 1.2 * x * x + lift;   // 真ん中の板の前の面：左右の前スカートの前の面より 1.5 cm 以上前（同じ傾き）
+const center = lift => (x, y) => 0.26 + 0.12 * (-0.015 - y) - 1.2 * x * x + lift;   // 真ん中の板の前の面：左右の前スカートの前の面より 1.5 cm 以上前（同じ傾き）
 const tabard = lift => (x, y) => 0.215 - 2.5 * x * x - 0.06 * y + lift;   // 長い垂れの前の面：下ほど少し前
 export default [
   M('maekake', '前掛け（V 字の盾）', [

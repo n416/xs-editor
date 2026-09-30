@@ -50,7 +50,7 @@ export function sideSkirt({ id, name, bottom = -0.26, zf = 0.15, zb = -0.14, pan
  * 1 枚の曲がった板は凸にならないので、弧を segs 枚に分けて少し重ねる（継ぎ目が抜けない）。前の端（a1 度）は前スカートの裏へ、
  * 後ろの端（a0 度）は後ろスカートの裏へ入る。太ももの柱（x ≤ 0.26）には入らない（内の面の x ≥ 0.27）。動かない（腰の骨）
  */
-export function wrapSide({ id, name, bottom = -0.34, a0 = -52, a1 = 41, ro = 0.32, ri = 0.275, flare = 0.06, segs = 3, rim = 0.04, panel = [0.1, -0.22] }) {
+export function wrapSide({ id, name, bottom = -0.34, a0 = -40, a1 = 30, ro = 0.32, ri = 0.275, flare = 0.14, segs = 3, rim = 0.04, panel = [0.1, -0.22] }) {
   const cx = -0.075, TOPY = 0.175, R = Math.PI / 180;
   const outer = (t, lift = 0) => P([Math.cos(t * R), flare, Math.sin(t * R)], [cx + (ro + lift) * Math.cos(t * R), TOPY, (ro + lift) * Math.sin(t * R)]);
   const innerAt = m => P([-Math.cos(m * R), -flare, -Math.sin(m * R)], [cx + ri * Math.cos(m * R), TOPY, ri * Math.sin(m * R)]);

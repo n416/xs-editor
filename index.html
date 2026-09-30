@@ -515,7 +515,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = 'afdc011';
+const BUILD = '532dbc4';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -1937,11 +1937,12 @@ function skirtOutlines(pieces, at) {
   const sets = {};
   for (const pc of pieces) {
     if (!SKIRT_BONES.includes(pc.bone) && !/^(leg|shin)_/.test(pc.bone)) continue;
-    const e = (sets[pc.bone] ||= { yz: [], x: [Infinity, -Infinity] }), pos = pc.geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) { e.yz.push([pos.getY(i), pos.getZ(i)]); e.x[0] = Math.min(e.x[0], pos.getX(i)); e.x[1] = Math.max(e.x[1], pos.getX(i)); }
+    const e = (sets[pc.bone] ||= { yz: [], tris: [], x: [Infinity, -Infinity] }), pos = pc.geo.attributes.position;   // geo は三角形ごとの頂点の並び
+    for (let i = 0; i < pos.count; i++) { e.yz.push([pos.getY(i), pos.getZ(i)]); e.tris.push(pos.getX(i), pos.getY(i), pos.getZ(i)); e.x[0] = Math.min(e.x[0], pos.getX(i)); e.x[1] = Math.max(e.x[1], pos.getX(i)); }
   }
   const yz = v => [v.y, v.z];
-  const plates = SKIRT_BONES.filter(n => sets[n]).map(n => ({ name: n, poly: hull2(sets[n].yz), hinge: yz(at[n]), dir: n.includes('front') ? 1 : -1, x: sets[n].x }));
+  // tris：脚ごとにその脚の幅にかかる所だけで押し開きを調べる（脚の幅の外で後ろへ曲がった所はその脚に押されない）
+  const plates = SKIRT_BONES.filter(n => sets[n]).map(n => ({ name: n, poly: hull2(sets[n].yz), tris: sets[n].tris, hinge: yz(at[n]), dir: n.includes('front') ? 1 : -1, x: sets[n].x }));
   const legs = s => ['leg_' + s, 'shin_' + s].filter(n => sets[n]).map(n => ({ bone: n, side: s, poly: hull2(sets[n].yz), x: sets[n].x, pivot: yz(at['leg_' + s]), knee: n.startsWith('shin') ? yz(at['shin_' + s]) : null }));
   return { plates, legs: [...legs('l'), ...legs('r')] };
 }
