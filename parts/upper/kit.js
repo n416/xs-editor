@@ -33,3 +33,35 @@ export function slab(axis, sign, f, [a0, a1], [b0, b1], { bev = 0.012, depth = 0
     P(n(1, 0, 1), at(a1 - bev, vc, f(a1 - bev, vc))), P(n(-1, 0, 1), at(a0 + bev, vc, f(a0 + bev, vc))),
     P(n(0, 1, 1), at(uc, b1 - bev, f(uc, b1 - bev))), P(n(0, -1, 1), at(uc, b0 + bev, f(uc, b0 + bev))), ...extra];
 }
+
+// ---- 面の上に置く道具 ----
+export const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+export const unit = v => { const l = Math.hypot(...v); return v.map(x => x / l); };
+/** 面の上の箱：中心 o、幅の向き u、高さの向き v、外向き n（単位ベクトル）で、a0〜a1 × b0〜b1 × c0〜c1（c は外へ） */
+export function boxOn(name, o, u, v, n, [a0, a1], [b0, b1], [c0, c1], opt = {}) {
+  const pts = [];
+  for (const a of [a0, a1]) for (const b of [b0, b1]) for (const c of [c0, c1]) pts.push([0, 1, 2].map(i => o[i] + a * u[i] + b * v[i] + c * n[i]));
+  return hull(name, pts, opt);
+}
+/**
+ * 通気口：面の上に 4 辺の枠（外へ dep 出る）、枠の中の底に黒い板、前が下がった斜めの羽根板 slats 枚。本当にくぼんで見える。
+ * o は面の上の中心、u 幅の向き、v 上の向き、n 外向き（u × v、面に垂直）。w × h の大きさ
+ */
+export function grille(name, o, u, v, w, h, { dep = 0.028, slats = 3, fw = 0.012 } = {}) {
+  u = unit(u); v = unit(v); const n = unit(cross(u, v)), hw = w / 2, hh = h / 2, out = [];
+  out.push(boxOn(`${name}の枠（上）`, o, u, v, n, [-hw, hw], [hh - fw, hh], [-0.015, dep]));
+  out.push(boxOn(`${name}の枠（下）`, o, u, v, n, [-hw, hw], [-hh, -hh + fw], [-0.015, dep]));
+  out.push(boxOn(`${name}の枠（左）`, o, u, v, n, [-hw, -hw + fw], [-hh, hh], [-0.015, dep]));
+  out.push(boxOn(`${name}の枠（右）`, o, u, v, n, [hw - fw, hw], [-hh, hh], [-0.015, dep]));
+  out.push(boxOn(`${name}の奥`, o, u, v, n, [-hw + 0.004, hw - 0.004], [-hh + 0.004, hh - 0.004], [-0.012, 0.004], { color: '#23262c' }));
+  const s = (2 * hh - 2 * fw) / slats;
+  for (let k = 0; k < slats; k++) {
+    const b = -hh + fw + k * s, pts = [];
+    for (const a of [-hw + fw - 0.002, hw - fw + 0.002]) for (const [db, c] of [[0.75, dep - 0.006], [0.4, dep - 0.006], [0.55, 0.004], [0.9, 0.004]])
+      pts.push([0, 1, 2].map(i => o[i] + a * u[i] + (b + db * s) * v[i] + c * n[i]));
+    out.push(hull(`${name}の羽根 ${k + 1}`, pts, { color: '#6b727d' }));
+  }
+  return out;
+}
+/** +x 側に作った部品の並びを、x で鏡像にした並び（名前の「+x」を「−x」に） */
+export const mirrorPieces = list => list.map(pc => ({ ...pc, name: pc.name.replace('+x', '−x'), planes: pc.planes.map(mir) }));

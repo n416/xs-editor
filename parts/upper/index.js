@@ -32,14 +32,14 @@ const sample = (mid, sides, armorScale = 1) => [
 const torso = (c = 'chest', b = 'back', a = 'abdomen', f = 'flank') => [c, b, a, f];
 export const UPPER_SAMPLES = {
   標準: sample([...torso(), 'collar', 'backpack'], ['shoulderjoint', 'shoulderarmor']),
-  '丸い胸と盾': sample([...torso('chestround', 'backhump', 'abdomenband', 'flankbulge'), 'collarlow', 'backpackbooster', 'chestpipe'], ['shoulderjointdrum', 'shoulderarmorshield']),
-  '横の稜と箱形': sample([...torso('chestwedge', 'back', 'abdomenvee', 'flankslats'), 'collarwide', 'backpack', 'chestventlong'], ['shoulderjoint', 'shoulderarmorbox']),
-  '重ねた板と重ね板': sample([...torso('chestlames', 'backlames', 'abdomenbellows', 'flank'), 'collar', 'backpackslim'], ['shoulderjoint', 'shoulderarmorlayer']),
-  '大きな張り出しととげ': sample([...torso('chestbulge', 'backblades', 'abdomenplate', 'flankbig'), 'collarlow', 'backpackbooster', 'chestpipethick'], ['shoulderjointdrum', 'shoulderarmorspike']),
-  '差し色と大きな丸い肩': sample([...torso('chestaccent', 'backhump', 'abdomen', 'flankbulge'), 'collarlow', 'backpack'], ['shoulderjoint', 'shoulderarmorbig']),
+  '丸い胸と盾': sample([...torso('chestbarrel', 'backhump', 'abdomenband', 'flankbulge'), 'collarlow', 'backpackbooster', 'chestpipe'], ['shoulderjointdrum', 'shoulderarmorshield']),
+  '横の稜と箱形': sample([...torso('chestvee', 'back', 'abdomenvee', 'flankslats'), 'collarwide', 'backpack', 'chestventlong'], ['shoulderjoint', 'shoulderarmorbox']),
+  '重ねた板と重ね板': sample([...torso('chestframe', 'backlames', 'abdomenbellows', 'flank'), 'collar', 'backpackslim'], ['shoulderjoint', 'shoulderarmorlayer']),
+  '大きな張り出しととげ': sample([...torso('chestpigeon', 'backblades', 'abdomenplate', 'flankbig'), 'collarlow', 'backpackbooster', 'chestpipethick'], ['shoulderjointdrum', 'shoulderarmorspike']),
+  '差し色と大きな丸い肩': sample([...torso('chestcockpit', 'backhump', 'abdomen', 'flankbulge'), 'collarlow', 'backpack'], ['shoulderjoint', 'shoulderarmorbig']),
   '段付きの丸い肩': sample([...torso('chest', 'backblades', 'abdomenband', 'flankbig'), 'collar', 'backpackslim', 'chestpipe'], ['shoulderjointdrum', 'shoulderarmorstep']),
   'とても大きな丸い肩': sample([...torso(), 'collar', 'backpackbooster'], ['shoulderjointdrum', 'shoulderarmorsphere'], 1.8),
-  'とても大きな盾': sample([...torso('chestwedge', 'backhump', 'abdomenvee', 'flankslats'), 'collarwide', 'backpack'], ['shoulderjoint', 'shoulderarmorshield'], 1.5),
+  'とても大きな盾': sample([...torso('chestvee', 'backhump', 'abdomenvee', 'flankslats'), 'collarwide', 'backpack'], ['shoulderjoint', 'shoulderarmorshield'], 1.5),
   '通気口とハッチ': sample([...torso(), 'collar', 'backpack', 'chestvent', 'chesthatch'], ['shoulderjoint', 'shoulderarmorbox']),
 };
 /** ランダムに組む：部位ごとに 1 つ（胴の 4 つは必ず、襟・バックパックはたいてい付け、胸の飾りは 0〜2 個。肩アーマーはときどきとても大きく） */
