@@ -18,7 +18,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #inspector { width: 340px; flex: none; background: var(--panel); border-left: 1px solid var(--line);
   overflow-y: auto; padding: 0 12px 12px; display: none; }
 body.has-sel #inspector { display: block; }
-#view { flex: 1; position: relative; min-width: 0; }
+#view { flex: 1; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
 .sidehead { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 6px; }
 .sidehead h2 { margin: 0; }
 .pop { position: absolute; z-index: 5; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
@@ -42,7 +42,11 @@ body.has-sel #inspector { display: block; }
   padding: 8px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.5); }
 #updBar[hidden] { display: none; }
 #updBar span { flex: 1; min-width: 200px; }
+/* the 3D view is laid over #view, not in its flow: sized to #view, it must not push #view (or the page) bigger, or the
+   page gains scroll bars, #view shrinks, the canvas follows and the bars go again, over and over */
 #view canvas { display: block; }
+#view > canvas:first-child { display: block; position: absolute; left: 0; top: 0; }
+html, body { overflow: hidden; }
 h1 { font-size: 15px; margin: 0 0 10px; letter-spacing: .04em; }
 h2 { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; margin: 14px 0 6px; font-weight: 600; }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
@@ -489,7 +493,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '5009a01';
+const BUILD = 'a2fee21';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
