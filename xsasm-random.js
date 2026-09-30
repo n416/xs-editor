@@ -28,6 +28,8 @@ export function fitScale(id, H, rng = null, jit = 0) {
       if (id === 'crest') return by(2, H.d * rnd(0.7, 1.0));
       if (id === 'backfin') return by(1, H.h * rnd(0.35, 0.55));
       if (id === 'thruster') return by(1, H.h * rnd(0.2, 0.3));
+      if (id.startsWith('headpipecheek')) return by(2, H.d * rnd(0.6, 0.75));   // 頬の動力パイプ：頭の奥行きの 6〜7 割の長さ
+      if (id === 'headpipemouth') return by(2, H.d * rnd(0.35, 0.45));
       return by(1, H.h * rnd(0.3, 0.45));
     case '頭蓋': return [H.sw, H.sh, H.sd];
     default: return by(1, H.h * rnd(0.3, 0.45));
@@ -59,6 +61,9 @@ export function placementsFor(id, shellItem, rng = Math.random) {
       if (id === 'crest') return [{ part: id, mov: [0, H.top - rnd(0.05, 0.12), rnd(0, 0.05)], rot: [rnd(10, 30), 0, 0], scal: fit(id) }];
       if (id === 'backfin') return [{ part: id, mov: [0, H.top - rnd(0.08, 0.2), H.back + rnd(0.0, 0.05)], rot: [rnd(-10, 10), 0, 0], scal: fit(id) }];
       if (id === 'thruster') { const it = { part: id, mov: [H.side - rnd(0.05, 0.12), rnd(0.0, 0.15), H.back + rnd(0.0, 0.05)], rot: [0, rnd(-20, 20), 0], scal: fit(id) }; return [it, mirrorOf(it)]; }
+      // 動力パイプ：頬は頭の横の下寄りに前後に沿わせ、口から首へは口の前から左右へ（どちらも左右の対）
+      if (id.startsWith('headpipecheek')) { const it = { part: id, mov: [H.side - rnd(0.0, 0.03), H.chin + H.h * rnd(0.2, 0.32), (H.front + H.back) / 2 + rnd(0.0, 0.05)], rot: [rnd(-8, 8), 0, 0], scal: fit(id) }; return [it, mirrorOf(it)]; }
+      if (id === 'headpipemouth') { const it = { part: id, mov: [0.02, H.chin + H.h * rnd(0.1, 0.18), H.chinFront - rnd(0.0, 0.04)], rot: [0, 0, 0], scal: fit(id) }; return [it, mirrorOf(it)]; }
       const it = { part: id, mov: [H.side - rnd(0.0, 0.04), H.eye + rnd(-0.08, 0.04), rnd(-0.06, 0.02)], rot: [0, rnd(-10, 10), rnd(-10, 10)], scal: fit(id) };   // 耳ブロック・頬当てなど、横に付くもの
       return [it, mirrorOf(it)];
     },

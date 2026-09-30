@@ -17,4 +17,5 @@ import twineyes from './twineyes.js';
 import backfin from './backfin.js';
 import thruster from './thruster.js';
 import cheekguard from './cheekguard.js';
-export const EXTRA = [vfin, headband, collar, maska, china, finplate, horn, antenna, visorhelm, boxhelm, earblock, chinguard, neck, monoeye, twineyes, backfin, thruster, cheekguard].flat();
+import headpipe from './headpipe.js';
+export const EXTRA = [vfin, headband, collar, maska, china, finplate, horn, antenna, visorhelm, boxhelm, earblock, chinguard, neck, monoeye, twineyes, backfin, thruster, cheekguard, headpipe].flat();

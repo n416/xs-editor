@@ -6,6 +6,7 @@
 //   動力パイプ：短い筒を少しずつ向きを変えて並べた蛇腹の管。腰の後ろから横を回って前へ（太さ 4 種類 × 長さ 3 種類と、2 本）。両端の受けで帯につなぐ
 import { P, XH, XL, YH, YL, ZH, ZL, both, planesFromPoints, prismX, prismY, piece, MAIN, DARK, BLACK, ACCENT } from '../../xsasm-lib.js';
 import { crown, steps } from './shape.js';
+import { tube, bellows, fitting } from '../pipe.js';   // 蛇腹の管の道具（頭の飾りと共通）
 
 const XS = steps(-0.3, 0.3, 6);
 /** 帯の段と同じ作りの輪（waist.js の tier と同じ面）：y0〜y1、前後の面 zf・zb、横 xw、角の落とし（cn・cd） */
@@ -32,39 +33,9 @@ const pouch = (x, z, side, back) => {
   return [piece('ポーチ', planesFromPoints(pts), { color: DARK }), piece('ポーチの蓋', planesFromPoints(lid))];
 };
 
-// ---- 筒・パイプの道具 ----
-/** 2 点 a → b を軸にした n 角の筒（半径 r）。点を並べて凸包にする */
-function tube(a, b, r, n = 8) {
-  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(...d), u = d.map(v => v / L);
-  const ref = Math.abs(u[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
-  const cr = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
-  let v1 = cr(u, ref); const l1 = Math.hypot(...v1); v1 = v1.map(v => v / l1); const v2 = cr(u, v1);
-  const pts = [];
-  for (const c of [a, b]) for (let k = 0; k < n; k++) { const t = (k + 0.5) * 2 * Math.PI / n; pts.push([0, 1, 2].map(i => c[i] + r * (Math.cos(t) * v1[i] + Math.sin(t) * v2[i]))); }
-  return planesFromPoints(pts);
-}
-/** 蛇腹の管：点の列（道筋）に沿って、短い筒（太い輪と細い芯）を交互に並べる */
-function bellows(path, name, rr = 0.026, rc = 0.02) {
-  const out = [];
-  for (let i = 0; i + 1 < path.length; i++) {
-    const a = path[i], b = path[i + 1], m = a.map((v, k) => (v + b[k]) / 2);
-    out.push(piece(`${name}の芯 ${i + 1}`, tube(a, b, rc), { color: BLACK }));
-    const q = a.map((v, k) => v + (m[k] - v) * 0.25), w = a.map((v, k) => v + (m[k] - v) * 1.75);
-    out.push(piece(`${name}の輪 ${i + 1}`, tube(q, w, rr), { color: DARK }));
-  }
-  return out;
-}
 /** 腰のまわりの楕円の弧（上から見て）：θ は前 0°・横 90°・後ろ 180°、半径 rx・rz、高さ y。n 分割の点の列（+x 側） */
 const arc = (th0, th1, rx, rz, y, n) => Array.from({ length: n + 1 }, (_, i) => { const t = (th0 + (th1 - th0) * i / n) * Math.PI / 180; return [rx * Math.sin(t), y, rz * Math.cos(t)]; });
 const mirX = pts => pts.map(p => [-p[0], p[1], p[2]]);
-/** 管の端の受け：管の端から帯へ届く暗い小さな箱（半分の大きさ h。帯の側＝原点寄りへ 3 割伸ばす） */
-const fitting = (p, name, h = 0.022) => {
-  // x・z は管の端から原点寄りへ 3 割（左右どちらの側でも、管の端と帯の両方を含む向きに）
-  const span = v => [Math.min(v, v * 0.7) - h, Math.max(v, v * 0.7) + h];
-  const [x0, x1] = span(p[0]), [z0, z1] = span(p[2]);
-  const pts = []; for (const x of [x0, x1]) for (const y of [p[1] - h, p[1] + h]) for (const z of [z0, z1]) pts.push([x, y, z]);
-  return piece(name, planesFromPoints(pts), { color: DARK });
-};
 /** 動力パイプ：左右に 1 本ずつ。rr 輪の半径（太さ）、rc 芯の半径、y 高さ、rx・rz 腰のまわりの楕円の半径、n 輪の数 */
 const pipePair = (y, rr, rc, n, tag0 = '', rx = 0.39 + rr, rz = 0.275 + rr, th0 = 150, th1 = 35) => [1, -1].flatMap(s => {
   const path = arc(th0, th1, rx, rz, y, n), p = s > 0 ? path : mirX(path), tag = `${tag0}${s > 0 ? '（+x）' : '（−x）'}`;
