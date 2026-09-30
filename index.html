@@ -514,7 +514,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '6be0441';
+const BUILD = '01c35aa';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -1122,7 +1122,8 @@ function renderProps() {
     <label class="check"><input type="checkbox" id="pTeam" ${p.team ? 'checked' : ''}> 陣営色で塗る（マテリアル team_color）</label>
     <label class="check"><input type="checkbox" id="pGlow" ${isGlow(p) ? 'checked' : ''}> 発光する（目・センサーなど）</label>
     ${p.kind === 'mesh' ? `<h2>取り込んだ形</h2><p class="hint">外から取り込んだ形（スキン用）です。形は描き直せませんが、位置・回転・拡大、質感は変えられます。どこで曲がるかは「関節と切り分け」で、関節の球を置いて決めます。${MESHES.has(p.mesh) ? '' : '（形を読み込み中、またはこのブラウザに形がありません）'}</p>
-    <div class="seg"><button id="pJoints" class="on" ${MESHES.has(p.mesh) ? '' : 'disabled'}>関節と切り分け（3 面図）</button></div>` : ''}
+    <div class="seg"><button id="pJoints" class="on" ${MESHES.has(p.mesh) ? '' : 'disabled'}>関節と切り分け（3 面図）</button></div>
+    <div class="seg"><button id="pBlocks" ${MESHES.has(p.mesh) ? '' : 'disabled'} title="骨ごとに形を塊に分け、塊ごとに正面・横・上から見た輪郭の重なりで部品にする（試作）">ブロックの部品に変換（試作）</button></div>` : ''}
     ${p.kind === 'hull' ? `<h2>面で作る部品</h2><p class="hint">平面の集まりで囲った形（${(p.planes ?? []).length} 面）です。頭ジェネレーターが作ります。形は描き直せませんが、位置・回転・拡大、辺の面取り、質感は変えられます。</p>` : ''}
     <div ${p.kind === 'mesh' || p.kind === 'hull' ? 'hidden' : ''}>
     <h2>断面 ${p.kind === 'extrude' ? '（押し出し）' : '（回転体：右半分を描く）'}</h2>
@@ -1153,6 +1154,10 @@ function renderProps() {
   $('#pGlow').onchange = e => { p.glow = e.target.checked; save(); };
   $('#pSnap').onchange = e => { snap = e.target.checked; };
   if ($('#pJoints')) $('#pJoints').onclick = () => openJointTool(p);
+  if ($('#pBlocks')) $('#pBlocks').onclick = async () => {
+    const n = await ask('この取り込んだ形を、ブロックの部品（約 100 個）に置き換えます。頭（首の球より上）は元の形のまま残します。ほかは形の細かい所やテクスチャの模様がなくなります（元に戻すで戻せます）。', { ok: '変換する' });
+    if (n) meshToBlocks(p);
+  };
   for (const b of document.querySelectorAll('#pFace button')) b.onclick = () => { profileFace = b.dataset.face; renderProps(); };
   $('#bDup').onclick = () => duplicatePart(p.id);
   $('#bDel').onclick = () => deletePart(p.id);
@@ -3161,6 +3166,234 @@ function capCuts(entry, idx, faceBone, src, pos, nor, uv, si, from, out) {
     }
   }
 }
+// ---- an imported shape turned into the editor's own parts. Each bone's surface is split into lumps made of whole
+// plates (faces between creases, as the joint tool's plates), grouped by where they are, which way they face and their
+// colour (k-means over the plates, about `target` lumps in all). Each lump becomes an extruded part turned to the lump's
+// own axes (its longest and thinnest directions; set on the figure's axes when within 15 degrees of them), a box as big
+// as the lump along those axes, coloured by the texture under it, on the lump's bone.
+async function meshToBlocks(p, target = 100) {
+  const entry = MESHES.get(p.mesh);
+  if (!entry) return;
+  if (p.joints) applyJoints(p); else if (!entry.geo.attributes.skinIndex) { ensureJoints(p); applyJoints(p); }
+  const g = entry.geo, P = g.attributes.position, SI = g.attributes.skinIndex, UV = g.attributes.uv, I = g.index.array;
+  const { id: plateOf } = platesOf(entry, 35), F0 = entry.base.index.count / 3;   // (the split mesh keeps the unsplit mesh's faces first, in order; caps come after)
+  p.proxy.updateMatrixWorld();
+  const M = p.proxy.matrixWorld, v = new THREE.Vector3();
+  const world = new Float32Array(P.count * 3);
+  for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(M); world[i * 3] = v.x; world[i * 3 + 1] = v.y; world[i * 3 + 2] = v.z; }
+  // the head is kept as it was (the face is what a robot is known by; boxes lose it): what is above the neck joint and
+  // within one and a half times its radius of it (move or size the neck's sphere in the joint tool to change what is kept)
+  const Jn = p.joints?.neck ?? (p.rig?.head ? { p: p.rig.head, r: 0.16 } : null);
+  const neck = Jn ? V3(Jn.p).applyMatrix4(M) : null, HR = (Jn?.r ?? 0.16) * 1.5;
+  const inHead = (x, y, z) => !!neck && y > neck.y && Math.hypot(x - neck.x, z - neck.z) < HR;
+  const faceInHead = (pos, idx, t) => { const c3 = [0, 1, 2].map(k => (pos[idx[t] * 3 + k] + pos[idx[t + 1] * 3 + k] + pos[idx[t + 2] * 3 + k]) / 3); return inHead(...c3); };
+  let pix = null;
+  const TW = 256, img = entry.tex?.image;
+  if (img) {
+    const cv = document.createElement('canvas'); cv.width = cv.height = TW;
+    const x = cv.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, TW, TW);
+    pix = x.getImageData(0, 0, TW, TW).data;
+  }
+  // plates (per bone): area, centre, facing, colour, faces
+  const plates = new Map();   // key bone:plate -> plate
+  let total = 0;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+  for (let t = 0; t < Math.min(I.length, F0 * 3); t += 3) {
+    a.fromArray(world, I[t] * 3); b.fromArray(world, I[t + 1] * 3); c.fromArray(world, I[t + 2] * 3);
+    n.subVectors(b, a).cross(c.clone().sub(a));
+    const area = n.length() / 2;
+    if (area < 1e-9 || faceInHead(world, I, t)) continue;
+    n.normalize();
+    const bone = IMPORT_BONES[SI.getX(I[t])] ?? 'torso', key = bone + ':' + plateOf[t / 3];
+    let pl = plates.get(key);
+    if (!pl) plates.set(key, pl = { bone, a: 0, c: [0, 0, 0], n: [0, 0, 0], col: [0, 0, 0], faces: [] });
+    pl.a += area; pl.faces.push(t);
+    pl.c[0] += (a.x + b.x + c.x) / 3 * area; pl.c[1] += (a.y + b.y + c.y) / 3 * area; pl.c[2] += (a.z + b.z + c.z) / 3 * area;
+    pl.n[0] += n.x * area; pl.n[1] += n.y * area; pl.n[2] += n.z * area;
+    if (pix) {
+      const u = (UV.getX(I[t]) + UV.getX(I[t + 1]) + UV.getX(I[t + 2])) / 3, w = (UV.getY(I[t]) + UV.getY(I[t + 1]) + UV.getY(I[t + 2])) / 3;
+      const o = (Math.min(TW - 1, Math.max(0, Math.floor(w * TW))) * TW + Math.min(TW - 1, Math.max(0, Math.floor(u * TW)))) * 4;
+      pl.col[0] += pix[o] * area; pl.col[1] += pix[o + 1] * area; pl.col[2] += pix[o + 2] * area;
+    }
+    total += area;
+  }
+  const byBone = new Map();
+  for (const pl of plates.values()) {
+    pl.c = pl.c.map(x => x / pl.a); const nl = Math.hypot(...pl.n) || 1; pl.n = pl.n.map(x => x / nl); pl.col = pl.col.map(x => x / pl.a / 255);
+    (byBone.get(pl.bone) ?? byBone.set(pl.bone, []).get(pl.bone)).push(pl);
+  }
+  // the feature a plate is grouped by: where it is (figure units, 3 tall), which way it faces, its colour
+  const WN = 0.25, WC = 0.6;
+  const feat = pl => [pl.c[0], pl.c[1], pl.c[2], pl.n[0] * WN, pl.n[1] * WN, pl.n[2] * WN, pl.col[0] * WC, pl.col[1] * WC, pl.col[2] * WC];
+  const d2 = (m, q) => { let s2 = 0; for (let i = 0; i < m.length; i++) s2 += (m[i] - q[i]) ** 2; return s2; };
+  // 3 x 3 symmetric eigen vectors (Jacobi), columns sorted by eigen value, largest first
+  const eigen = A => {
+    const m = A.map(r => r.slice()), V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    for (let sweep = 0; sweep < 20; sweep++) for (const [p0, q] of [[0, 1], [0, 2], [1, 2]]) {
+      if (Math.abs(m[p0][q]) < 1e-12) continue;
+      const th = (m[q][q] - m[p0][p0]) / (2 * m[p0][q]), t2 = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1)), cs = 1 / Math.sqrt(t2 * t2 + 1), sn = t2 * cs;
+      for (let k = 0; k < 3; k++) { const x = m[k][p0], y = m[k][q]; m[k][p0] = cs * x - sn * y; m[k][q] = sn * x + cs * y; }
+      for (let k = 0; k < 3; k++) { const x = m[p0][k], y = m[q][k]; m[p0][k] = cs * x - sn * y; m[q][k] = sn * x + cs * y; }
+      for (let k = 0; k < 3; k++) { const x = V[k][p0], y = V[k][q]; V[k][p0] = cs * x - sn * y; V[k][q] = sn * x + cs * y; }
+    }
+    return [0, 1, 2].sort((i, j) => m[j][j] - m[i][i]).map(i => new THREE.Vector3(V[0][i], V[1][i], V[2][i]).normalize());
+  };
+  const SNAP = Math.cos(22 * Math.PI / 180);
+  const group = bone => bone.replace(/_[lr]$/, '').replace('forearm', 'fore');
+  // each bone's frame: a limb (arm, forearm, leg, shin, wing) along its length (its surface's longest direction), the front
+  // kept as near +Z as it can; the body, the hips and the head on the figure's own axes
+  const boneFrame = (bone, list) => {
+    const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
+    if (!/arm|leg|shin|wing/.test(bone)) return [X, Y, Z];
+    let wsum = 0; const m = new THREE.Vector3();
+    for (const pl of list) { m.addScaledVector(new THREE.Vector3(...pl.c), pl.a); wsum += pl.a; }
+    m.divideScalar(wsum);
+    const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (const pl of list) { const d = [pl.c[0] - m.x, pl.c[1] - m.y, pl.c[2] - m.z]; for (let r = 0; r < 3; r++) for (let s3 = 0; s3 < 3; s3++) C[r][s3] += d[r] * d[s3] * pl.a; }
+    const L = eigen(C)[0];
+    if (L.dot(Y) < 0) L.negate();
+    const f = Math.abs(L.dot(Z)) > 0.9 ? X.clone() : Z.clone();
+    f.sub(L.clone().multiplyScalar(f.dot(L))).normalize();
+    return [new THREE.Vector3().crossVectors(L, f).normalize(), L, f];
+  };
+  const made = [];
+  for (const [bone, list] of byBone) {
+    const frame = boneFrame(bone, list), limb = /arm|leg|shin|wing/.test(bone);
+    // the body's plates are set on the figure's axes more readily than a limb's (a chest is built square)
+    const snap = limb ? SNAP : Math.cos(35 * Math.PI / 180);
+    const area = list.reduce((s2, pl) => s2 + pl.a, 0);
+    // the head is small but it is the face: three times its share of lumps, six at least
+    const k = Math.max(1, Math.min(list.length, bone === 'head' ? Math.max(6, Math.round(target * area / total * 3)) : Math.round(target * area / total)));
+    // a core: a dark box on the bone's frame inside its surface, so the gaps between the plates show no background
+    {
+      const vs = [];
+      for (const pl of list) for (const t of pl.faces) for (let q = 0; q < 3; q++) { const vi = I[t + q]; vs.push(new THREE.Vector3(world[vi * 3], world[vi * 3 + 1], world[vi * 3 + 2])); }
+      const lc = vs.map(q => frame.map(ax => q.dot(ax)));
+      const rng = i => { const s3 = lc.map(q => q[i]).sort((m, o) => m - o), cut = Math.floor(s3.length * 0.12); return [s3[cut], s3[s3.length - 1 - cut]]; };
+      const r = [0, 1, 2].map(rng), sz = r.map(([l, h]) => Math.max(0.02, (h - l) * 0.8)), cm = r.map(([l, h]) => (l + h) / 2);
+      if (vs.length && Math.min(...sz) > 0.03) {
+        const ctr = frame[0].clone().multiplyScalar(cm[0]).addScaledVector(frame[1], cm[1]).addScaledVector(frame[2], cm[2]);
+        const e = new THREE.Euler().setFromRotationMatrix(new THREE.Matrix4().makeBasis(...frame));
+        const w = sz[0] / 2, h = sz[1] / 2;
+        made.push({ ...DEFAULTS, name: `${BONE_LABEL[bone] ?? bone}・芯`, kind: 'extrude', pts: [[-w, -h], [w, -h], [w, h], [-w, h]].map(q => q.map(x => +x.toFixed(4))),
+          depth: +sz[2].toFixed(4), pos: ctr.toArray().map(x => +x.toFixed(4)), rot: [e.x, e.y, e.z].map(x => +x.toFixed(4)), scl: [1, 1, 1],
+          bevel: 0, bevelSegs: 1, corner: +Math.min(0.03, Math.min(...sz) * 0.2).toFixed(4), color: '#34383f', metal: 0.4, rough: 0.7, bone: group(bone) });
+      }
+    }
+    // (a plate counts by the square root of its size: a detailed place, many small plates, as a face, draws lumps too)
+    // the bone's surface in its separate pieces (plates sharing a corner are one piece): each piece gets its own lumps,
+    // by the square root of its size, so a small piece (a head beside a backpack on the same bone) is not swallowed
+    const key = vi => `${Math.round(world[vi * 3] * 1e4)},${Math.round(world[vi * 3 + 1] * 1e4)},${Math.round(world[vi * 3 + 2] * 1e4)}`;
+    const up = list.map((_, i) => i), root = i => { while (up[i] !== i) i = up[i] = up[up[i]]; return i; };
+    const owner = new Map();
+    list.forEach((pl, i) => { for (const t of pl.faces) for (let q = 0; q < 3; q++) { const kk = key(I[t + q]), o = owner.get(kk); if (o === undefined) owner.set(kk, i); else up[root(o)] = root(i); } });
+    const pieces = new Map();
+    list.forEach((pl, i) => (pieces.get(root(i)) ?? pieces.set(root(i), []).get(root(i))).push(pl));
+    const pcs = [...pieces.values()].map(ps => ({ ps, a: ps.reduce((s2, pl) => s2 + pl.a, 0) }));
+    const sq = pcs.reduce((s2, pc) => s2 + Math.sqrt(pc.a), 0);
+    const lumps = [];
+    for (const { ps, a: pa } of pcs) {
+      const kp = Math.max(1, Math.min(ps.length, Math.round(k * Math.sqrt(pa) / sq)));
+      const fs = ps.map(feat);
+      // seeds: the biggest plate, then the farthest (weighted by size) each time
+      const cent = [fs[ps.reduce((bi, pl, i) => (pl.a > ps[bi].a ? i : bi), 0)].slice()];
+      while (cent.length < kp) { let far = 0, fd = -1; fs.forEach((f, i) => { const d = Math.min(...cent.map(q => d2(q, f))) * Math.sqrt(ps[i].a); if (d > fd) { fd = d; far = i; } }); cent.push(fs[far].slice()); }
+      const lab = new Int32Array(ps.length);
+      for (let it = 0; it < 15; it++) {
+        fs.forEach((f, i) => { let bi = 0, bd = Infinity; cent.forEach((q, j) => { const d = d2(q, f); if (d < bd) { bd = d; bi = j; } }); lab[i] = bi; });
+        const sum = Array.from({ length: kp }, () => new Array(10).fill(0));
+        fs.forEach((f, i) => { const q = sum[lab[i]], w = Math.sqrt(ps[i].a); for (let d = 0; d < 9; d++) q[d] += f[d] * w; q[9] += w; });
+        sum.forEach((q, j) => { if (q[9] > 0) cent[j] = q.slice(0, 9).map(x => x / q[9]); });
+      }
+      for (let j = 0; j < kp; j++) { const m = ps.filter((_, i) => lab[i] === j); if (m.reduce((s2, pl) => s2 + pl.a, 0) > total * 0.001) lumps.push(m); }   // (a crumb is left out)
+    }
+    for (let j = 0; j < lumps.length; j++) {
+      const mine = lumps[j];
+      const pts = [];
+      for (const pl of mine) for (const t of pl.faces) for (let q = 0; q < 3; q++) { const vi = I[t + q]; pts.push(new THREE.Vector3(world[vi * 3], world[vi * 3 + 1], world[vi * 3 + 2])); }
+      const mean = pts.reduce((s2, q) => s2.add(q), new THREE.Vector3()).divideScalar(pts.length);
+      const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+      for (const q of pts) { const d = [q.x - mean.x, q.y - mean.y, q.z - mean.z]; for (let r = 0; r < 3; r++) for (let s3 = 0; s3 < 3; s3++) C[r][s3] += d[r] * d[s3]; }
+      // the lump's own axes: x along its length, y across, z through its thinnest (the extrusion)
+      const [ex, ey] = eigen(C), ez = new THREE.Vector3().crossVectors(ex, ey).normalize();
+      ey.crossVectors(ez, ex).normalize();
+      // axes near the bone's own (within SNAP) are set on them: the length first, then across
+      const nearAxis = (d, not) => {
+        let best = null, bd = -1;
+        for (const w of frame) { const u = w.clone(); if (not && Math.abs(u.dot(not)) > 0.5) continue; const k2 = Math.abs(d.dot(u)); if (k2 > bd) { bd = k2; best = u.multiplyScalar(Math.sign(d.dot(u)) || 1); } }
+        return bd > snap ? best : null;
+      };
+      const sx = nearAxis(ex);
+      if (sx) { ex.copy(sx); ey.sub(ex.clone().multiplyScalar(ey.dot(ex))).normalize(); }
+      const sy = nearAxis(ey, ex);
+      if (sy) { ey.copy(sy); ex.sub(ey.clone().multiplyScalar(ex.dot(ey))).normalize(); }
+      ez.crossVectors(ex, ey).normalize();
+      const R = new THREE.Matrix4().makeBasis(ex, ey, ez);
+      const loc = pts.map(q => { const d = q.clone().sub(mean); return [d.dot(ex), d.dot(ey), d.dot(ez)]; });
+      // a box: the lump's extent along its axes, a few stray corners (a thin spike) left out
+      const qt = i => { const s3 = loc.map(q => q[i]).sort((m, o) => m - o), cut = Math.floor(s3.length * 0.06); return [s3[cut], s3[s3.length - 1 - cut]]; };
+      const [lo, hi] = [0, 1, 2].map(qt).reduce((r, [l, h]) => (r[0].push(l), r[1].push(h), r), [[], []]);
+      // a lump that mostly faces one way is a plate of armour, not a solid: the box keeps to its outer side, only as thick
+      // as a plate (a quarter of its width, at most), instead of filling the curve behind it
+      const nrm = new THREE.Vector3(), aw = mine.reduce((s2, pl) => s2 + pl.a, 0);
+      for (const pl of mine) nrm.addScaledVector(new THREE.Vector3(...pl.n), pl.a / aw);
+      if (nrm.length() > 0.6) {
+        const ax = [ex, ey, ez], ti = [0, 1, 2].reduce((bi, i) => (Math.abs(nrm.dot(ax[i])) > Math.abs(nrm.dot(ax[bi])) ? i : bi), 0);
+        const others = [0, 1, 2].filter(i => i !== ti).map(i => hi[i] - lo[i]);
+        const th = Math.max(0.03, Math.min(...others) * 0.25);
+        if (hi[ti] - lo[ti] > th) { if (nrm.dot(ax[ti]) > 0) lo[ti] = hi[ti] - th; else hi[ti] = lo[ti] + th; }
+      }
+      const mid = lo.map((l, i) => (l + hi[i]) / 2), size = hi.map((h, i) => Math.max(0.01, h - lo[i]));
+      if (Math.max(...size) < 0.02) continue;
+      const ctr = mean.clone().add(ex.clone().multiplyScalar(mid[0])).add(ey.clone().multiplyScalar(mid[1])).add(ez.clone().multiplyScalar(mid[2]));
+      // a box from below the neck that rises in front of the face is cut down to the neck's height
+      if (neck) {
+        const ax = [ex, ey, ez], top = ctr.y + ax.reduce((s2, u, i) => s2 + Math.abs(u.y) * size[i] / 2, 0);
+        if (ctr.y < neck.y && top > neck.y && Math.hypot(ctr.x - neck.x, ctr.z - neck.z) < HR * 2.5) {
+          const i = [0, 1, 2].reduce((bi, q) => (Math.abs(ax[q].y) > Math.abs(ax[bi].y) ? q : bi), 0);
+          const cut = Math.min(size[i] * 0.8, (top - neck.y) / Math.abs(ax[i].y));
+          size[i] -= cut; ctr.addScaledVector(ax[i], -Math.sign(ax[i].y) * cut / 2);
+        }
+      }
+      const r0 = Math.min(...size);
+      const e = new THREE.Euler().setFromRotationMatrix(R);
+      const colr = [0, 1, 2].map(i => mine.reduce((s2, pl) => s2 + pl.col[i] * pl.a, 0) / mine.reduce((s2, pl) => s2 + pl.a, 0));
+      const hex = pix ? '#' + colr.map(x => Math.round(Math.min(1, Math.max(0, x)) * 255).toString(16).padStart(2, '0')).join('') : '#c8ccd4';
+      const w = size[0] / 2, h = size[1] / 2;
+      made.push({ ...DEFAULTS, name: `${BONE_LABEL[bone] ?? bone}・${j + 1}`, kind: 'extrude', pts: [[-w, -h], [w, -h], [w, h], [-w, h]].map(q => q.map(x => +x.toFixed(4))),
+        depth: +size[2].toFixed(4), pos: ctr.toArray().map(x => +x.toFixed(4)), rot: [e.x, e.y, e.z].map(x => +x.toFixed(4)), scl: [1, 1, 1],
+        bevel: +Math.min(0.02, r0 * 0.15).toFixed(4), bevelSegs: 1, corner: +Math.min(0.03, r0 * 0.2).toFixed(4), color: hex, metal: 0.3, rough: 0.6, bone: group(bone) });
+    }
+  }
+  if (!made.length) return;
+  // the kept head: its own mesh (LOD0 and LOD1), on the imported bones as before
+  if (neck && entry.geo.attributes.skinIndex) {
+    const rec = await dbGet('mesh', p.mesh);
+    const Mp = new THREE.Matrix4().compose(V3(p.pos), new THREE.Quaternion().setFromEuler(new THREE.Euler(...p.rot)), V3(p.scl));
+    const wpos = new Float32Array(rec.pos.length);
+    for (let i = 0; i < rec.pos.length; i += 3) { v.fromArray(rec.pos, i).applyMatrix4(Mp); wpos[i] = v.x; wpos[i + 1] = v.y; wpos[i + 2] = v.z; }
+    const keep = idx => [...Array(idx.length / 3).keys()].filter(t => faceInHead(wpos, idx, t * 3));
+    const t0 = keep(rec.index), t1 = keep(rec.lod1);
+    if (t0.length) {
+      const m = regionMesh(rec, t0), l = regionMesh({ ...rec, index: rec.lod1 }, t1.length ? t1 : t0);
+      const join = (A, B, T) => { const o = new T(A.length + B.length); o.set(A); o.set(B, A.length); return o; };
+      const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      await dbPut('mesh', id, {
+        pos: join(m.pos, l.pos, Float32Array), nor: join(m.nor, l.nor, Float32Array), uv: join(m.uv, l.uv, Float32Array),
+        index: m.index, lod1: new Uint32Array(l.index.map(i => i + m.pos.length / 3)), texId: rec.texId,
+        skinI: join(m.skinI, l.skinI, Uint16Array), skinW: join(m.skinW, l.skinW, Float32Array),
+      });
+      made.unshift({ ...DEFAULTS, name: '頭（元の形）', kind: 'mesh', mesh: id, bone: p.bone, rig: p.rig, pos: p.pos.slice(), rot: p.rot.slice(), scl: p.scl.slice(),
+        color: p.color, metal: p.metal, rough: p.rough, fromBones: true });
+    }
+  }
+  const at = parts.indexOf(p);
+  proxyGroup.remove(p.proxy); p._geo?.dispose();
+  parts.splice(at, 1, ...made.map(d => makePart(d)));
+  select(null); scheduleRebuild(); save();
+  return made.length;
+}
+
 // cut, paint and store: the skin (LOD0 and LOD1), the rig and the right hand; rebuild the view
 function applyJoints(p) {
   const entry = MESHES.get(p.mesh);
