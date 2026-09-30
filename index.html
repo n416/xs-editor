@@ -129,8 +129,11 @@ input[type=text] { width: 100%; background: var(--panel2); color: var(--text); b
 #jtNote { color: var(--dim); font-size: 12px; }
 #jtNote.ng { color: #ff8b8b; }
 @media (max-width: 760px) { .jtviews { grid-template-columns: 1fr; } }
-#share, #aiBox, #start { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 10; padding: 16px; }
-#share[hidden], #aiBox[hidden], #start[hidden] { display: none; }
+.rgsteps { padding-left: 20px; display: flex; flex-direction: column; gap: 12px; }
+.rgsteps label { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.rgsteps label input[type=text] { flex: 1; }
+#share, #aiBox, #start, #rigBox { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 10; padding: 16px; }
+#share[hidden], #aiBox[hidden], #start[hidden], #rigBox[hidden] { display: none; }
 #msgBox { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; z-index: 30; padding: 16px; }
 #msgBox[hidden] { display: none; }
 #msgBox .mbox { width: min(460px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
@@ -301,6 +304,7 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
           <button id="bShare">みんなの機体</button>
           <button id="bAi">AIで作る</button>
           <button id="bImport" title="Blender などで作った .glb を、部位ごとの部品に分けて取り込む（スキン）">外の形を取り込む（glb）</button>
+          <button id="bRigAi" title="パソコンの AI（Claude など）に Blender で骨を付けてもらい、できた .glb を取り込む">AI に骨を付けてもらう（Blender）</button>
           <input type="file" id="importFile" accept=".glb,.gltf,model/gltf-binary" hidden>
           <hr>
           <button id="bExport">GLB書き出し</button>
@@ -334,6 +338,20 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
     <p class="hint">自分のサンプルはこのブラウザに保存されます。別のPCやブラウザに持っていくときは「ファイルに書き出す」を使ってください。</p>
   </div>
 </div>
+<div id="rigBox" hidden>
+  <div class="gbox">
+    <div class="ghead"><h1>AI に骨を付けてもらう（Blender）</h1><button id="rgClose">閉じる Esc</button></div>
+    <p class="hint">Blender を自分で触らずに、AI（Claude など）に Blender で骨を付けてもらいます。Blender が入っているパソコンで、ファイルを扱ってコマンドを動かせる AI（Claude Code など）を使ってください。</p>
+    <ol class="rgsteps">
+      <li><b>頼み方をコピー</b>：骨の名前・曲がる中心・部品の付け方・確かめ方・書き出し方が入った文章です
+        <label class="check"><input type="checkbox" id="rgWings"> 背中に翼がある（翼の骨も付ける）</label>
+        <button id="rgCopy" class="on">頼み方をコピー</button> <span id="rgNote" class="hint"></span></li>
+      <li><b>AI に送る</b>：骨を付けたい .glb を AI に添付して、コピーした文章を貼って送ります。AI が Blender で骨を付け、姿勢を付けた絵で確かめて、骨付きの .glb を作ります</li>
+      <li><b>取り込む</b>：できた .glb を読み込みます。付けた骨と割り当てがそのまま使われ、「姿勢」で曲がり方を見られます。直したい所は部品を選んで「関節と切り分け（3 面図）」で <button id="rgImport">できた .glb を取り込む</button></li>
+    </ol>
+  </div>
+</div>
+
 <div id="share" hidden>
   <div class="gbox">
     <div class="ghead"><h1>みんなの機体</h1><button id="sClose">閉じる Esc</button></div>
@@ -493,7 +511,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = 'b064b65';
+const BUILD = '13149c5';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -974,6 +992,7 @@ window.addEventListener('keydown', e => {
   if (!$('#msgBox').hidden) { if (e.key === 'Escape') $('#msgCancel').click(); return; }
   if (galleryOpen()) { if (e.key === 'Escape') closeGallery(); return; }
   if (!$('#share').hidden) { if (e.key === 'Escape') $('#share').hidden = true; return; }
+  if (!$('#rigBox').hidden) { if (e.key === 'Escape') $('#rigBox').hidden = true; return; }
   if (!$('#aiBox').hidden) { if (e.key === 'Escape') closeAi(); return; }
   if (!$('#start').hidden) { if (e.key === 'Escape') $('#start').hidden = true; return; }
   if (!$('#jointTool').hidden) {
@@ -3045,15 +3064,17 @@ function capCuts(entry, idx, faceBone, src, pos, nor, uv, si, from, out) {
       if (list) list.push(b); else dir.set(key, [b]);
     }
   }
-  // a bone's cut edges: its face runs u -> v, none of its own faces runs back v -> u, another bone's face does
-  const next = new Map();   // bone -> Map(u -> [v])
+  // a bone's open edges: its face runs u -> v and none of its own faces runs back v -> u. A cut edge (another bone's face
+  // runs back) or the rim of a hole the shape had anyway: a loop is walked through both, so a cut that meets such a
+  // hole still closes, but only a loop with a cut edge in it is capped
+  const next = new Map(), cut = new Set();   // bone -> Map(u -> [v]); 'bone:u:v' of the cut edges
   for (const [key, bones] of dir) {
     const u = Math.floor(key / K), v = key % K, back = dir.get(v * K + u);
-    if (!back) continue;
     for (const b of new Set(bones)) {
-      if (back.includes(b)) continue;
+      if (back?.includes(b)) continue;
       const m = next.get(b) ?? next.set(b, new Map()).get(b);
       (m.get(u) ?? m.set(u, []).get(u)).push(v);
+      if (back) cut.add(`${b}:${u}:${v}`);
     }
   }
   const P = src.position, a = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
@@ -3061,14 +3082,16 @@ function capCuts(entry, idx, faceBone, src, pos, nor, uv, si, from, out) {
     for (const start of [...m.keys()]) {
       while (m.get(start)?.length) {
         const loop = [start];
-        let cur = m.get(start).pop();
+        let cur = m.get(start).pop(), cuts = cut.has(`${b}:${start}:${cur}`) ? 1 : 0;
         while (cur !== start && loop.length < 4000) {
           loop.push(cur);
           const outs = m.get(cur);
           if (!outs?.length) { cur = -1; break; }
-          cur = outs.pop();
+          const nx = outs.pop();
+          if (cut.has(`${b}:${cur}:${nx}`)) cuts++;
+          cur = nx;
         }
-        if (cur !== start || loop.length < 3) continue;   // an open run (a tangle at a non-manifold corner): leave it
+        if (cur !== start || loop.length < 3 || !cuts) continue;   // an open run (a tangle at a non-manifold corner), or an old hole: leave it
         c.set(0, 0, 0);
         for (const w of loop) c.add(a.fromBufferAttribute(P, rep[w]));
         c.divideScalar(loop.length);
@@ -4305,6 +4328,67 @@ $('#bShare').onclick = async () => {
 };
 $('#sClose').onclick = () => { $('#share').hidden = true; };
 closeOnBackdrop($('#share'), () => { $('#share').hidden = true; });
+
+// ---------- AI に骨を付けてもらう: a request for an AI on the player's own computer (one that can read and write files and
+// run commands, with Blender installed) to rig a shape the way the game and this editor take it; the .glb it writes is
+// then imported as usual (its bones and weights are kept)
+$('#bRigAi').onclick = () => { $('#menuPop').hidden = true; $('#rigBox').hidden = false; $('#rgNote').textContent = ''; };
+$('#rgClose').onclick = () => { $('#rigBox').hidden = true; };
+closeOnBackdrop($('#rigBox'), () => { $('#rigBox').hidden = true; });
+$('#rgImport').onclick = () => { $('#rigBox').hidden = true; $('#importFile').click(); };
+$('#rgCopy').onclick = async () => {
+  const ok = await copyText(rigRequest($('#rgWings').checked));
+  $('#rgNote').textContent = ok ? 'コピーしました。AI に貼って送ってください' : 'コピーできませんでした（ブラウザがクリップボードを許していません）';
+};
+function rigRequest(wings) {
+  const bones = [
+    '| hips | 腰（骨盤）。しゃがむ・歩くときに上下する | なし（いちばん上） | 左右の股関節の真ん中 |',
+    '| torso | 胴（胸から上）。前後に傾き、左右にひねる | hips | 腰のくびれ（胸の下、ひねる所） |',
+    '| head | 頭（アンテナ・角・顔を含む） | torso | 首の付け根 |',
+    '| arm_l / arm_r | 上腕（肩の装甲を含む） | torso | 肩の球（腕が回る中心） |',
+    '| forearm_l / forearm_r | 前腕（ひじから先。手と、手に持った武器・腕に付いた盾を含む） | arm_l / arm_r | ひじ |',
+    '| leg_l / leg_r | 太もも | hips | 股関節 |',
+    '| shin_l / shin_r | すね（ひざから下。足を含む） | leg_l / leg_r | ひざ |',
+    ...(wings ? ['| wing_l / wing_r | 背中の左右の翼（羽・翼の付け根の装甲） | torso | 翼の付け根（開くときに回る中心） |'] : []),
+  ];
+  return `添付した人型ロボットの 3D モデル（.glb）に、Blender を使って骨を付けてください。ゲーム「XS オンライン」の自分の機体の見た目（スキン）にします。Blender はこのパソコンに入っています。画面を使わず、Blender をコマンド（blender -b -P スクリプト.py）で動かして作業してください（Blender が見つからなければ、入っている場所を私に聞いてください）。
+
+## ファイル
+- 元のモデル：添付した .glb。書き換えないでください。
+- できたモデル：「元の名前_骨付き.glb」として、元のモデルと同じフォルダ（分からなければ私が受け取れる場所）に書き出してください。
+
+## 骨（アーマチュア）
+骨の名前は次のとおりにしてください（ゲームとエディタはこの名前で骨を探します）。骨の付け根（ヘッド）の位置が、そこで曲がる中心です。骨の向き（テール）は自由です。
+| 骨の名前 | 動かす所 | 親 | 付け根（ヘッド）の位置 |
+|---|---|---|---|
+${bones.join('\n')}
+${wings ? '' : '背中の翼の骨は要りません（翼のような部品があれば torso に付けてください）。\n'}
+まずモデルの寸法と形を調べて、上の各関節の位置をモデルに合わせて決めてください（左右は対称に。_l がロボット自身の左）。
+
+## 部品の付け方（大事）
+- ロボットなので、関節の間の装甲の塊は、1 本の骨にまるごと（重み 1.0 で）付けます。1 つの頂点を 2 本の骨に分けてなめらかに曲げる付け方（自動のウェイト）はしないでください。
+- 1 枚の装甲の板を、途中で 2 本の骨に分けないでください。境目は板と板のすき間（溝）で分けます。
+- 手に持った銃や剣は、持っている腕の前腕（forearm）に付けます。腕に付いた盾も前腕です。腰のスカートの装甲は hips、腰から下げた武器は hips に付けます。
+- 3D 生成 AI で作ったモデルは、全体が 1 つにつながった面になっていることがあります。その場合は、骨の境目にあたる所で面を切り離し、切り口に開いた穴を面でふさいで、各部品を閉じた塊にしてください。こうしないと、曲げたときに面が引き伸ばされたり、中の空洞が見えたりします。
+
+## 確かめ方（書き出す前に必ず）
+1. 部品ごとに骨で色分けした絵を、正面・横・後ろから（正射影で）描き、どの部品がどの骨に付いたか確かめてください。
+2. 次の姿勢を付けて絵を描き、面が引き伸ばされていないか、部品が裂けて中の空洞が見えていないか、体から離れて浮いた部品がないかを確かめてください。
+   - 歩き：左の太ももを前へ 0.5 rad、右を後ろへ 0.5 rad、右のすねを後ろへ 0.6 rad 曲げる
+   - しゃがみ：両方の太ももを前へ 0.9 rad、両方のすねを後ろへ 1.5 rad、胴を後ろへ 0.2 rad
+   - ひねり：胴を左右に 1.5 rad ひねる
+   - 構え：右の上腕を前へ 1.45 rad 上げる、左の上腕を前へ 1.3 rad 上げる
+${wings ? '   - 翼を開く：左右の翼を外へ 0.5 rad 開いて、後ろへ 0.25 rad 上げる\n' : ''}3. おかしい所があれば、付け方か切り離し方を直して、もう一度確かめてください。直らない所があれば、最後にどこがおかしいかを教えてください。
+
+## 書き出し
+- 形式：glTF バイナリ（.glb）。「+Y Up」オン、「スキニング」オン、アニメーションはなし。テクスチャ（色の画像）は元のモデルのものをそのまま .glb に入れてください。
+- 三角形が 20 万を超えるときは、形が崩れない程度に減らしてから書き出してください（読み込むエディタが 2.7 万まで減らします）。
+- 大きさ・向き・位置は元のままで構いません（エディタが全高 3・足元・正面を合わせます）。
+
+## 終わったら
+できたファイルの場所と、各骨の付け根の位置、確かめた姿勢でおかしい所が残っていないかを教えてください。
+そのファイルは「XS部品エディタ」（${SPEC_URL.replace(/ai.md$/, '')}）の「≡ → 外の形を取り込む（glb）」で読み込みます。`;
+}
 
 // ---------- AIで作る: the request to hand an AI, pasting its JSON back, check results as text it can act on ----------
 // ai.md lives next to the page; a local copy (localhost / file) points the AI at the public one it can reach
