@@ -6,7 +6,7 @@ import { XL, XH, prismX, ellipsoid, piece, DARK } from '../../xsasm-lib.js';
 
 const J = { color: DARK, bone: 'torso' };
 const ball = r => piece('肩関節', ellipsoid([r, r, r], [0, 0, 0], 12, [-60, -30, 0, 30, 60, -85, 85]), { ...J, pivot: 'arm' });
-const socket = (r, x0 = -0.165) => piece('肩の軸受け', [...prismX(r, 8, 22.5), XL(x0), XH(-0.05)], { ...J, pivot: 'none' });
+const socket = (r, x0 = -0.165) => piece('肩の軸受け', [...prismX(r, 8, 22.5), XL(x0), XH(-0.085)], { ...J, pivot: 'none' });   // 球の表面の少し中まで（中空の肩アーマーの殻が回っても入らないよう、球の外へ出る長さは短く）
 export default [
   { id: 'shoulderjoint', name: '肩関節（球）', cat: '肩関節', size: [0.27, 0.2, 0.2], pieces: [ball(0.1), socket(0.07)] },
   { id: 'shoulderjointdrum', name: '肩関節（太い軸受け）', cat: '肩関節', size: [0.27, 0.22, 0.22],
