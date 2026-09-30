@@ -19,16 +19,17 @@ export function placementOf(def) {
 }
 
 /** 見本の組み立て：骨格図の標準の寸法（xsbody.js の makeSheet()）の置き場所に置く。左右の対は +x 側を置き、反対側は x の拡大 −1。
- *  skirts: [前, 横, 後ろ] のスカートの部品 id */
-const sample = (skirts = ['skirtfront', 'skirtside', 'skirtback']) => [
-  { part: 'waist', mov: [0, 1.77, 0] },
-  { part: 'belly', mov: [0, 2.0, 0] },
-  { part: 'skirtrear', mov: [0, 1.77, 0] },
-  { part: 'maekake', mov: [0, 1.77, 0] },
-  ...[1, -1].flatMap(s => ['hipjoint', 'hipbase', ...skirts].map(part => ({ part, mov: [s * HIP[0], HIP[1], HIP[2]], scal: [s, 1, 1] }))),
+ *  中央の部品 [腰, 腹, 後ろ腰, 前掛け]（null で置かない）と、左右の部品 [股関節, 脚の台, 前, 横, 後ろのスカート] の id */
+const sample = (mid = ['waist', 'belly', 'skirtrear', 'maekake'], sides = ['hipjoint', 'hipbase', 'skirtfront', 'skirtside', 'skirtback']) => [
+  ...mid.filter(Boolean).map(part => ({ part, mov: placementOf(lowerById[part]).mov })),
+  ...[1, -1].flatMap(s => sides.filter(Boolean).map(part => ({ part, mov: [s * HIP[0], HIP[1], HIP[2]], scal: [s, 1, 1] }))),
 ];
 export const SAMPLES = {
   '標準のスカート': sample(),
-  '長く大きいスカート': sample(['skirtfrontlong', 'skirtsidelong', 'skirtbacklong']),
+  '長く大きいスカート': sample(undefined, ['hipjoint', 'hipbase', 'skirtfrontlong', 'skirtsidelong', 'skirtbacklong']),
+  '重装（幅広・張り出し・ミサイルポッド）': sample(['waistbulge', 'bellyarmor', 'skirtrearbulge', 'maekakesquare'], ['hipjointdrum', 'hipbasebox', 'skirtfrontwide', 'skirtsidepod', 'skirtbackwide']),
+  '軽快（短い・細い帯・尖った裾）': sample(['waistthin', 'bellybellows', 'skirtrearthruster', 'maekakeclasp'], ['hipjointball', 'hipbasedisc', 'skirtfrontpoint', 'skirtsideshort', 'skirtbackshort']),
+  '短冊と 2 枚重ね': sample(['waistangular', 'belly', 'skirtrear', 'maekakelong'], ['hipjoint', 'hipbase', 'skirtfrontstrips', 'skirtsidestack', 'skirtbacklayer']),
+  '差し色の縁と翼形': sample(['waistbuckle', 'belly', 'skirtrear', null], ['hipjoint', 'hipbase', 'skirtfrontaccent', 'skirtsidewing', 'skirtbackaccent']),
 };
 export const SAMPLE = SAMPLES['標準のスカート'];
