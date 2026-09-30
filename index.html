@@ -303,6 +303,7 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
           <button id="bSample">サンプル集</button>
           <button id="bShare">みんなの機体</button>
           <button id="bAi">AIで作る</button>
+          <button id="bHeadGen" title="部品カタログから頭の殻・目・あご・トサカ・首などを置いて頭を組み、今の機体の頭と入れ替える（ランダムに組むこともできる）">頭ジェネレーター</button>
           <button id="bImport" title="Blender などで作った .glb を、部位ごとの部品に分けて取り込む（スキン）">外の形を取り込む（glb）</button>
           <button id="bRigAi" title="パソコンの AI（Claude など）に Blender で骨を付けてもらい、できた .glb を取り込む">AI に骨を付けてもらう（Blender）</button>
           <input type="file" id="importFile" accept=".glb,.gltf,model/gltf-binary" hidden>
@@ -488,6 +489,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { toCreasedNormals, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Brush, Evaluator, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
 import { MeshBVH } from 'three-mesh-bvh';
+import { openHeadAsm } from './xsasm-editor.js';
+import { buildHull, hullReach } from './hull.js';
 
 const $ = s => document.querySelector(s);
 // a question in the page's own dialog instead of the browser's confirm(): resolves true for the main button
@@ -511,7 +514,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = 'd38b626';
+const BUILD = '6be0441';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -601,6 +604,7 @@ const DEFAULTS = {
   segments: 24, arrayCount: 1, arrayStep: [0, 0.15, 0], metal: 0.55, rough: 0.38, blockout: false, bone: 'auto', team: false, glow: null, pivot: 'auto',
   pos: [0, 0, 0], rot: [0, 0, 0], scl: [1, 1, 1],
   side: null, top: null,   // extrude only: outlines seen from the side [[z, y], ...] and from above [[x, z], ...]; null = none
+  planes: null,            // kind 'hull' only: the planes of a convex solid [[nx, ny, nz, d, bevel?], ...] (hull.js); n·p ≤ d is kept
   mesh: null,              // kind 'mesh' only: the id of an imported mesh (IndexedDB), shown instead of an outline
   joint: null,             // imported meshes: where the bone this part rides on turns, in the part's own frame
   rig: null,               // a skinned imported mesh: { bone name: [x, y, z] } where each bone turns, in the part's frame
@@ -686,9 +690,18 @@ function latheLoop(p) {
 
 function buildLocalGeometry(p) {
   if (p.kind === 'mesh') return meshGeometry(p);
-  const key = JSON.stringify([p.kind, p.pts, p.depth, p.bevel, p.bevelSegs, p.corner, p.cornerSegs, p.taper, p.tiltY, p.ridge, p.segments, p.side, p.top]);
+  const key = JSON.stringify([p.kind, p.pts, p.depth, p.bevel, p.bevelSegs, p.corner, p.cornerSegs, p.taper, p.tiltY, p.ridge, p.segments, p.side, p.top, p.planes]);
   if (p._geoKey === key) return p._geo;
   let g;
+  if (p.kind === 'hull') {   // a convex solid cut out by its planes, its edges bevelled (hull.js)
+    const h = buildHull(p.planes ?? [], { bevel: p.bevel, bevelSegs: p.bevelSegs, reach: hullReach(p.planes ?? []) });
+    g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(h.positions, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(h.normals, 3));
+    p._geo?.dispose();
+    p._geo = g; p._geoKey = key;
+    return g;
+  }
   if (p.kind === 'extrude') {
     const pts = roundCorners(p.pts, p.corner, p.cornerSegs, true);
     const shape = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
@@ -1086,7 +1099,8 @@ function renderProps() {
     ['面の角度（正面を斜めにする）', [slider('厚みの傾き（上下）', 'tiltY', -3, 3, 0.05), slider('中央の盛り上がり', 'ridge', 0, 4, 0.05)]],
   );
   else if (p.kind === 'lathe') sliders.push(['回転体', [slider('分割数', 'segments', 3, 64, 1)]]);
-  if (p.kind !== 'mesh') sliders.push(['角（断面の頂点）', [slider('面取り幅', 'corner', 0, 0.5, 0.005), slider('段数', 'cornerSegs', 1, 8, 1)]]);
+  else if (p.kind === 'hull') sliders.push(['面で作る部品の辺', [slider('面取り幅', 'bevel', 0, 0.05, 0.001), slider('段数', 'bevelSegs', 1, 8, 1)]]);
+  if (p.kind !== 'mesh' && p.kind !== 'hull') sliders.push(['角（断面の頂点）', [slider('面取り幅', 'corner', 0, 0.5, 0.005), slider('段数', 'cornerSegs', 1, 8, 1)]]);
   sliders.push(
     ['繰り返し', [slider('個数', 'arrayCount', 1, 16, 1), slider('間隔 X', 'arrayStep', -1, 1, 0.01, 0),
       slider('間隔 Y', 'arrayStep', -1, 1, 0.01, 1), slider('間隔 Z', 'arrayStep', -1, 1, 0.01, 2)]],
@@ -1109,7 +1123,8 @@ function renderProps() {
     <label class="check"><input type="checkbox" id="pGlow" ${isGlow(p) ? 'checked' : ''}> 発光する（目・センサーなど）</label>
     ${p.kind === 'mesh' ? `<h2>取り込んだ形</h2><p class="hint">外から取り込んだ形（スキン用）です。形は描き直せませんが、位置・回転・拡大、質感は変えられます。どこで曲がるかは「関節と切り分け」で、関節の球を置いて決めます。${MESHES.has(p.mesh) ? '' : '（形を読み込み中、またはこのブラウザに形がありません）'}</p>
     <div class="seg"><button id="pJoints" class="on" ${MESHES.has(p.mesh) ? '' : 'disabled'}>関節と切り分け（3 面図）</button></div>` : ''}
-    <div ${p.kind === 'mesh' ? 'hidden' : ''}>
+    ${p.kind === 'hull' ? `<h2>面で作る部品</h2><p class="hint">平面の集まりで囲った形（${(p.planes ?? []).length} 面）です。頭ジェネレーターが作ります。形は描き直せませんが、位置・回転・拡大、辺の面取り、質感は変えられます。</p>` : ''}
+    <div ${p.kind === 'mesh' || p.kind === 'hull' ? 'hidden' : ''}>
     <h2>断面 ${p.kind === 'extrude' ? '（押し出し）' : '（回転体：右半分を描く）'}</h2>
     ${p.kind === 'extrude' ? `<div class="seg" id="pFace">${Object.entries(FACE_LABEL).map(([k, v]) => `<button data-face="${k}">${v}${k !== 'front' && p[FACE_KEY[k]] ? ' ●' : ''}</button>`).join('')}</div>
     <p class="hint" id="pFaceNote"></p>` : ''}
@@ -4816,11 +4831,16 @@ function checkAiParts(list) {
     if (!p || typeof p !== 'object' || Array.isArray(p)) return bad('{ } のオブジェクトではありません');
     for (const k of Object.keys(p)) if (!(k in DEFAULTS) && k !== 'gun') unknown.add(k);
     const kind = p.kind ?? 'extrude';
-    if (kind !== 'extrude' && kind !== 'lathe') return bad(`kind は "extrude" か "lathe" です（${JSON.stringify(p.kind)}）`);
+    if (kind !== 'extrude' && kind !== 'lathe' && kind !== 'hull') return bad(`kind は "extrude" か "lathe"（か、頭ジェネレーターの "hull"）です（${JSON.stringify(p.kind)}）`);
     if (p.op !== undefined && p.op !== 'add' && p.op !== 'sub') return bad(`op は "add" か "sub" です（${JSON.stringify(p.op)}）`);
+    if (kind === 'hull') {
+      const pl = p.planes;
+      if (!Array.isArray(pl) || pl.length < 4 || pl.length > 96 || !pl.every(q => Array.isArray(q) && (q.length === 4 || q.length === 5) && q.every(Number.isFinite))) return bad('planes は [[nx, ny, nz, d, 面取り?], ...] の 4〜96 個の数値の組です');
+    } else {
     const pts = p.pts, need = kind === 'extrude' ? 3 : 2;
     if (!Array.isArray(pts) || !pts.every(q => Array.isArray(q) && q.length === 2 && q.every(Number.isFinite))) return bad('pts は [[x, y], ...] の数値の組の一覧です');
     if (pts.length < need || pts.length > 128) return bad(`pts の点が ${pts.length} 個です（${need}〜128 個）`);
+    }
     for (const [k, [lo, hi]] of Object.entries(RANGES))
       if (p[k] !== undefined && !(Number.isFinite(p[k]) && p[k] >= lo && p[k] <= hi)) return bad(`${k} は ${lo}〜${hi} の数値です（${JSON.stringify(p[k])}）`);
     for (const k of ['pos', 'rot', 'scl', 'arrayStep'])
@@ -5046,6 +5066,26 @@ function closeAi() {
   }
 }
 $('#bAi').onclick = () => { if (isVehicle()) ask('AI で作るのは、今は XS だけです（艦の頼み方はまだありません）。', { cancel: null }); else openAi(); };
+// ---------- 頭ジェネレーター (xshead.js / xshead-ui.js): it builds ordinary parts and puts them in this scene ----------
+const headGenApi = {
+  parts: () => parts,
+  bone: p => boneGroupOf(p),
+  bounds: p => { const b = new THREE.Box3(); for (const g of worldGeometries(p)) b.union(g.boundingBox); return b.isEmpty() ? null : { min: b.min.toArray(), max: b.max.toArray() }; },
+  serialize,
+  add: list => list.map(d => { const p = makePart(d); parts.push(p); return p.id; }),
+  insertAt: (index, d) => { const p = makePart(d); parts.splice(Math.min(index, parts.length), 0, p); return p.id; },
+  removeIds: ids => {
+    const set = new Set(ids);
+    for (const p of parts) if (set.has(p.id)) { proxyGroup.remove(p.proxy); p._geo?.dispose(); }
+    parts = parts.filter(p => !set.has(p.id));
+    if (set.has(selectedId)) select(null);
+  },
+  refresh: () => { renderList(); scheduleRebuild(); },
+  commit: () => { select(null); renderList(); rebuild(); save(); },
+  ask,
+  look: (center, dist) => { orbit.target.set(center[0], center[1], center[2]); camera.position.set(center[0] + dist * 0.5, center[1] + dist * 0.3, center[2] + dist * 1.1); },
+};
+$('#bHeadGen').onclick = () => { $('#menuPop').hidden = true; if (isVehicle()) ask('頭ジェネレーターは XS 用です（艦には頭がありません）。', { cancel: null }); else openHeadAsm(headGenApi); };
 $('#aClose').onclick = closeAi;
 closeOnBackdrop($('#aiBox'), closeAi);
 
