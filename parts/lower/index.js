@@ -31,5 +31,19 @@ export const SAMPLES = {
   '軽快（短い・細い帯・尖った裾）': sample(['waistthin', 'bellybellows', 'skirtrearthruster', 'maekakeclasp'], ['hipjointball', 'hipbasedisc', 'skirtfrontpoint', 'skirtsideshort', 'skirtbackshort']),
   '短冊と 2 枚重ね': sample(['waistangular', 'belly', 'skirtrear', 'maekakelong'], ['hipjoint', 'hipbase', 'skirtfrontstrips', 'skirtsidestack', 'skirtbacklayer']),
   '差し色の縁と翼形': sample(['waistbuckle', 'belly', 'skirtrear', null], ['hipjoint', 'hipbase', 'skirtfrontaccent', 'skirtsidewing', 'skirtbackaccent']),
+  '左右が合わさるスカート': sample(['waist', 'belly', 'skirtrear', null], ['hipjoint', 'hipbase', 'skirtfrontjoined', 'skirtside', 'skirtbackjoined']),
 };
+
+/** ランダムに組む：部位ごとに 1 つ選ぶ。前スカートの系統（短い・長い・短冊など）を先に決め、後ろスカートも多くは同じ系統に、
+ *  長いスカートなら横も長くしやすく。左右が合わさる前スカートは前掛けと重なるので、前掛けは置かない（ほかも 4 回に 1 回は置かない） */
+export function randomLower(rnd = Math.random) {
+  const pick = list => list[Math.floor(rnd() * list.length)];
+  const ids = cat => LOWER.filter(p => p.cat === cat).map(p => p.id);
+  const front = pick(ids('前スカート'));
+  const fam = front.replace('skirtfront', '');
+  const back = lowerById['skirtback' + fam] && rnd() < 0.8 ? 'skirtback' + fam : pick(ids('後ろスカート'));
+  const side = fam === 'long' && rnd() < 0.7 ? 'skirtsidelong' : pick(ids('横スカート'));
+  const maekake = fam === 'joined' || rnd() < 0.25 ? null : pick(ids('前掛け'));
+  return sample([pick(ids('腰')), pick(ids('腹')), pick(ids('後ろ腰')), maekake], [pick(ids('股関節')), pick(ids('脚の台')), front, side, back]);
+}
 export const SAMPLE = SAMPLES['標準のスカート'];
