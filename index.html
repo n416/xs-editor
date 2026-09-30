@@ -511,7 +511,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '13149c5';
+const BUILD = 'd38b626';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -609,6 +609,7 @@ const DEFAULTS = {
                            //     (picks / unpicks: plates clicked, [{ p, n, a }]: the point, the face's normal, the crease angle)
                            //     (a lasso goes right through its view; subs: lassos cut out; skip: leave what earlier regions took)
   wings: null,             // ... whether it has wing joints
+  fromBones: null,         // ... imported with bones of its own: their weights are what is not given by hand (not the spheres)
   mid: null,               // ... and the x of its centre line (left and right spheres mirror about it; none = 0)
 };
 const FIELDS = Object.keys(DEFAULTS);
@@ -2746,7 +2747,7 @@ async function importModel(file) {
     rig.hand_r = hand.multiplyScalar(1 / n).toArray().map(v => +v.toFixed(5));   // m.pos is already centred
   }
   if (!usesWings) { delete rig.wing_l; delete rig.wing_r; }
-  const made = [{ ...DEFAULTS, name: '取り込んだ形', kind: 'mesh', mesh: id, bone: 'torso', rig, color: '#c8ccd4', metal: 0.3, rough: 0.6, pos: c.toArray().map(v => +v.toFixed(5)) }];
+  const made = [{ ...DEFAULTS, name: '取り込んだ形', kind: 'mesh', mesh: id, bone: 'torso', rig, color: '#c8ccd4', metal: 0.3, rough: 0.6, pos: c.toArray().map(v => +v.toFixed(5)), fromBones: src.skinI ? true : null }];
   return { made, inTris, outTris: lod0.length / 3, usesWings, rigged: !!src.skinI };
 }
 $('#bImport').onclick = () => { $('#menuPop').hidden = true; $('#importFile').click(); };
@@ -2942,7 +2943,7 @@ function regionMask(entry, rg) {
   for (let v = 0; v < T.n0; v++) out[v] = (picked[v] || inL[v]) && !inS[v] && !unpicked[v] ? 1 : 0;
   return out;
 }
-function cutAssign(entry, J, regions) {
+function cutAssign(entry, J, regions, fromBones = false) {
   const g = entry.base, P = g.attributes.position.array, I = g.index.array;
   let n0 = 0; for (let i = 0; i < I.length; i++) if (I[i] + 1 > n0) n0 = I[i] + 1;
   // weld corners that share a position (texture seams split them)
@@ -3004,6 +3005,15 @@ function cutAssign(entry, J, regions) {
   for (const rg of regions) {
     const b = IMPORT_BONES.indexOf(rg.bone), m = regionMask(entry, rg), was = hand.slice();
     for (let v = 0; v < n0; v++) { const w = weld[v]; if (m[v] && !(rg.skip && was[w])) { owner[w] = b; hand[w] = 1; } }
+  }
+  // a shape imported with bones of its own (rigged in Blender, by hand or by an AI): the rest keeps the bone it came
+  // with (each corner's heaviest), so fixing a few pieces by hand leaves everything else as it was
+  const SI = entry.base.attributes.skinIndex, SW = entry.base.attributes.skinWeight;
+  if (fromBones && SI && SW) for (let v = 0; v < n0; v++) {
+    const w = weld[v];
+    if (owner[w] >= 0) continue;
+    let best = 0; for (let k = 1; k < 4; k++) if (SW.getComponent(v, k) > SW.getComponent(v, best)) best = k;
+    owner[w] = SI.getComponent(v, best);
   }
   // the rest: each bone spreads from the figure's seeds, round what was given by hand
   for (const sd of jointSeeds(J)) push([0, nearestW(sd.p), IMPORT_BONES.indexOf(sd.bone)]);
@@ -3103,6 +3113,12 @@ function capCuts(entry, idx, faceBone, src, pos, nor, uv, si, from, out) {
         }
         if (n.lengthSq() < 1e-12) continue;
         n.normalize();
+        // a big twisted loop (a ragged border between bones, not a clean cut round a limb) would take a big dark sheet
+        // that sticks out when the joint bends: better left open (the figure is 3 tall; a clean cut round a limb or the
+        // waist is under 0.5 from its middle, or about flat)
+        let reach = 0, off = 0;
+        for (const w of loop) { a.fromBufferAttribute(P, rep[w]).sub(c); reach = Math.max(reach, a.length()); off = Math.max(off, Math.abs(a.dot(n))); }
+        if (reach > 0.5 && off > 0.5 * reach) continue;
         // flat across the loop seen along its normal, cut into triangles that do not overlap (ear clipping), in one dark
         // colour (the texture's darkest spot), so the end reads as a closed block, not a smear
         const t = Math.abs(n.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
@@ -3134,7 +3150,7 @@ function capCuts(entry, idx, faceBone, src, pos, nor, uv, si, from, out) {
 function applyJoints(p) {
   const entry = MESHES.get(p.mesh);
   if (!entry) return { conflicts: [] };
-  const J = p.joints, res = cutAssign(entry, J, p.regions ?? []);
+  const J = p.joints, res = cutAssign(entry, J, p.regions ?? [], !!p.fromBones);
   const g = entry.base, P = g.attributes.position.array, N = g.attributes.position.count;
   const vb = new Int8Array(N);   // every vertex's bone (LOD0 from the cut, LOD1 from the nearest LOD0 vertex)
   for (let v = 0; v < res.n0; v++) vb[v] = res.bone[v];
