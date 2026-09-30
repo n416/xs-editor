@@ -31,11 +31,12 @@ export const SAMPLES = {
   '軽快（短い・細い帯・尖った裾）': sample(['waistthin', 'bellybellows', 'skirtrearthruster', 'maekakeclasp'], ['hipjointball', 'hipbasedisc', 'skirtfrontpoint', 'skirtsideshort', 'skirtbackshort']),
   '短冊と 2 枚重ね': sample(['waistangular', 'belly', 'skirtrear', 'maekakelong'], ['hipjoint', 'hipbase', 'skirtfrontstrips', 'skirtsidestack', 'skirtbacklayer']),
   '差し色の縁と翼形': sample(['waistbuckle', 'belly', 'skirtrear', null], ['hipjoint', 'hipbase', 'skirtfrontaccent', 'skirtsidewing', 'skirtbackaccent']),
-  '左右が合わさるスカート': sample(['waist', 'belly', 'skirtrear', null], ['hipjoint', 'hipbase', 'skirtfrontjoined', 'skirtsidewrap', 'skirtbackjoined']),
+  '左右が合わさるスカート': sample(['waistwide', 'belly', 'skirtrearcenter', 'maekakecenter'], ['hipjoint', 'hipbase', 'skirtfrontjoined', 'skirtsidewrap', 'skirtbackjoined']),
 };
 
 /** ランダムに組む：部位ごとに 1 つ選ぶ。前スカートの系統（短い・長い・短冊など）を先に決め、後ろスカートも多くは同じ系統に、
- *  長いスカートなら横も長くしやすく。左右が合わさる前スカートは前掛けと重なるので、前掛けは置かない（ほかも 4 回に 1 回は置かない） */
+ *  長いスカートなら横も長くしやすく。左右が合わさるスカートは、幅広の帯・真ん中の動かない板（前掛け・後ろ腰）・前後とつながる横スカートで組む
+ *  （片方の脚で板が開いても穴があかない）。ほかは前掛けを 4 回に 1 回は置かない。真ん中の板はほかのスカートとは組まない */
 export function randomLower(rnd = Math.random) {
   const pick = list => list[Math.floor(rnd() * list.length)];
   const ids = cat => LOWER.filter(p => p.cat === cat).map(p => p.id);
@@ -44,7 +45,9 @@ export function randomLower(rnd = Math.random) {
   const back = fam === 'joined' ? 'skirtbackjoined' : lowerById['skirtback' + fam] && rnd() < 0.8 ? 'skirtback' + fam : pick(ids('後ろスカート').filter(id => id !== 'skirtbackjoined'));
   // 左右が合わさるスカートは、前後とつながる横スカートでまわりを埋める（すき間が空かないように）
   const side = fam === 'joined' ? 'skirtsidewrap' : fam === 'long' && rnd() < 0.7 ? 'skirtsidelong' : pick(ids('横スカート').filter(id => id !== 'skirtsidewrap'));
-  const maekake = fam === 'joined' || rnd() < 0.25 ? null : pick(ids('前掛け'));
-  return sample([pick(ids('腰')), pick(ids('腹')), pick(ids('後ろ腰')), maekake], [pick(ids('股関節')), pick(ids('脚の台')), front, side, back]);
+  const maekake = fam === 'joined' ? 'maekakecenter' : rnd() < 0.25 ? null : pick(ids('前掛け').filter(id => id !== 'maekakecenter'));
+  const rear = fam === 'joined' ? 'skirtrearcenter' : pick(ids('後ろ腰').filter(id => id !== 'skirtrearcenter'));
+  const waist = fam === 'joined' ? 'waistwide' : pick(ids('腰').filter(id => id !== 'waistwide'));
+  return sample([waist, pick(ids('腹')), rear, maekake], [pick(ids('股関節')), pick(ids('脚の台')), front, side, back]);
 }
 export const SAMPLE = SAMPLES['標準のスカート'];

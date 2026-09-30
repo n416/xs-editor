@@ -14,10 +14,11 @@ const TOP = 0.155;                                                  // 板の上
  * crownX 横の反り、panels 一段高いパネル [[上の y, 下の y], ...]、rim 裾の厚い縁の高さ（0 で無し）、rimColor その色、
  * veeK 下の縁の V の深さ（大きいほど尖る）、layer 重ねる上の板の下の縁の y（0 で無し）、strips 縦の短冊に割る数（1 で割らない）、
  * hingeZ 蝶番の前後の位置、spreadIn 内側の縁の下での広がり（無ければ spread）、center 反りと V の中心の x（無ければ板の中央）、
- * panelC パネルの中心の x（無ければ center）
+ * panelC パネルの中心の x（無ければ center）、segs 反りに沿わせて縦に割る数（反りの中心が板の外にあると 1 枚の平らな裏では
+ * 外ほど前の面が裏より後ろへ回って板が消えるので、割った各本の裏の面をその位置の前の面に平行にする。継ぎ目は重ねる）
  */
 export function frontSkirt({ id, name, bottom = -0.26, x0 = -0.06, x1 = 0.12, spread = 0.015, lean = 0.2, crownX = 2, panels = [[0.1, -0.2]], rim = 0, rimColor = DARK,
-  veeK = 0.3, layer = 0, strips = 1, hingeZ = 0.2, spreadIn = spread, center, panelC }) {
+  veeK = 0.3, layer = 0, strips = 1, hingeZ = 0.2, spreadIn = spread, center, panelC, segs = 1 }) {
   const C = center ?? (x0 + x1) / 2, PC = panelC ?? C, len = TOP - bottom, k = spread / len, kIn = spreadIn / len, dz = hingeZ - 0.2;
   const HINGE = { y: 0.17, z: hingeZ, dir: 1 };
   const H = { hinge: HINGE, bone: 'skirt' };   // 骨はスカート（ゲームでは skirt_front_* / skirt_back_*）
@@ -28,15 +29,24 @@ export function frontSkirt({ id, name, bottom = -0.26, x0 = -0.06, x1 = 0.12, sp
   const X = steps(x0 - spreadIn, x1 + spread, 4), Y = steps(bottom - 0.04 - veeK * 0.15, TOP, Math.max(6, Math.round(len / 0.07)));
   const plate = [...crown('z', 1, face(0), X, Y), back(0.185), YH(TOP), P([0, 1, 1.5], [0, TOP, 0.205 + dz]), ...sides(x0, x1, TOP), ...vee(bottom)];
   // 短冊：板を縦に strips 本へ割る（間に細い隙間）。割った板は下の縁で広がる台形の幅を等分する
-  const cut = i => { const a = x0 + (x1 - x0) * i / strips, b = x0 + (x1 - x0) * (i + 1) / strips, g = i ? 0.004 : 0, h = i < strips - 1 ? 0.004 : 0;
-    const ka = -spreadIn + (spread + spreadIn) * i / strips, kb = -spreadIn + (spread + spreadIn) * (i + 1) / strips;   // 下の縁での広がり
+  const cut = (i, n = strips, gap = 0.004) => { const a = x0 + (x1 - x0) * i / n, b = x0 + (x1 - x0) * (i + 1) / n, g = i ? gap : 0, h = i < n - 1 ? gap : 0;
+    const ka = -spreadIn + (spread + spreadIn) * i / n, kb = -spreadIn + (spread + spreadIn) * (i + 1) / n;   // 下の縁での広がり
     return [P([1, kb / len, 0], [b - h, TOP, 0]), P([-1, -ka / len, 0], [a + g, TOP, 0])]; };
+  // 反りに沿う裏の面：x = m で前の面から t 奥に、その位置の反りの傾きで
+  const faceTop = x => face(0)(x, TOP);
+  const slope = m => -2 * crownX * (m - C);
+  const backAt = (m, t) => P([slope(m), 0.02, -1], [m, TOP, faceTop(m) - t]);
+  const segMid = i => x0 + (x1 - x0) * (i + 0.5) / segs;
+  const segPlate = i => { const m = segMid(i), o = 0.006;   // 継ぎ目は少し重ねる
+    return [...crown('z', 1, face(0), X, Y), backAt(m, 0.028), YH(TOP),
+      ...sides(x0, x1, TOP), ...vee(bottom), ...cut(i, segs, -o)]; };
   const pieces = [
-    ...(strips > 1 ? Array.from({ length: strips }, (_, i) => piece(`前スカート ${i + 1}`, [...plate, ...cut(i)], H)) : [piece('前スカート', plate, H)]),
+    ...(segs > 1 ? Array.from({ length: segs }, (_, i) => piece(`前スカート ${i + 1}`, segPlate(i), H))
+      : strips > 1 ? Array.from({ length: strips }, (_, i) => piece(`前スカート ${i + 1}`, [...plate, ...cut(i)], H)) : [piece('前スカート', plate, H)]),
     ...panels.map(([y0, y1], i) => {
       const w = (x1 - x0) * 0.33;
       return piece(`前スカートのパネル${panels.length > 1 ? ' ' + (i + 1) : ''}`, [...crown('z', 1, face(0.01), steps(PC - w, PC + w, 2), steps(y1 - 0.02 - veeK * 0.05, y0, 4)),
-        back(0.21), YH(y0), ...sides(PC - w, PC + w, y0), ...vee(y1 - veeK * Math.abs(PC - C))], H);
+        segs > 1 ? backAt(PC, 0.012) : back(0.21), YH(y0), ...sides(PC - w, PC + w, y0), ...vee(y1 - veeK * Math.abs(PC - C))], H);
     }),
     piece('前スカートの蝶番', [...prismX(0.02, 8, 22.5, HINGE.y, HINGE.z), XL(x0 + 0.01), XH(x1 - 0.01)], { ...H, pivot: 'skirt', color: DARK }),
   ];
@@ -44,7 +54,11 @@ export function frontSkirt({ id, name, bottom = -0.26, x0 = -0.06, x1 = 0.12, sp
   if (layer) pieces.push(piece('前スカートの上の板', [...crown('z', 1, face(0.03), X, steps(layer - 0.02, TOP, 4)), back(0.2), YH(TOP), P([0, 1, 1.5], [0, TOP, 0.215 + dz]),
     ...sides(x0 - 0.006, x1 + 0.006, TOP), YL(layer), P([0, -1, 1.2], [0, layer, face(0.03)(C, layer) - 0.01])], H));
   // 裾の厚い縁：下の縁に沿って前へ少し出た帯。V の左右で 1 個ずつ（縁の上の線も V にそろえる。V の中心が板の端なら片側だけ）
-  if (rim) for (const s of [-1, 1]) if (s > 0 ? C < x1 + spread : C > x0 - spreadIn) pieces.push(piece(`前スカートの裾（${s < 0 ? '内' : '外'}）`, [
+  // 反りに沿わせて割った板の縁：各本ごとに（V の中心は板の外にある前提で、V は片側の斜めだけ）
+  if (rim && segs > 1) for (let i = 0; i < segs; i++) { const m = segMid(i), sg = Math.sign(m - C) || 1;
+    pieces.push(piece(`前スカートの裾 ${i + 1}`, [...crown('z', 1, face(0.014), X, steps(bottom - 0.04 - veeK * 0.3, bottom + rim + 0.04, 2)), backAt(m, 0.012),
+      ...sides(x0, x1, TOP), ...cut(i, segs, -0.006), P([veeK * sg, -1, 0], [C, bottom, 0]), P([-veeK * sg, 1, 0], [C, bottom + rim, 0])], { ...H, color: rimColor })); }
+  else if (rim) for (const s of [-1, 1]) if (s > 0 ? C < x1 + spread : C > x0 - spreadIn) pieces.push(piece(`前スカートの裾（${s < 0 ? '内' : '外'}）`, [
     ...crown('z', 1, face(0.014), steps(s < 0 ? x0 - spreadIn : C, s < 0 ? C : x1 + spread, 2), steps(bottom - 0.04 - veeK * 0.15, bottom + rim + 0.04, 2)),
     back(0.2), ...sides(x0, x1, TOP), P([veeK * s, -1, 0], [C, bottom, 0]), P([-veeK * s, 1, 0], [C, bottom + rim, 0]), s < 0 ? XH(C) : XL(C)], { ...H, color: rimColor }));
   const wide = x1 - x0 + spread + spreadIn;
@@ -59,11 +73,12 @@ export default [
   frontSkirt({ id: 'skirtfrontlayer', name: '前スカート（2 枚重ね）', bottom: -0.42, spread: 0.02, lean: 0.18, panels: [[-0.17, -0.34]], layer: -0.12, rim: 0.035 }),
   frontSkirt({ id: 'skirtfrontstrips', name: '前スカート（短冊）', bottom: -0.36, spread: 0.03, lean: 0.18, crownX: 1.5, panels: [], strips: 3, veeK: 0.12, rim: 0.035 }),
   frontSkirt({ id: 'skirtfrontaccent', name: '前スカート（差し色の縁）', bottom: -0.3, spread: 0.02, panels: [[0.1, -0.16]], rim: 0.045, rimColor: ACCENT }),
-  // 左右が合わさる：板の内側の縁が体の中心（x = −0.175、股関節の中心から）まで来て、左右の板が中央で合わさって 1 枚の大きな盾になる。
-  // 外の縁は前後とつながる横スカートの前の端より外まで出して重ねる（横スカートは板の裏にあるので、押されて前へ開いても当たらない）
-  // 反りと V は体の中心がいちばん前・いちばん下。蝶番は帯の前面の中央より前（帯の前の反りに入らない）。前掛けとは重なるので一緒に置かない
-  frontSkirt({ id: 'skirtfrontjoined', name: '前スカート（左右が合わさる）', x0: -0.171, x1: 0.2, spread: 0.03, spreadIn: 0, center: -0.175, panelC: -0.01,
-    bottom: -0.36, lean: 0.2, crownX: 0.8, veeK: 0.22, hingeZ: 0.228, panels: [[0.1, -0.25]], rim: 0.04 }),
+  // 左右が合わさる：真ん中の動かない前掛け（前掛け（真ん中の板））の両脇から下がる。前掛けは板より前に出た厚い板で、板の内側の縁は
+  // その脇（体の中心から x 0.09）で止まるので、脚に押されて開いても前掛けに当たらず、開いた所は前掛けの側面で埋まる。閉じると前掛けと
+  // 左右の板で 1 枚の盾に見えるよう、反りの中心は体の中心。下の縁はほぼ横（浅い V）。外の縁は前後とつながる横スカートの前の端より外まで
+  // 出して重ねる（横スカートは板の裏にあるので、押されて前へ開いても当たらない）。蝶番は帯の前面の中央より前（帯の前の反りに入らない）
+  frontSkirt({ id: 'skirtfrontjoined', name: '前スカート（左右が合わさる）', x0: -0.085, x1: 0.2, spread: 0.03, spreadIn: 0, center: -0.175, panelC: 0.06,
+    bottom: -0.36, lean: 0.12, crownX: 0.8, veeK: 0.1, hingeZ: 0.228, panels: [[0.1, -0.25]], rim: 0.04, segs: 4 }),
   frontSkirt({ id: 'skirtfrontlong', name: '前スカート（長く大きい）', bottom: -0.62, x0: -0.075, x1: 0.145, spread: 0.035, lean: 0.17, crownX: 1.6,
     panels: [[0.11, -0.16], [-0.21, -0.5]], rim: 0.05 }),
 ];
