@@ -26,11 +26,12 @@ export function sideSkirt({ id, name, bottom = -0.26, zf = 0.15, zb = -0.14, pan
       inner(0.2), YH(y0), hem(y1), ZL(zc - hz * 0.65), ZH(zc + hz * 0.65)])),
     piece('横スカートの付け根', [XL(0.125), XH(0.2), YL(0.12), YH(0.19), ZL(-0.06), ZH(0.06), P([1, -1, 0], [0.2, 0.12, 0])], { color: DARK }),
   ];
-  // 2 段：下の段は上の段の裏から出て、少し外に重なる
-  if (stack) pieces.push(piece('横スカート（下の段）', [...crown('x', 1, out(0.03), steps(bottom - 0.06, stack, 4), Z),
-    inner(0.2), YH(stack), hem(bottom), ...ends]));
-  if (rim) pieces.push(piece('横スカートの裾', [...crown('x', 1, out(stack ? 0.044 : 0.014), steps(bottom - 0.06, bottom + rim + 0.06, 2), Z),
-    inner(0.2), hem(bottom), P([0, 1, -0.35], [0, bottom + rim, zb]), ...ends], { color: DARK }));
+  // 2 段：下の段は上の段の裏から出る（上の端は上の段の裾と同じ斜めで、その 6 cm 上まで上の段の裏に入る）。外の面は上の段より 1.2 cm 内
+  const topAt = y => P([0, 1, -0.35], [0, y, zb]);                 // 裾と平行な上の端
+  if (stack) pieces.push(piece('横スカート（下の段）', [...crown('x', 1, out(-0.012), steps(bottom - 0.06, yb + 0.1, 4), Z),
+    inner(0.185), topAt(yb + 0.06), hem(bottom), ...ends]));
+  if (rim) pieces.push(piece('横スカートの裾', [...crown('x', 1, out(stack ? 0.002 : 0.014), steps(bottom - 0.06, bottom + rim + 0.06, 2), Z),
+    inner(stack ? 0.185 : 0.2), hem(bottom), P([0, 1, -0.35], [0, bottom + rim, zb]), ...ends], { color: DARK }));
   // ミサイルポッド：外の面に付いた箱（角を落とす）と、外を向いた 2 × 3 の発射口（暗い 8 角の穴に見える短い筒）
   if (pod) {
     const y0 = -0.13, y1 = 0.07, x0 = out(0)(-0.03, zc) - 0.02, x1 = x0 + 0.075, z0 = zc - hz * 0.7, z1 = zc + hz * 0.7;
