@@ -8,7 +8,7 @@
 //   骨組み：細い芯に、前を回る肋の棒 3 本と胸骨、上に小さな板 2 枚（軽い機体）
 //   角の排気口：上の角の丸い塊の、左右の上の外の角を斜めに落とした面に排気口（光る黄色の羽根板）。真ん中に縦長の板
 // 腕を振ると肩アーマーの内の端が肩のまわり（x 0.26 より外で y 0.34 より上）を通るので、そこは空ける。
-import { P, XL, YL, YH, both, piece, DARK, ACCENT } from '../../xsasm-lib.js';
+import { P, XL, YL, YH, both, mir, ellipsoid, piece, DARK, ACCENT } from '../../xsasm-lib.js';
 import { crown, steps } from '../lower/shape.js';
 import { STD, sideX, frontZ, hull, mirP, pairPl, slab, grille, mirrorPieces, unit, cross } from './kit.js';
 
@@ -114,32 +114,33 @@ function frame() {
 }
 
 // ---- 角の排気口 ----
-// 前の面が中ほど（y 0.385）の横の折れ目で上下 2 面に折れた、上の角の丸い塊。上の面は上前、下の面は下前を向き、折れ目がいちばん前。
-// 折れ目の下の左右の外の角を、斜め下前（外）を向いた面で落とし、そこに排気口（枠・奥の黒い壁・光る黄色の横の羽根板）。
-// 真ん中の板は折れ目にまたがり、面と一緒に折れる
+// 写真の胸から：角を丸めた箱のような塊で、上の胸が前へふくらむ。中ほどより下は下前を向いた面で切れ込み、交わる線が曲がった折れ目になる
+// （上は上前、下は下前を向く）。真ん中の暗い板は折れ目にまたがり、面に沿って折れる。その板のすぐ左右、折れ目の下の面（斜め下前を向く）に
+// 排気口（枠・奥の黒い壁・光る黄色の横の羽根板）
 function cornerExhaust() {
-  const FY = 0.385, FZ = 0.305;                                          // 折れ目の高さ・真ん中の前
-  const up = y => FZ - (y - FY) * 0.105 / 0.16, lo = y => FZ - (FY - y) * 0.05 / 0.155;   // 上の面・下の面の真ん中の z
-  const A = [0.16, FY - 0.01, 0.28], B = [0.3, 0.37, 0.19], Cc = [0.29, 0.255, 0.1], Dd = [0.12, 0.235, 0.19];   // 排気口の面（左の半分）
-  const shell = hull('胸の塊', ptsBoth([
-    [0, FY, FZ], [0.16, FY, 0.285], A, B, Cc, Dd,                          // 折れ目と排気口の面
-    [0, 0.545, 0.2], [0.2, 0.53, 0.175], [0.285, 0.49, 0.12],   // 上の面と外の上
-    [0.12, top, 0.13], [0, top + 0.01, 0.12], [0.2, top, -0.03], [0.27, 0.51, -0.03],
-    [0, 0.23, 0.255], [0.1, 0.225, 0.24],                                    // 下の面
-    [0.31, 0.44, 0.02], [0.3, 0.3, 0.02], [0.28, 0.22, 0.06], [0.3, 0.46, -0.03], [0.26, 0.22, -0.03], [0.2, 0.2, 0.15], [0, 0.2, 0.2]]));
-  const avg = ps => [0, 1, 2].map(i => ps.reduce((a, p) => a + p[i], 0) / ps.length);
-  const top2 = avg([A, B]), bot2 = avg([Cc, Dd]);
-  const u = unit([B[0] - A[0], B[1] - A[1], B[2] - A[2]]), v0 = unit([top2[0] - bot2[0], top2[1] - bot2[1], top2[2] - bot2[2]]);
-  const n = unit(cross(u, v0)), v = unit(cross(n, u));
-  const o = avg([A, B, Cc, Dd]);
-  const vent = grille('胸の排気口（+x）', [o[0] + n[0] * 0.004, o[1] + n[1] * 0.004, o[2] + n[2] * 0.004], u, v, 0.12, 0.1, { slats: 4, dep: 0.02, slatColor: '#ffd257' });
-  // 真ん中の板：折れ目にまたがって折れる（上の面と下の面から 1.5 cm 出る）
-  const w = 0.075, d = 0.015, plate = [];
-  for (const x of [-w, w]) for (const [y, z] of [[0.5, up(0.5)], [FY, FZ], [0.275, lo(0.275)]]) plate.push([x, y, z + d - 0.3 * x * x], [x, y, z - 0.04]);
-  for (const x of [-w - 0.01, w + 0.01]) for (const [y, z] of [[0.49, up(0.49)], [FY, FZ], [0.285, lo(0.285)]]) plate.push([x, y, z + d - 0.012 - 0.3 * x * x]);
-  return C('chestexhaust', '胸（角の排気口）', [0.64, 0.36, 0.34], [
-    hull('胸の芯', ptsBoth([[0.24, 0.2, 0.17], [0.24, 0.2, -0.03], [0.29, 0.47, 0.2], [0.29, 0.47, -0.03], [0.13, top, 0.13], [0.13, top, -0.03]]), { color: DARK }),
-    shell, ...vent, ...mirrorPieces(vent), hull('胸の真ん中の板', plate)]);
+  // 角を丸めた箱：前・横・上の面を少しずつ丸め（crown）、角は大きな楕円体で落とす
+  const front = (x, y) => 0.3 - 0.35 * x * x - 1.0 * (y - 0.42) ** 2;
+  const R = [0.37, 0.33, 0.34], Cn = [0, 0.37, 0.03];
+  const lowerPlane = P([0, -0.9, 1], [0, 0.37, 0.27]);                     // 下前の面：z ≤ 0.9 y − 0.063
+  const planes = [...crown('z', 1, front, steps(-0.3, 0.3, 6), steps(0.3, 0.56, 4)),
+    ...crown('x', 1, (y, z) => 0.31 - 0.4 * (y - 0.38) ** 2 - 0.6 * (z - 0.08) ** 2, steps(0.22, 0.54, 4), steps(-0.03, 0.26, 3)),
+    ...crown('x', -1, (y, z) => 0.31 - 0.4 * (y - 0.38) ** 2 - 0.6 * (z - 0.08) ** 2, steps(0.22, 0.54, 4), steps(-0.03, 0.26, 3)),
+    ...crown('y', 1, (x, z) => 0.57 - 0.3 * x * x - 0.4 * (z - 0.05) ** 2, steps(-0.28, 0.28, 5), steps(-0.03, 0.26, 3)),
+    ...ellipsoid(R, Cn, 28, [-40, -25, -10, 5, 20, 35, 50, 65, 80]), YL(0.2), P([0, 0, -1], [0, 0, -0.03]), lowerPlane];
+  const ez = (x, y) => Cn[2] + R[2] * Math.sqrt(Math.max(0, 1 - (x / R[0]) ** 2 - ((y - Cn[1]) / R[1]) ** 2));
+  const sz = (x, y) => Math.min(front(x, y), ez(x, y), 0.9 * y - 0.063);
+  // 排気口：真ん中の板のすぐ左右、折れ目の下の面（斜め下前を向く）の上
+  const u = [1, 0, 0], v = unit([0, 1, 0.9]), n = unit(cross(u, v));
+  const oy = 0.3, o0 = [0.15, oy, 0.9 * oy - 0.063 + 0.003];
+  const vent = grille('胸の排気口（+x）', [o0[0] + n[0] * 0.002, o0[1] + n[1] * 0.002, o0[2] + n[2] * 0.002], u, v, 0.11, 0.1, { slats: 4, dep: 0.02, slatColor: '#ffd257' });
+  // 真ん中の板：面から 1.5 cm 出て、折れ目で一緒に折れる
+  const plate = [];
+  for (const x of [-0.085, 0.085]) for (const y of [0.53, 0.47, 0.42, 0.39, 0.36, 0.3, 0.25]) plate.push([x, y, sz(x, y) + 0.015], [x, y, sz(x, y) - 0.03]);
+  for (const x of [-0.095, 0.095]) for (const y of [0.52, 0.39, 0.26]) plate.push([x, y, sz(x, y) + 0.004]);
+  return C('chestexhaust', '胸（角の排気口）', [0.64, 0.38, 0.34], [
+    piece('胸の塊', planes), ...vent, ...mirrorPieces(vent),
+    hull('胸の真ん中の板', plate, { color: DARK }),
+    piece('胸の下の段', slab('z', 1, (x, y) => sz(0, y) - 0.02 - 0.5 * x * x, [-0.17, 0.17], [0.2, 0.235], { bev: 0.006, depth: 0.05, na: 4, nb: 1 }), { color: DARK })]);
 }
 
 export default [
