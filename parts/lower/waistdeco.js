@@ -3,7 +3,7 @@
 // 後ろ z 0.2・横 x 0.355）に合わせ、帯に食い込ませてつなぐ（幅広の帯には「幅広の帯用」のベルト）。
 //   ベルト：帯の形を外へ 1.3 cm ふくらませた輪（帯を包む 1 つの凸の形）と、前の留め金。細い・太い・2 本・ポーチ付き・幅広の帯用
 //   腰の筒：左右の横に立てた筒（縦）・前後に寝かせた筒（横）・後ろに 2 本（縦、並べても顔に見えないよう細長く）。受けで帯につなぐ
-//   動力パイプ：短い筒を少しずつ向きを変えて並べた蛇腹の管。腰の後ろから横を回って前へ（1 本・2 本）。両端の受けで帯につなぐ
+//   動力パイプ：短い筒を少しずつ向きを変えて並べた蛇腹の管。腰の後ろから横を回って前へ（細い・標準・太い・とても太い・2 本）。両端の受けで帯につなぐ
 import { P, XH, XL, YH, YL, ZH, ZL, both, planesFromPoints, prismX, prismY, piece, MAIN, DARK, BLACK, ACCENT } from '../../xsasm-lib.js';
 import { crown, steps } from './shape.js';
 
@@ -57,9 +57,19 @@ function bellows(path, name, rr = 0.026, rc = 0.02) {
 /** 腰のまわりの楕円の弧（上から見て）：θ は前 0°・横 90°・後ろ 180°、半径 rx・rz、高さ y。n 分割の点の列（+x 側） */
 const arc = (th0, th1, rx, rz, y, n) => Array.from({ length: n + 1 }, (_, i) => { const t = (th0 + (th1 - th0) * i / n) * Math.PI / 180; return [rx * Math.sin(t), y, rz * Math.cos(t)]; });
 const mirX = pts => pts.map(p => [-p[0], p[1], p[2]]);
-/** 管の端の受け：管の端から帯へ届く暗い小さな箱 */
-const fitting = (p, name) => piece(name, planesFromPoints([[-0.022, -0.022, -0.022], [0.022, -0.022, -0.022], [-0.022, 0.022, -0.022], [0.022, 0.022, -0.022], [-0.022, -0.022, 0.022], [0.022, -0.022, 0.022], [-0.022, 0.022, 0.022], [0.022, 0.022, 0.022]]
-  .map(([a, b, c]) => [p[0] * (a > 0 ? 1 : 0.7) + a, p[1] + b, p[2] * (c > 0 ? 1 : 0.7) + c])), { color: DARK });   // 帯の側（原点寄り）へ 3 割伸ばす
+/** 管の端の受け：管の端から帯へ届く暗い小さな箱（半分の大きさ h。帯の側＝原点寄りへ 3 割伸ばす） */
+const fitting = (p, name, h = 0.022) => {
+  // x・z は管の端から原点寄りへ 3 割（左右どちらの側でも、管の端と帯の両方を含む向きに）
+  const span = v => [Math.min(v, v * 0.7) - h, Math.max(v, v * 0.7) + h];
+  const [x0, x1] = span(p[0]), [z0, z1] = span(p[2]);
+  const pts = []; for (const x of [x0, x1]) for (const y of [p[1] - h, p[1] + h]) for (const z of [z0, z1]) pts.push([x, y, z]);
+  return piece(name, planesFromPoints(pts), { color: DARK });
+};
+/** 動力パイプ：左右に 1 本ずつ。rr 輪の半径（太さ）、rc 芯の半径、y 高さ、rx・rz 腰のまわりの楕円の半径、n 輪の数 */
+const pipePair = (y, rr, rc, n, tag0 = '', rx = 0.39 + rr, rz = 0.275 + rr) => [1, -1].flatMap(s => {
+  const path = arc(150, 35, rx, rz, y, n), p = s > 0 ? path : mirX(path), tag = `${tag0}${s > 0 ? '（+x）' : '（−x）'}`;
+  return [...bellows(p, '動力パイプ' + tag, rr, rc), fitting(p[0], '動力パイプの受け（後ろ）' + tag, rr * 0.85), fitting(p[p.length - 1], '動力パイプの受け（前）' + tag, rr * 0.85)];
+});
 
 const D = (id, name, cat, pieces, size = [0.8, 0.2, 0.5]) => ({ id, name, cat, size, pieces });
 export default [
@@ -87,13 +97,10 @@ export default [
     piece(`筒（${s > 0 ? '+x' : '−x'}）`, [...prismY(0.03, 10, 18).map(p => [p[0], p[1], p[2], p[3] + p[0] * s * 0.2 + p[2] * -0.27]), YL(0.0), YH(0.2)]),
     piece(`筒の蓋（${s > 0 ? '+x' : '−x'}）`, [...prismY(0.034, 10, 18).map(p => [p[0], p[1], p[2], p[3] + p[0] * s * 0.2 + p[2] * -0.27]), YL(0.185), YH(0.215)], { color: DARK }),
     piece(`筒の受け（${s > 0 ? '+x' : '−x'}）`, [s > 0 ? XL(0.17) : XH(-0.17), s > 0 ? XH(0.23) : XL(-0.23), YL(0.06), YH(0.14), ZL(-0.27), ZH(-0.18)], { color: DARK })])),
-  // ---- 動力パイプ ----
-  D('pipe', '動力パイプ', '動力パイプ', [1, -1].flatMap(s => {
-    const path = arc(150, 35, 0.415, 0.3, 0.11, 10), p = s > 0 ? path : mirX(path), tag = s > 0 ? '（+x）' : '（−x）';
-    return [...bellows(p, '動力パイプ' + tag), fitting(p[0], '動力パイプの受け（後ろ）' + tag), fitting(p[p.length - 1], '動力パイプの受け（前）' + tag)];
-  })),
-  D('pipetwin', '動力パイプ（2 本）', '動力パイプ', [1, -1].flatMap(s => [0.07, 0.14].flatMap((y, j) => {
-    const path = arc(150, 40, 0.41 + j * 0.005, 0.295, y, 10), p = s > 0 ? path : mirX(path), tag = `（${j ? '上' : '下'}）${s > 0 ? '（+x）' : '（−x）'}`;
-    return [...bellows(p, '動力パイプ' + tag, 0.022, 0.017), fitting(p[0], '動力パイプの受け（後ろ）' + tag), fitting(p[p.length - 1], '動力パイプの受け（前）' + tag)];
-  }))),
+  // ---- 動力パイプ（太さ違い。太いほど帯から離し、輪を少なく大きく） ----
+  D('pipethin', '動力パイプ（細い）', '動力パイプ', pipePair(0.11, 0.016, 0.012, 14)),
+  D('pipe', '動力パイプ', '動力パイプ', pipePair(0.11, 0.026, 0.02, 10)),
+  D('pipethick', '動力パイプ（太い）', '動力パイプ', pipePair(0.1, 0.036, 0.028, 8)),
+  D('pipehuge', '動力パイプ（とても太い）', '動力パイプ', pipePair(0.09, 0.048, 0.038, 7)),
+  D('pipetwin', '動力パイプ（2 本）', '動力パイプ', [...pipePair(0.07, 0.022, 0.017, 10, '（下）', 0.412, 0.297), ...pipePair(0.14, 0.022, 0.017, 10, '（上）', 0.417, 0.297)]),
 ];
