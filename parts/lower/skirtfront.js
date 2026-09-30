@@ -60,8 +60,9 @@ export default [
   frontSkirt({ id: 'skirtfrontstrips', name: '前スカート（短冊）', bottom: -0.36, spread: 0.03, lean: 0.18, crownX: 1.5, panels: [], strips: 3, veeK: 0.12, rim: 0.035 }),
   frontSkirt({ id: 'skirtfrontaccent', name: '前スカート（差し色の縁）', bottom: -0.3, spread: 0.02, panels: [[0.1, -0.16]], rim: 0.045, rimColor: ACCENT }),
   // 左右が合わさる：板の内側の縁が体の中心（x = −0.175、股関節の中心から）まで来て、左右の板が中央で合わさって 1 枚の大きな盾になる。
+  // 外の縁は前後とつながる横スカートの前の端より外まで出して重ねる（横スカートは板の裏にあるので、押されて前へ開いても当たらない）
   // 反りと V は体の中心がいちばん前・いちばん下。蝶番は帯の前面の中央より前（帯の前の反りに入らない）。前掛けとは重なるので一緒に置かない
-  frontSkirt({ id: 'skirtfrontjoined', name: '前スカート（左右が合わさる）', x0: -0.171, x1: 0.15, spread: 0.025, spreadIn: 0, center: -0.175, panelC: -0.01,
+  frontSkirt({ id: 'skirtfrontjoined', name: '前スカート（左右が合わさる）', x0: -0.171, x1: 0.2, spread: 0.03, spreadIn: 0, center: -0.175, panelC: -0.01,
     bottom: -0.36, lean: 0.2, crownX: 0.8, veeK: 0.22, hingeZ: 0.228, panels: [[0.1, -0.25]], rim: 0.04 }),
   frontSkirt({ id: 'skirtfrontlong', name: '前スカート（長く大きい）', bottom: -0.62, x0: -0.075, x1: 0.145, spread: 0.035, lean: 0.17, crownX: 1.6,
     panels: [[0.11, -0.16], [-0.21, -0.5]], rim: 0.05 }),

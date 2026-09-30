@@ -51,7 +51,7 @@ export default [
   backSkirt({ id: 'skirtbackaccent', name: '後ろスカート（差し色の縁）', bottom: -0.3, spread: 0.02, panels: [[0.1, -0.15]], rim: 0.045, rimColor: ACCENT }),
   // 左右が合わさる：板の内側の縁が体の中心まで来て、左右の板が中央で合わさる。反りの中心と下の縁の斜めは体の中心から。
   // 蝶番は後ろ腰の装甲の中央の下の角より後ろ（装甲の反りに入らない）
-  backSkirt({ id: 'skirtbackjoined', name: '後ろスカート（左右が合わさる）', x0: -0.171, x1: 0.15, spread: 0.025, spreadIn: 0, center: -0.175, panelC: -0.01,
+  backSkirt({ id: 'skirtbackjoined', name: '後ろスカート（左右が合わさる）', x0: -0.171, x1: 0.2, spread: 0.03, spreadIn: 0, center: -0.175, panelC: -0.01,
     bottom: -0.34, lean: 0.18, crownX: 0.8, slant: 0.2, hingeZ: -0.285, panels: [[0.1, -0.23]], rim: 0.04 }),
   backSkirt({ id: 'skirtbacklong', name: '後ろスカート（長く大きい）', bottom: -0.6, x0: -0.08, x1: 0.15, spread: 0.03, lean: 0.15, crownX: 1.6,
     panels: [[0.11, -0.15], [-0.2, -0.47]], rim: 0.05 }),

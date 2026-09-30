@@ -2,7 +2,7 @@
 // 脚を前後に振っても当たらず、動かない（押されて開く骨は要らない）。長さは自由。
 // 外の面は前後に反って盛り上がり、下ほど外へ開く（上下はほぼまっすぐ）。裾は前が少し短い斜めで、外の下の角を落とす。一段高いパネル。
 // 上端の付け根（暗い色）で腰の帯の下と脚の台につながる。
-// sideSkirt() で寸法・形を変えた種類を作る（標準・短い・翼形・2 段・ミサイルポッド付き・長く大きい）
+// sideSkirt() で寸法・形を変えた種類を作る（標準・短い・翼形・2 段・ミサイルポッド付き・長く大きい）。wrapSide() は前後とつながる弧の横スカート
 import { P, XL, XH, YH, YL, ZH, ZL, prismX, piece, DARK, BLACK } from '../../xsasm-lib.js';
 import { crown, steps } from './shape.js';
 
@@ -44,11 +44,45 @@ export function sideSkirt({ id, name, bottom = -0.26, zf = 0.15, zb = -0.14, pan
   return { id, name, cat: '横スカート', size: [0.1 + flare * len + (pod ? 0.08 : 0), len + 0.04, zf - zb], pieces };
 }
 
+/**
+ * 前後とつながる横スカート：腰の横を回り込む弧。左右が合わさる前・後ろスカートと組むと、腰のまわりがすき間なく埋まる。
+ * 弧の中心は体の中心寄りの縦の線（原点から x −0.075）で、外の面の半径 ro・内の面の半径 ri、下ほど外へ開く（flare）。
+ * 1 枚の曲がった板は凸にならないので、弧を segs 枚に分けて少し重ねる（継ぎ目が抜けない）。前の端（a1 度）は前スカートの裏へ、
+ * 後ろの端（a0 度）は後ろスカートの裏へ入る。太ももの柱（x ≤ 0.26）には入らない（内の面の x ≥ 0.27）。動かない（腰の骨）
+ */
+export function wrapSide({ id, name, bottom = -0.34, a0 = -52, a1 = 41, ro = 0.32, ri = 0.275, flare = 0.12, segs = 3, rim = 0.04, panel = [0.1, -0.22] }) {
+  const cx = -0.075, TOPY = 0.175, R = Math.PI / 180;
+  const outer = (t, lift = 0) => P([Math.cos(t * R), flare, Math.sin(t * R)], [cx + (ro + lift) * Math.cos(t * R), TOPY, (ro + lift) * Math.sin(t * R)]);
+  const innerAt = m => P([-Math.cos(m * R), -flare, -Math.sin(m * R)], [cx + ri * Math.cos(m * R), TOPY, ri * Math.sin(m * R)]);
+  const from = a => P([Math.sin(a * R), 0, -Math.cos(a * R)], [cx, 0, 0]);    // 角 a より大きい側だけ
+  const to = b => P([-Math.sin(b * R), 0, Math.cos(b * R)], [cx, 0, 0]);      // 角 b より小さい側だけ
+  const hem = y => P([0, -1, 0.15], [0, y, 0]);                               // 裾：前が少し短い
+  const pieces = [];
+  const step = (a1 - a0) / segs;
+  for (let i = 0; i < segs; i++) {
+    const a = a0 + step * i - (i ? 1.5 : 0), b = a0 + step * (i + 1) + (i < segs - 1 ? 1.5 : 0), m = (a + b) / 2;
+    const ts = [a, a + (b - a) / 3, a + 2 * (b - a) / 3, b];
+    pieces.push(piece(`横スカート ${i + 1}`, [...ts.map(t => outer(t)), innerAt(m), from(a), to(b), YH(TOPY), hem(bottom),
+      P([Math.cos(m * R), 1.4, Math.sin(m * R)], [cx + ro * Math.cos(m * R), TOPY, ro * Math.sin(m * R)])]));   // 上の外の角を落とす
+    // 上の縁：帯の下へ入り込む薄い棚。帯の角を落とした所と前後のスカートの蝶番の間をふさぐ（前後の端は前後のスカートが開く所に入らない z ≤ 0.21）
+    pieces.push(piece(`横スカートの上の縁 ${i + 1}`, [...ts.map(t => outer(t, -0.004)), P([-Math.cos(m * R), 0, -Math.sin(m * R)], [cx + 0.19 * Math.cos(m * R), 0, 0.19 * Math.sin(m * R)]),
+      from(a), to(b), YH(TOPY + 0.02), YL(TOPY - 0.012), ZH(0.21), ZL(-0.25)], { color: DARK }));
+    if (rim) pieces.push(piece(`横スカートの裾 ${i + 1}`, [...ts.map(t => outer(t, 0.013)), innerAt(m), from(a), to(b), hem(bottom), P([0, 1, -0.15], [0, bottom + rim, 0])], { color: DARK }));
+  }
+  if (panel) {   // まん中の板に一段高いパネル
+    const pa = -14, pb = 14, ts = [pa, 0, pb];
+    pieces.push(piece('横スカートのパネル', [...ts.map(t => outer(t, 0.012)), innerAt(0), from(pa), to(pb), YH(panel[0]), hem(panel[1])]));
+  }
+  pieces.push(piece('横スカートの付け根', [XL(0.125), XH(0.2), YL(0.12), YH(0.19), ZL(-0.06), ZH(0.06), P([1, -1, 0], [0.2, 0.12, 0])], { color: DARK }));
+  return { id, name, cat: '横スカート', size: [ro - ri + 0.1, TOPY - bottom, 2 * ro * 0.8], pieces };
+}
+
 export default [
   sideSkirt({ id: 'skirtside', name: '横スカート' }),
   sideSkirt({ id: 'skirtsideshort', name: '横スカート（短い）', bottom: -0.08, panels: [[0.12, 0.0]] }),
   sideSkirt({ id: 'skirtsidewing', name: '横スカート（翼形）', bottom: -0.36, zf: 0.12, zb: -0.2, flare: 0.28, panels: [[0.12, -0.12]], rim: 0.04 }),
   sideSkirt({ id: 'skirtsidestack', name: '横スカート（2 段）', bottom: -0.4, stack: -0.12, panels: [[0.12, -0.06]], rim: 0.035 }),
   sideSkirt({ id: 'skirtsidepod', name: '横スカート（ミサイルポッド付き）', bottom: -0.3, panels: [] , pod: true }),
+  wrapSide({ id: 'skirtsidewrap', name: '横スカート（前後とつながる）' }),
   sideSkirt({ id: 'skirtsidelong', name: '横スカート（長く大きい）', bottom: -0.6, zf: 0.19, zb: -0.18, panels: [[0.12, -0.14], [-0.2, -0.46]], rim: 0.05 }),
 ];
