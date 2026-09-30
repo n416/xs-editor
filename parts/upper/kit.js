@@ -45,9 +45,9 @@ export function boxOn(name, o, u, v, n, [a0, a1], [b0, b1], [c0, c1], opt = {}) 
 }
 /**
  * 通気口：面の上に 4 辺の枠（外へ dep 出る）、枠の中の底に黒い板、前が下がった斜めの羽根板 slats 枚。本当にくぼんで見える。
- * o は面の上の中心、u 幅の向き、v 上の向き、n 外向き（u × v、面に垂直）。w × h の大きさ
+ * o は面の上の中心、u 幅の向き、v 上の向き、n 外向き（u × v、面に垂直）。w × h の大きさ。slatColor 羽根板の色
  */
-export function grille(name, o, u, v, w, h, { dep = 0.028, slats = 3, fw = 0.012 } = {}) {
+export function grille(name, o, u, v, w, h, { dep = 0.028, slats = 3, fw = 0.012, slatColor = '#6b727d' } = {}) {
   u = unit(u); v = unit(v); const n = unit(cross(u, v)), hw = w / 2, hh = h / 2, out = [];
   out.push(boxOn(`${name}の枠（上）`, o, u, v, n, [-hw, hw], [hh - fw, hh], [-0.015, dep]));
   out.push(boxOn(`${name}の枠（下）`, o, u, v, n, [-hw, hw], [-hh, -hh + fw], [-0.015, dep]));
@@ -59,7 +59,7 @@ export function grille(name, o, u, v, w, h, { dep = 0.028, slats = 3, fw = 0.012
     const b = -hh + fw + k * s, pts = [];
     for (const a of [-hw + fw - 0.002, hw - fw + 0.002]) for (const [db, c] of [[0.75, dep - 0.006], [0.4, dep - 0.006], [0.55, 0.004], [0.9, 0.004]])
       pts.push([0, 1, 2].map(i => o[i] + a * u[i] + (b + db * s) * v[i] + c * n[i]));
-    out.push(hull(`${name}の羽根 ${k + 1}`, pts, { color: '#6b727d' }));
+    out.push(hull(`${name}の羽根 ${k + 1}`, pts, { color: slatColor }));
   }
   return out;
 }

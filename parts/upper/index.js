@@ -40,6 +40,7 @@ export const UPPER_SAMPLES = {
   '段付きの丸い肩': sample([...torso('chest', 'backblades', 'abdomenband', 'flankbig'), 'collar', 'backpackslim', 'chestpipe'], ['shoulderjointdrum', 'shoulderarmorstep']),
   'とても大きな丸い肩': sample([...torso(), 'collar', 'backpackbooster'], ['shoulderjointdrum', 'shoulderarmorsphere'], 1.8),
   'とても大きな盾': sample([...torso('chestvee', 'backhump', 'abdomenvee', 'flankslats'), 'collarwide', 'backpack'], ['shoulderjoint', 'shoulderarmorshield'], 1.5),
+  '角の排気口ととげ': sample([...torso('chestexhaust', 'backhump', 'abdomenbellows', 'flank'), 'collarlow', 'backpack'], ['shoulderjoint', 'shoulderarmorspike']),
   '通気口とハッチ': sample([...torso(), 'collar', 'backpack', 'chestvent', 'chesthatch'], ['shoulderjoint', 'shoulderarmorbox']),
 };
 /** ランダムに組む：部位ごとに 1 つ（胴の 4 つは必ず、襟・バックパックはたいてい付け、胸の飾りは 0〜2 個。肩アーマーはときどきとても大きく） */
