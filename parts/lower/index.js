@@ -11,12 +11,18 @@ import maekake from './maekake.js';
 export const LOWER = [waist, belly, hipjoint, hipbase, skirtfront, skirtside, skirtrear, skirtback, maekake].flat();
 export const lowerById = Object.fromEntries(LOWER.map(p => [p.id, p]));
 
-/** 見本の組み立て：骨格図の標準の寸法（xsbody.js の makeSheet()）の置き場所に置く。左右の対は +x 側を置き、反対側は x の拡大 −1 */
+/** 見本の組み立て：骨格図の標準の寸法（xsbody.js の makeSheet()）の置き場所に置く。左右の対は +x 側を置き、反対側は x の拡大 −1。
+ *  skirts: [前, 横, 後ろ] のスカートの部品 id */
 const HIP = [0.175, 1.6, 0];
-export const SAMPLE = [
+const sample = (skirts = ['skirtfront', 'skirtside', 'skirtback']) => [
   { part: 'waist', mov: [0, 1.77, 0] },
   { part: 'belly', mov: [0, 2.0, 0] },
   { part: 'skirtrear', mov: [0, 1.77, 0] },
   { part: 'maekake', mov: [0, 1.77, 0] },
-  ...[1, -1].flatMap(s => ['hipjoint', 'hipbase', 'skirtfront', 'skirtside', 'skirtback'].map(part => ({ part, mov: [s * HIP[0], HIP[1], HIP[2]], scal: [s, 1, 1] }))),
+  ...[1, -1].flatMap(s => ['hipjoint', 'hipbase', ...skirts].map(part => ({ part, mov: [s * HIP[0], HIP[1], HIP[2]], scal: [s, 1, 1] }))),
 ];
+export const SAMPLES = {
+  '標準のスカート': sample(),
+  '長く大きいスカート': sample(['skirtfrontlong', 'skirtsidelong', 'skirtbacklong']),
+};
+export const SAMPLE = SAMPLES['標準のスカート'];
