@@ -26,6 +26,8 @@ export const UPPER_SAMPLES = {
   '角ばった胸と箱形': sample(['chestangular', 'collarwide', 'backpack', 'chestventlong'], ['shoulderjoint', 'shoulderarmorbox']),
   '細い胸と重ね板': sample(['chestslim', 'collar', 'backpackslim'], ['shoulderjoint', 'shoulderarmorlayer']),
   '差し色の胸ととげ': sample(['chestaccent', 'collarlow', 'backpackbooster', 'chestpipethick'], ['shoulderjointdrum', 'shoulderarmorspike']),
+  '大きな丸い肩': sample(['chestbarrel', 'collarlow', 'backpack'], ['shoulderjoint', 'shoulderarmorbig']),
+  '段付きの丸い肩': sample(['chest', 'collar', 'backpackslim', 'chestpipe'], ['shoulderjointdrum', 'shoulderarmorstep']),
   '通気口とハッチ': sample(['chest', 'collar', 'backpack', 'chestvent', 'chesthatch'], ['shoulderjoint', 'shoulderarmorbox']),
 };
 /** ランダムに組む：部位ごとに 1 つ（襟・背中はたいてい付け、胸の飾りは 0〜2 個） */
