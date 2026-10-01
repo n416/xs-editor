@@ -515,7 +515,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = 'f6740ca';
+const BUILD = '3676fef';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -1122,6 +1122,7 @@ function renderProps() {
     <div class="row"><label>回転の中心</label><select id="pPivot" style="grid-column: span 2">${Object.entries(PIVOT_CHOICES).map(([k, v]) => `<option value="${k}" ${p.pivot === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + (PIVOT_CHOICES[pivotOf({ ...p, pivot: 'auto' })] ?? 'なし') : ''}</option>`).join('')}</select></div>
     <label class="check"><input type="checkbox" id="pTeam" ${p.team ? 'checked' : ''}> 陣営色で塗る（マテリアル team_color）</label>
     <label class="check"><input type="checkbox" id="pGlow" ${isGlow(p) ? 'checked' : ''}> 発光する（目・センサーなど）</label>
+    <label class="check"><input type="checkbox" id="pNoHit" ${p.noHit ? 'checked' : ''}> 当たり判定なし（関節チェックでめり込みを見ない。動力パイプなど）</label>
     ${p.kind === 'mesh' ? `<h2>取り込んだ形</h2><p class="hint">外から取り込んだ形（スキン用）です。形は描き直せませんが、位置・回転・拡大、質感は変えられます。どこで曲がるかは「関節と切り分け」で、関節の球を置いて決めます。${MESHES.has(p.mesh) ? '' : '（形を読み込み中、またはこのブラウザに形がありません）'}</p>
     <div class="seg"><button id="pJoints" class="on" ${MESHES.has(p.mesh) ? '' : 'disabled'}>関節と切り分け（3 面図）</button></div>
     <div class="seg"><button id="pBlocks" ${MESHES.has(p.mesh) ? '' : 'disabled'} title="骨ごとに形を塊に分け、塊ごとに正面・横・上から見た輪郭の重なりで部品にする（試作）">ブロックの部品に変換（試作）</button></div>` : ''}
@@ -1153,6 +1154,7 @@ function renderProps() {
   $('#pTeam').onchange = e => { p.team = e.target.checked; save(); };
   $('#pPivot').onchange = e => { p.pivot = e.target.value; save(); if (viewPose !== '待機') applyViewPose(); };
   $('#pGlow').onchange = e => { p.glow = e.target.checked; save(); };
+  $('#pNoHit').onchange = e => { p.noHit = e.target.checked; save(); };
   $('#pSnap').onchange = e => { snap = e.target.checked; };
   if ($('#pJoints')) $('#pJoints').onclick = () => openJointTool(p);
   if ($('#pBlocks')) $('#pBlocks').onclick = async () => {
@@ -2158,12 +2160,12 @@ function jointCheck(id = roleId()) {
     const sizes = new Array(c).fill(0); comp.forEach(k => sizes[k]++);
     const body = sizes.indexOf(Math.max(...sizes));
     const off = [...new Set(pieces.filter((pc, k) => comp[k] !== body && !hidden(pc)).map(pieceLabel))];
-    // 2) cutting in: pairs moving differently that intersect now but were apart at rest
+    // 2) cutting in: pairs moving differently that intersect now but were apart at rest (parts marked 当たり判定なし, like power pipes, are skipped)
     const cut = new Set();
     const boxes = pieces.map(pc => pc.geo.boundingBox.clone().applyMatrix4(moved(pc)));
     for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
       const pa = pieces[a], pb = pieces[b];
-      if (same(pa, pb) || hidden(pa) || hidden(pb) || restPair.has(a + ',' + b) || !boxes[a].intersectsBox(boxes[b])) continue;
+      if (same(pa, pb) || hidden(pa) || hidden(pb) || pa.part.noHit || pb.part.noHit || restPair.has(a + ',' + b) || !boxes[a].intersectsBox(boxes[b])) continue;
       const gb = into(pa, moved(pa), pb, moved(pb));
       if (!pa.bvh.intersectsGeometry(gb, I)) continue;
       // grazing contact at a joint's rim is fine; only real cutting-in counts

@@ -1,5 +1,6 @@
 // 蛇腹の動力パイプを作る道具（腰の飾り parts/lower/waistdeco.js と、頭の飾り parts/headpipe.js で使う）。
 // 管は、道筋（点の列）に沿って短い筒を少しずつ向きを変えて並べる：暗い太い輪と、その間に見える黒い細い芯。両端に暗い受け。
+// 管と受けは当たり判定なし（noHit）：曲がる管なので、関節チェックでほかの部品へのめり込みを見ない（外れるかは見る）。
 import { planesFromPoints, piece, DARK, BLACK } from '../xsasm-lib.js';
 
 /** 2 点 a → b を軸にした n 角の筒（半径 r）。点を並べて凸包にする */
@@ -17,9 +18,9 @@ export function bellows(path, name, rr = 0.026, rc = 0.02) {
   const out = [];
   for (let i = 0; i + 1 < path.length; i++) {
     const a = path[i], b = path[i + 1], m = a.map((v, k) => (v + b[k]) / 2);
-    out.push(piece(`${name}の芯 ${i + 1}`, tube(a, b, rc), { color: BLACK }));
+    out.push(piece(`${name}の芯 ${i + 1}`, tube(a, b, rc), { color: BLACK, noHit: true }));
     const q = a.map((v, k) => v + (m[k] - v) * 0.25), w = a.map((v, k) => v + (m[k] - v) * 1.75);
-    out.push(piece(`${name}の輪 ${i + 1}`, tube(q, w, rr), { color: DARK }));
+    out.push(piece(`${name}の輪 ${i + 1}`, tube(q, w, rr), { color: DARK, noHit: true }));
   }
   return out;
 }
@@ -32,5 +33,5 @@ export function fitting(p, name, h = 0.022, toward = [0, p[1], 0], k = 0.3) {
   const span = i => [Math.min(p[i], q[i]) - h, Math.max(p[i], q[i]) + h];
   const [x0, x1] = span(0), [y0, y1] = span(1), [z0, z1] = span(2);
   const pts = []; for (const x of [x0, x1]) for (const y of [y0, y1]) for (const z of [z0, z1]) pts.push([x, y, z]);
-  return piece(name, planesFromPoints(pts), { color: DARK });
+  return piece(name, planesFromPoints(pts), { color: DARK, noHit: true });
 }
