@@ -9,7 +9,8 @@ import { DARK, BLACK, MAIN, ACCENT } from '../../xsasm-lib.js';
 const F = { bone: 'fore', pivot: 'none' };
 const P2 = [0, -0.05, 0];
 /** 上のお椀（暗い）と手首の輪 */
-const base = (wrist = 0.042) => [...cup('前腕のお椀', P2, 0.086, -22, { color: DARK }), cylY('手首', 0, 0, wrist, -0.475, -0.42, 12, { color: DARK })];
+// お椀は装甲の色（前腕の上の端の丸い装甲に見える。ひじの節の下の軸はこの中に隠れる）
+const base = (wrist = 0.042) => [...cup('前腕の上の丸い装甲', P2, 0.086, -22), loft('前腕の上の輪', [ring(-0.084, 0.081, 0.081, 16), ring(-0.125, 0.078, 0.078, 16)]), cylY('手首', 0, 0, wrist, -0.475, -0.42, 12, { color: DARK })];
 /** 本体は下の寸法の WX 倍に太らせて置く（お椀と手首はそのまま） */
 export const WX = 1.2;
 const FA = (id, name, size, pieces, wrist) => ({ id, name, cat: '前腕', size: [size[0] * WX, size[1], size[2] * WX], pieces: [...pieces.map(pc => widen(pc, WX)), ...base(wrist)].map(pc => ({ ...F, ...pc })) });
