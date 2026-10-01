@@ -151,6 +151,13 @@ const engine = (() => {
     ...[0, 1, 2, 3, 4, 5].map(slit), ...[0, 1, 2].flatMap(fin)], at));
 })();
 
+// ---- 発生器のエンジン（円錐）：太い胴から後ろへ伸びる短い円錐と、差し色の帯。光らない。neck は付ける面までの首の長さ ----
+export const coreEngine = (neck = 0.1) => xf([
+  ...lathe('エンジンの胴', [[-neck, 0.06, DARK], [-0.08, 0.09], [-0.04, 0.15], [0.02, 0.16], [0.05, 0.135]], { n: 12 }),
+  piece('エンジンの円錐', lathePlanes([[0.04, 0.125], [0.2, 0.05], [0.235, 0.014]], 12)),
+  piece('エンジンの円錐の帯', lathePlanes([[0.1, 0.1], [0.105, 0.106], [0.125, 0.097], [0.13, 0.086]], 12), { color: ACCENT })], { rot: [-90, 0, 0] });
+const core = G('gearcore', '発生器のエンジン（短い円錐）', 'back', [0.32, 0.32, 0.36], coreEngine(0.12));
+
 // ---- ウィンチ：左右の枠、巻き胴とワイヤー、滑車の腕、下がるフック ----
 const winch = (() => {
   const X = { rot: [0, 0, -90] };   // 軸を x へ
@@ -197,4 +204,4 @@ const vFin = G('gearfin', '垂直安定板（V 字）', 'top', [0.2, 0.5, 0.4], 
   cbox('安定板の台', [0, -0.03], [0.045, 0.09], [0.035, 0.075], -0.03, 0.04, { bev: 0.012, color: DARK }),
   ...strip('垂直安定板', [{ a: [0, 0.0, 0.05], b: [0, 0.0, -0.13], t: 0.04 }, { a: [0.05, 0.2, -0.07], b: [0.05, 0.2, -0.21], t: 0.028 }, { a: [0.115, 0.44, -0.25], b: [0.115, 0.44, -0.33], t: 0.012, color: ACCENT }, { a: [0.13, 0.49, -0.3], b: [0.13, 0.49, -0.34], t: 0.005 }])]);
 
-export default [tankLong, tankFat, tankTwin, tankHuge, containerSide, containerBack, rackGun, rackBlade, vernierSide, vernierTop, vernierTriple, engine, winch, flatWing, finWing, vFin];
+export default [tankLong, tankFat, tankTwin, tankHuge, containerSide, containerBack, rackGun, rackBlade, vernierSide, vernierTop, vernierTriple, engine, core, winch, flatWing, finWing, vFin];

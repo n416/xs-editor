@@ -143,3 +143,8 @@ export function prism(a, b, [w, h], up, { w1 = w, h1 = h } = {}) {
   for (const [c, ww, hh] of [[a, w, h], [b, w1, h1]]) for (const sx of [-1, 1]) for (const sy of [-1, 1]) pts.push([0, 1, 2].map(i => c[i] + s[i] * sx * ww / 2 + u[i] * sy * hh / 2));
   return planesFromPoints(pts);
 }
+/** 2 つの色（#rrggbb）を混ぜる（t = 0 で a、1 で b） */
+export function mix(a, b, t) {
+  const h = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)), [p, q] = [h(a), h(b)];
+  return '#' + p.map((v, i) => Math.round(v + (q[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}

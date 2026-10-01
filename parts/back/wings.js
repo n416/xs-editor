@@ -1,10 +1,10 @@
 // 翼（胴の骨 torso）。左右の対で、+x 側の 1 枚を作る（反対側は鏡像で置く）。バックパックとは同時に付けない。
 // 原点は翼の付け根（背中の板の上、胸の下端の中心から x 0.11・y 0.4・z −0.19）。x は外、y は上、z は前（翼は後ろ −z へ伸びる）。
 // 付け根の台は体の真ん中（x −0.11）まで伸び、左右の台が真ん中で合わさる。置いた翼は、付け根を軸に回転で開き方を変えられる。
-// 部品ごとに、装備を付ける所（mounts）を持つ：hang 吊り下げる所（機械の翼。大きなバインダーには無い）・root 付け根。kind：mech 機械・organic 有機・light 光
+// 部品ごとに、装備を付ける所（mounts）を持つ：hang 吊り下げる所（機械の翼の一部）・root 付け根・light 光の刃を出す所（発生器の翼）。kind：mech 機械・organic 有機・light 光
 //   機械：刃の翼（刃 6 枚を扇に）・大きなバインダー・戦闘機の翼（翼の下にエンジン）・ひれの翼（長いひれ 3 枚）
 //   生き物の形（作りは機械）：羽根の翼（装甲の腕と刃の羽）・骨組みの翼（関節の骨組みと放熱の膜）・透ける板の羽（4 枚）
-//   光：光の翼（装甲の発生器から伸びる光の刃）
+//   光を出す：放射の翼（開くひれ 6 枚。光の輪の出どころ）・発生器の翼（光の刃を出す装甲の腕）。光そのものは別の部品（fx.js）
 import { piece, MAIN, DARK, BLACK, ACCENT } from '../../xsasm-lib.js';
 import { hull, xf, named, lathe, lathePlanes, bell, strip, rod, prism, lerp3, unit, cross, aim, add3, sub3, mul3 } from './kit.js';
 
@@ -199,20 +199,47 @@ function insect() {
     ...wing('下の羽', [0.07, -0.05, -0.1], [1.25, -0.12, -0.56], [0.05, 0.22, 0.25, 0.25, 0.23, 0.2, 0.03], unit([-0.05, -1, -0.3]))]);
 }
 
-// ---- 光の翼：斜め上へ出た装甲の発生器の後ろの縁から、細く鋭い光の刃 5 本が下と外へ扇に伸びる（外ほど長い）（白い芯と青い光） ----
+// ---- 発生器の翼：斜め上へ出た装甲の発生器。後ろの縁の溝から光の刃（エフェクト fx.js の「光の刃」）を出す。光は別の部品 ----
+/** 発生器の位置と向き（光の刃のエフェクトが同じ値を使う）：A 根元、d0 伸びる向き、n 翼の面の向き、ch 幅の向き */
+export const LIGHT_EMITTER = (() => { const A = [0.1, 0.04, -0.1], d0 = unit(sub3([0.62, 0.5, -0.36], A)), n = unit([0.25, 0.1, 1]); return { A, d0, n, ch: unit(cross(n, d0)) }; })();
 function light() {
-  const A = [0.1, 0.04, -0.1], Bp = [0.62, 0.5, -0.36], d0 = unit(sub3(Bp, A)), n = unit([0.25, 0.1, 1]), ch = unit(cross(n, d0)), CY = '#18c8ff', CORE = '#e8fdff';
+  const { A, d0, n, ch } = LIGHT_EMITTER;
   const g = (r, w, tk, off = 0) => { const c = along(along(A, d0, r), ch, off); return { a: along(c, ch, w / 2), b: along(c, ch, -w / 2), t: tk, k: 0.4 }; };
   const out = [...rootMech(), ...frameIn('翼の腕', [0.02, 0, -0.03], A, 0.05), ...drum('発生器の関節', A, n, 0.075, 0.07),
     ...strip('発生器', [g(-0.04, 0.12, 0.09), g(0.12, 0.2, 0.115), g(0.5, 0.15, 0.085), g(0.74, 0.03, 0.025)]),
     ...strip('発生器の下の枠', [g(0.02, 0.07, 0.1, -0.09), g(0.12, 0.08, 0.125, -0.115), g(0.5, 0.06, 0.09, -0.09), g(0.68, 0.03, 0.04, -0.045)], { color: DARK }),
-    ...strip('発生器の光る溝', [g(0.1, 0.02, 0.06, -0.16), g(0.6, 0.016, 0.04, -0.105)], { color: CY, glow: true })];
-  for (let j = 0; j < 5; j++) {
-    const o = along(along(A, d0, 0.12 + 0.11 * j), ch, -0.13 + 0.008 * j), d = unit([0.3 + 0.13 * j, -1 + 0.14 * j, -0.38]), l = 1.1 + 0.22 * j, q = unit(cross(n, d));
-    const blade = (name, w, tk, len, o2) => { const st = (r, f) => { const c = along(o, d, r * len); return { a: along(c, q, w * f / 2), b: along(c, q, -w * f / 2), t: tk, k: 0.5 }; }; return strip(name, [st(0, 0.45), st(0.06, 1), st(0.5, 0.7), st(1, 0.02)], o2); };
-    out.push(...blade(`光の刃 ${j + 1}`, 0.17, 0.012, l, { color: CY, glow: true, opacity: 0.5, noHit: true }), ...blade(`光の刃 ${j + 1}の芯`, 0.06, 0.022, l * 0.8, { color: CORE, glow: true, opacity: 0.9, noHit: true }));
-  }
-  return W('winglight', '光の翼（光の刃 5 本）', 'light', [1.9, 1.9, 0.8], {}, out);
+    ...strip('発生器の溝', [g(0.1, 0.02, 0.06, -0.16), g(0.6, 0.016, 0.04, -0.105)], { color: BLACK })];
+  return W('winglight', '発生器の翼（光の刃を出す装甲の腕）', 'light', [0.8, 0.7, 0.5], { light: [0, 0, 0] }, out);
 }
 
-export default [blades(), binder(), jet(), plates(), feathers(), bat(), insect(), light()];
+// ---- 放射の翼：背中の後ろへ出した軸の台から、細長いひれ 3 枚（左右で 6 枚）を放射状に開く。上と下の白いひれは体の高さほどの長さ、真ん中の差し色のひれは短い。
+//      光の輪（エフェクト）の出どころ：ひれが輪を貫いて、その外まで伸びる ----
+function radial() {
+  const Hc = [-0.02, 0.0, -0.39], e1 = unit([1, 0, -0.12]), e2 = unit([0, 1, -0.06]), n = unit(cross(e1, e2));   // 開く面（n は前）
+  const out = [...rootMech(), ...frame('ひれの台の腕', [0.0, 0, -0.04], Hc, [0, 1, 0], 0.06),
+    ...drum('ひれの台', Hc, n, 0.1, 0.06), piece('ひれの台の覆い', prism(along(Hc, n, -0.07), along(Hc, n, -0.1), [0.16, 0.14], [0, 1, 0], { w1: 0.1, h1: 0.09 }))];
+  // 寸法は、見せてもらった写真の上で測った比（頭から足までを 3 として）：白いひれの長さ 2.7・2.4、差し色のひれ 1.9。
+  // 根元の 3 割は細い柱（幅 0.08）、その先が幅 0.22 の細長い刃。向きは水平から +60°・+3°・−45°
+  [[60, 2.7, 1, MAIN, ACCENT], [3, 1.9, 0.72, ACCENT, MAIN], [-45, 2.4, 1, MAIN, ACCENT]].forEach(([deg, L, ws, col, line], i) => {
+    const d = unit(add3(mul3(e1, Math.cos(deg * R)), mul3(e2, Math.sin(deg * R)))), p0 = unit(cross(n, d));
+    const p = unit(add3(mul3(p0, Math.cos(12 * R)), mul3(n, Math.sin(12 * R)))), o = along(Hc, n, -0.02 * i), nm = `ひれ ${i + 1}`;
+    const at = (r, off = 0) => along(along(o, d, r * L), p0, off);
+    const st = (r, w, tk, sh = 0) => { const c = along(at(r), p, sh * ws); return { a: along(c, p, w * ws / 2), b: along(c, p, -w * ws / 2), t: tk, k: 0.5 }; };
+    out.push(
+      // 根元の骨組み（長さの 3 割）：途中で折れる主の柱 2 本、細い副の柱、斜めの筋交い 2 本、覆い、軸
+      piece(`${nm}の根の柱（根）`, prism(at(0.01), at(0.19, 0.012), [0.075, 0.09], p0, { w1: 0.065, h1: 0.08 }), { color: DARK }),
+      piece(`${nm}の根の柱（先）`, prism(at(0.18, 0.012), at(0.35), [0.065, 0.08], p0, { w1: 0.05, h1: 0.065 }), { color: DARK }),
+      piece(`${nm}の根の副の柱`, prism(at(0.03, -0.085), at(0.33, -0.05), [0.028, 0.028], p0), { color: STEEL }),
+      piece(`${nm}の根の筋交い 1`, prism(at(0.05, -0.08), at(0.12, 0.0), [0.022, 0.022], p0), { color: STEEL }),
+      piece(`${nm}の根の筋交い 2`, prism(at(0.12, 0.0), at(0.2, -0.065), [0.022, 0.022], p0), { color: STEEL }),
+      piece(`${nm}の根の覆い`, prism(at(0.04, 0.05), at(0.3, 0.06), [0.095, 0.035], p0, { w1: 0.07, h1: 0.028 }), { color: col }),
+      ...drum(`${nm}の軸`, at(0.02), n, 0.06, 0.05),
+      // ひれ：肩の段で広がる細長い刃。先の手前で一段細くなって、斜めに尖る
+      ...strip(nm, [st(0.3, 0.09, 0.05), st(0.36, 0.22, 0.06), st(0.78, 0.2, 0.045), st(0.8, 0.145, 0.04, -0.02), st(0.94, 0.12, 0.024, -0.02), st(1, 0.01, 0.006, 0.04)], { color: col }),
+      ...strip(`${nm}の筋`, [st(0.4, 0.05, 0.072), st(0.74, 0.04, 0.056)], { color: line }),
+      ...strip(`${nm}の先の筋`, [st(0.83, 0.03, 0.046, -0.02), st(0.92, 0.024, 0.034, -0.02)], { color: line }));
+  });
+  return W('wingradial', '放射の翼（開く長いひれ 6 枚）', 'mech', [2.0, 4.2, 0.8], {}, out);
+}
+
+export default [blades(), radial(), binder(), jet(), plates(), feathers(), bat(), insect(), light()];
