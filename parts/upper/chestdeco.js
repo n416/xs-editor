@@ -29,9 +29,10 @@ function vent(side, x0, x1, y0, y1, z0, n) {
 }
 /** 胸の動力パイプ（+x 側）の道筋：前の下の外の角 → 横の外 → 背中 */
 const pipePath = n => Array.from({ length: n + 1 }, (_, i) => {
-  // 前（a 0）から後ろ（a ≈ π）へ、体の横を下へたわみながら回る。横でも x 0.34 より内（腕を前後に回すと肩アーマーの内の端が x 0.38 の外を通る）
-  const t = i / n, a = Math.PI * 0.95 * t;
-  return [0.2 + 0.105 * Math.sin(a), 0.265 - 0.07 * Math.sin(a), 0.21 * Math.cos(a) - 0.01];
+  // 前（a 0）から後ろ（a ≈ π）へ、体の横を下へたわみながら回る。上から見て角の丸い四角に、体の外を回る（横で x 0.36）。
+  // 管は当たり判定なし（parts/pipe.js）なので、腕を振って肩アーマーと重なってもよい
+  const t = i / n, a = Math.PI * 0.95 * t, sn = Math.sin(a), cs = Math.cos(a);
+  return [0.2 + 0.16 * sn ** 0.45, 0.265 - 0.07 * sn, 0.27 * Math.sign(cs) * Math.abs(cs) ** 0.45 - 0.01];
 });
 const pipes = (rr, rc, n) => [1, -1].flatMap(s => {
   const p = pipePath(n).map(q => [s * q[0], q[1], q[2]]), t = s > 0 ? '+x' : '−x';
