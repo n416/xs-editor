@@ -496,6 +496,9 @@ import { hull2, pushAngle } from './skirtpush.js';
 import { doubleJoint, ELBOW_AXES, KNEE_AXES, BEND } from './doublejoint.js';
 
 const $ = s => document.querySelector(s);
+// ?nosave: opened as a hidden worker by 機体エディタ Ver2 (v2.html) for its game export: nothing is written to this browser's
+// storage, so the model the user is working on here (つづきから) stays as it is
+const NO_SAVE = new URLSearchParams(location.search).has('nosave');
 // a question in the page's own dialog instead of the browser's confirm(): resolves true for the main button
 function ask(text, { ok = 'OK', cancel = 'やめる', danger = false } = {}) {   // cancel: null = just a notice
   return new Promise(done => {
@@ -517,7 +520,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '6745e99';
+const BUILD = '41040b5';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -2669,10 +2672,11 @@ function exportVehicle() {
 // For scripts (tools/exportxs.ts): load a document and export it for the game without the dialogs.
 window.__xs = {
   /** doc: { parts, ai, role } as saved by the editor (tools/xs-models/*.json) → { glb (base64), report, joints } */
-  exportGame: (doc, id) => new Promise((resolve, reject) => {
-    loadScene(structuredClone(doc.parts), doc.ai, doc.role ?? id.replace(/^[ab]_/, ''));
+  exportGame: (doc, id) => { loadScene(structuredClone(doc.parts), doc.ai, doc.role ?? id.replace(/^[ab]_/, '')); return window.__xs.exportNow(id); },
+  /** the loaded model as it is → { glb (base64), report, loose } */
+  exportNow: (id, skipCheck = false) => new Promise((resolve, reject) => {
     const { root, report } = buildGameModel();
-    const joints = jointCheck(XS_INFO[id] ? id : '');
+    const joints = skipCheck ? {} : jointCheck(XS_INFO[id] ? id : '');
     const loose = Object.entries(joints).filter(([k, r]) => !k.startsWith('__') && (r.off.length || r.cut.length)).map(([name, r]) => `${name}: ${[...r.off.map(x => x + ' が外れる'), ...r.cut.slice(0, 3).map(x => x + ' がめり込む')].join('、')}`);
     new GLTFExporter().parse(root, data => {
       const b = new Uint8Array(data); let bin = '';
@@ -2689,6 +2693,22 @@ window.__xs = {
     const m = await import('./bodyparts.js');
     const { parts: list, anchors } = m.bodyParts(m.register(items).filter(it => m.byId[it.part]), adj);
     return applyBody(list, anchors);
+  },
+  /** put a whole unit from 機体エディタ Ver2 (its 機体の JSON: head, body, lengths, paint, its own parts) on the loaded model: only
+   *  the hand weapons stay. opt.weaponHand: where the right hand was when those weapons were placed (a weapon set from samples/) */
+  applyUnit: async (doc, opt = {}) => {
+    const m = await import('./unitparts.js');
+    m.registerUnit(doc);
+    const u = m.unitParts(doc);
+    return applyBody(u.parts, u.anchors, { replaceHead: u.head, ...opt });
+  },
+  /** the loaded model's hand weapons and where its right hand is (to make a weapon set for samples/) */
+  weapons: () => {
+    rebuild();
+    const b = new THREE.Box3();
+    for (const p of parts) if (p.op === 'add' && !p.blockout && !isHeld(p) && boneGroupOf(p) === 'fore' && /手/.test(p.name) && !/手首/.test(p.name))
+      for (const g of worldGeometries(p)) if (g.boundingBox.min.x + g.boundingBox.max.x < 0) b.union(g.boundingBox);
+    return { hand_r: b.isEmpty() ? null : b.getCenter(new THREE.Vector3()).toArray(), parts: parts.filter(p => !p.blockout && isHeld(p)).map(serialize) };
   },
   /** both checks on the loaded model: floating groups and the joint check's findings */
   check: id => {
@@ -5550,12 +5570,12 @@ const headGenApi = {
 // ---------- 体ジェネレーター (lowerasm.html in a frame over the editor): its body replaces this model's body ----------
 // What stays: the head (and neck), the hand weapons (gun / bazooka), blockouts. The head is set on the new neck and the
 // weapons follow the right hand. The new parts are hulls with their bone and the point it turns at (joint).
-function applyBody(list, anchors) {
+function applyBody(list, anchors, opt = {}) {
   rebuild();
   const boxOf = (ps, pick = () => true) => { const b = new THREE.Box3(); for (const p of ps) for (const g of worldGeometries(p)) if (pick(g)) b.union(g.boundingBox); return b; };
   const solid = parts.filter(p => p.op === 'add' && !p.blockout);
-  const stays = p => p.blockout || boneGroupOf(p) === 'head' || isHeld(p);
-  const oldHand = boxOf(solid.filter(p => !isHeld(p) && boneGroupOf(p) === 'fore' && /手/.test(p.name) && !/手首/.test(p.name)), g => g.boundingBox.min.x + g.boundingBox.max.x < 0);
+  const stays = p => p.blockout || (!opt.replaceHead && boneGroupOf(p) === 'head') || isHeld(p);   // (replaceHead: the new parts bring their own head)
+  const oldHand = opt.weaponHand ? new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(...opt.weaponHand), new THREE.Vector3(1e-4, 1e-4, 1e-4)) : boxOf(solid.filter(p => !isHeld(p) && boneGroupOf(p) === 'fore' && /手/.test(p.name) && !/手首/.test(p.name)), g => g.boundingBox.min.x + g.boundingBox.max.x < 0);
   const head = boxOf(solid.filter(p => boneGroupOf(p) === 'head' && !/^首/.test(p.name)));
   const gone = new Set(parts.filter(p => !stays(p)).map(p => p.id));
   for (const p of parts) if (gone.has(p.id)) { proxyGroup.remove(p.proxy); p._geo?.dispose(); }
@@ -5566,7 +5586,7 @@ function applyBody(list, anchors) {
   parts.push(...added);
   // the head: with a neck (parts named 首…), the head sits just over the neck's root and the neck goes down into the collar;
   // without one, it is set down onto what the new chest has under it (2 cm into it, so that it is joined)
-  if (anchors?.neck && !head.isEmpty()) {
+  if (anchors?.neck && !head.isEmpty() && !opt.replaceHead) {
     const heads = parts.filter(p => !p.blockout && boneGroupOf(p) === 'head' && !isHeld(p));
     let y = anchors.neck[1] + 0.02;
     if (!heads.some(p => /^首/.test(p.name))) {
@@ -5578,7 +5598,7 @@ function applyBody(list, anchors) {
     for (const p of heads) shift(p, d);
   }
   select(null); renderList(); rebuild(); save();
-  return { added: list.length, removed: gone.size, head: !head.isEmpty(), weapons: parts.some(p => !p.blockout && isHeld(p)) };
+  return { added: list.length, removed: gone.size, head: !head.isEmpty() || !!opt.replaceHead, weapons: parts.some(p => !p.blockout && isHeld(p)) };
 }
 let bodyFrame = null;
 function openBodyGen() {
@@ -5618,7 +5638,7 @@ function recordCheck(kind, ok) {
   const sig = shapeSig();
   if (checkState.sig !== sig) checkState = { sig };
   checkState[kind] = ok ? 'ok' : 'ng';
-  try { localStorage.setItem(CHECK_KEY, JSON.stringify(checkState)); } catch { /* storage blocked */ }
+  if (!NO_SAVE) try { localStorage.setItem(CHECK_KEY, JSON.stringify(checkState)); } catch { /* storage blocked */ }
   updateCheckBadge();
 }
 function checkStatus() {
@@ -5656,6 +5676,7 @@ $('#bRunChecks').onclick = () => {
 const CURRENT_KEY = 'xs-part-editor-current-v1', SKIP_START_KEY = 'xs-part-editor-skip-start';
 function writeCurrent() {
   updateCheckBadge();
+  if (NO_SAVE) return;
   try { localStorage.setItem(CURRENT_KEY, JSON.stringify({ parts: parts.map(serialize), ai: sceneAi, role: sceneRole, hit: sceneHit ?? undefined, savedAt: new Date().toISOString() })); } catch { /* storage full or blocked */ }
 }
 function readCurrent() {
