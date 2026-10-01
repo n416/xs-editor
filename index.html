@@ -304,7 +304,6 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
           <button id="bShare">みんなの機体</button>
           <button id="bAi">AIで作る</button>
           <button id="bHeadGen" title="部品カタログから頭の殻・目・あご・トサカ・首などを置いて頭を組み、今の機体の頭と入れ替える（ランダムに組むこともできる）">頭ジェネレーター</button>
-          <button id="bBodyGen" title="部品カタログから上半身・背中（バックパックか翼）・腕・下半身・脚を選んで体を組み、今の機体の体と入れ替える（頭と手持ちの武器は残る。ランダムに組むこともできる）">体ジェネレーター</button>
           <button id="bImport" title="Blender などで作った .glb を、部位ごとの部品に分けて取り込む（スキン）">外の形を取り込む（glb）</button>
           <button id="bRigAi" title="パソコンの AI（Claude など）に Blender で骨を付けてもらい、できた .glb を取り込む">AI に骨を付けてもらう（Blender）</button>
           <input type="file" id="importFile" accept=".glb,.gltf,model/gltf-binary" hidden>
@@ -520,7 +519,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '41040b5';
+const BUILD = 'ff95cd2';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -5567,7 +5566,7 @@ const headGenApi = {
   ask,
   look: (center, dist) => { orbit.target.set(center[0], center[1], center[2]); camera.position.set(center[0] + dist * 0.5, center[1] + dist * 0.3, center[2] + dist * 1.1); },
 };
-// ---------- 体ジェネレーター (lowerasm.html in a frame over the editor): its body replaces this model's body ----------
+// ---------- a body or a whole unit from 機体エディタ Ver2 / the body tools replaces this model's body (tools/bodyxs.ts, v2.html's game export) ----------
 // What stays: the head (and neck), the hand weapons (gun / bazooka), blockouts. The head is set on the new neck and the
 // weapons follow the right hand. The new parts are hulls with their bone and the point it turns at (joint).
 function applyBody(list, anchors, opt = {}) {
@@ -5600,27 +5599,6 @@ function applyBody(list, anchors, opt = {}) {
   select(null); renderList(); rebuild(); save();
   return { added: list.length, removed: gone.size, head: !head.isEmpty() || !!opt.replaceHead, weapons: parts.some(p => !p.blockout && isHeld(p)) };
 }
-let bodyFrame = null;
-function openBodyGen() {
-  if (!bodyFrame) {
-    bodyFrame = document.createElement('div');
-    bodyFrame.id = 'bodyGen';
-    bodyFrame.style.cssText = 'position:fixed;inset:0;z-index:60;background:#14161a';
-    bodyFrame.innerHTML = '<iframe src="./lowerasm.html?embed=1" title="体ジェネレーター" style="width:100%;height:100%;border:0"></iframe>';
-    document.body.appendChild(bodyFrame);
-  }
-  bodyFrame.hidden = false;
-}
-window.addEventListener('message', e => {
-  if (e.origin !== location.origin || !bodyFrame || e.source !== bodyFrame.querySelector('iframe').contentWindow) return;
-  if (e.data?.type === 'xs-body-close') bodyFrame.hidden = true;
-  if (e.data?.type === 'xs-body-commit' && Array.isArray(e.data.parts)) {
-    bodyFrame.hidden = true;
-    const r = applyBody(e.data.parts, e.data.anchors);
-    ask(`体を入れ替えました（新しい部品 ${r.added} 個。前の体の部品 ${r.removed} 個は消しました。「元に戻す」で戻せます）。${r.head ? '頭は新しい首の位置へ移しました。' : '頭がありません（頭ジェネレーターで付けられます）。'}${r.weapons ? '手持ちの武器は右手へ移しました。' : '手持ちの武器（「銃」「ライフル」）がありません。'}「チェックする」でつながりと関節を確かめてください。`, { cancel: null });
-  }
-});
-$('#bBodyGen').onclick = () => { $('#menuPop').hidden = true; if (isVehicle()) ask('体ジェネレーターは XS 用です。', { cancel: null }); else openBodyGen(); };
 $('#bHeadGen').onclick = () => { $('#menuPop').hidden = true; if (isVehicle()) ask('頭ジェネレーターは XS 用です（艦には頭がありません）。', { cancel: null }); else openHeadAsm(headGenApi); };
 $('#aClose').onclick = closeAi;
 closeOnBackdrop($('#aiBox'), closeAi);
