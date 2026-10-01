@@ -73,11 +73,11 @@ const finPods = (() => {
     ...[-0.105, 0, 0.105].flatMap(one)], ['mech']);
 })();
 
-// ---- 遠隔砲台（ロングレンジバレル）5 基：発生器の翼の後ろの縁につながる、長い砲身の砲台。5 基とも同じ長さで、先は尖らせず砲口で止める。
+// ---- オーブ（ORB：アウトレンジバレル。相手の射程の外から撃つ、射程がいちばん長い遠隔砲台）5 基：発生器の翼の後ろの縁につながる、長い砲身の砲台。5 基とも同じ長さで、先は尖らせず砲口で止める。
 //      並びは光の刃（エフェクト）と同じ扇。受け・機関部（下に動力の箱、小さな安定板 2 枚）・長い砲身（上に装甲の覆い、下に支えの桁と 2 つの留め具）・差し色の帯・砲口 ----
-const LRB_LEN = 1.5;
-const lrb = (() => {
-  const { A, d0, n, ch } = LIGHT_EMITTER, out = [], STEEL = '#4a4f57', L = LRB_LEN;
+const ORB_LEN = 1.5;
+const orb = (() => {
+  const { A, d0, n, ch } = LIGHT_EMITTER, out = [], STEEL = '#4a4f57', L = ORB_LEN;
   for (let j = 0; j < 5; j++) {
     const o = add3(add3(A, mul3(d0, 0.12 + 0.11 * j)), mul3(ch, -0.13 + 0.008 * j)), d = unit([0.3 + 0.13 * j, -1 + 0.14 * j, -0.38]), q = unit(cross(n, d)), nm = `砲台 ${j + 1}`;
     // r は長さに対する割合、dq は幅の向き（扇の面の中）、dn は厚みの向き（面の前後）へのずれ
@@ -98,10 +98,10 @@ const lrb = (() => {
       box('砲口の中', 0.985, 1.004, [0.045, 0.04], { color: BEAM, glow: true }),
       ...[-1, 1].flatMap(sg => strip(`${nm}の安定板（${sg > 0 ? '前' : '後ろ'}）`, [{ a: at(0.08, 0, sg * 0.04), b: at(0.2, 0, sg * 0.04), t: 0.016, k: 0.4, n: q }, { a: at(0.14, 0, sg * 0.11), b: at(0.2, 0, sg * 0.1), t: 0.006, k: 0.4, n: q }], { color: STEEL })));
   }
-  return G('wglrb', '遠隔砲台（ロングレンジバレル 5 基）', 'light', [1.6, 1.7, 0.8], out, ['light']);
+  return G('wgorb', 'オーブ（ORB：アウトレンジバレル 5 基）', 'light', [1.6, 1.7, 0.8], out, ['light']);
 })();
 
 // ---- 発生器のエンジン（円錐）：背中の真ん中の後ろに付く。光の輪（エフェクト）の真ん中に置ける ----
 const core = G('wgcore', '発生器のエンジン（短い円錐）', 'center', [0.32, 0.32, 0.55], coreEngine(0.49));
 
-export default [rackPart, wingTank, pods, finPods, lrb, core];
+export default [rackPart, wingTank, pods, finPods, orb, core];
