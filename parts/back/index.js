@@ -77,7 +77,8 @@ export const BACK_SAMPLES = {
   '骨組みの翼': wingSet('wingbat'),
   '発生器の翼と光の刃（青）': wingSet('winglight', ['fxblade_blue']),
   '発生器の翼と光の刃・光の帯（緑）': wingSet('winglight', ['fxblade_green', 'fxribbon_green']),
-  '発生器の翼とオーブ（ORB）': wingSet('winglight', ['wgorb']),
+  '発生器の翼とオーブ（ORB・扇）': wingSet('winglight', ['wgorb']),
+  '発生器の翼とオーブ（ORB・平行）': wingSet('winglight', ['wgorbpar']),
   '透ける板の羽': wingSet('winginsect'),
 };
 /**
@@ -97,7 +98,7 @@ export function randomBack(rnd = Math.random, which = null) {
   }
   const wing = pick(of('翼')), ids = [];
   if (wing.mounts.hang && rnd() < 0.6) { const g = pick(of('翼の装備').filter(x => x.slot === 'hang' && x.id !== 'wgrack')); if (g.bare && rnd() < 0.5) ids.push('wgrack'); ids.push(g.id); }   // タンクは半分はラックに吊る
-  if (wing.kind === 'light' && rnd() < 0.9) ids.push(rnd() < 0.5 ? `fxblade_${col}` : 'wgorb');   // 光の刃か、同じ並びの遠隔砲台（長い砲身）
+  if (wing.kind === 'light' && rnd() < 0.9) ids.push(pick([`fxblade_${col}`, `fxblade_${col}`, 'wgorb', 'wgorbpar']));   // 光の刃か、遠隔砲台のオーブ（扇・平行）
   if (wing.id === 'wingradial' ? rnd() < 0.85 : rnd() < 0.2) { if (wing.id !== 'wingradial' || rnd() < 0.5) ids.push('wgcore'); ids.push(`fxring_${col}`); }
   if (rnd() < 0.25) ids.push(`fxribbon_${col}`);
   return wingSet(wing.id, ids);

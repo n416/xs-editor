@@ -37,13 +37,12 @@ const rack = (name, drop = RACK_DROP, zs = -0.15) => {
 };
 const rackPart = G('wgrack', 'ラック（ひれ付きの吊り柱）', 'hang', [0.2, 0.2, 0.4], rack('ラック'), ['mech']);
 
-// ---- 翼のプロペラントタンク：後ろへ寝た細長いタンク。吊り柱は付けず、2 つの留め金で翼（かラック）に直に付く。後ろに小さなひれ 3 枚 ----
+// ---- 翼のプロペラントタンク：後ろへ寝た細長いタンク。吊り柱は付けず、2 つの留め金で翼（かラック）に直に付く。ひれは付けない ----
 const wingTank = (() => {
   const at = { rot: [-84, 0, 0], mov: [0, -0.078, -0.26] }, len = 0.74;
-  const fin = k => xf(strip('タンクのひれ', [{ a: [0, 0.2, 0.06], b: [0, 0.34, 0.055], t: 0.022 }, { a: [0, 0.27, 0.1], b: [0, 0.35, 0.1], t: 0.014 }, { a: [0, 0.32, 0.135], b: [0, 0.365, 0.135], t: 0.005 }]), { rot: [0, k * 120 + 60, 0] }).map(pc => ({ ...pc, name: pc.name.replace('タンクのひれ', `タンクのひれ ${k + 1}`) }));
   const lug = (s, i) => { const p = xfPt([0, s * len, 0], at); return piece(`タンクの留め金 ${i + 1}`, prism([0, 0.03, p[2]], [0, p[1] + 0.03, p[2]], [0.05, 0.05], [0, 0, 1], { w1: 0.075, h1: 0.05 }), { color: DARK }); };
   return { ...G('wgtank', '翼のプロペラントタンク', 'hang', [0.2, 0.2, 0.8], [lug(-0.12, 0), lug(0.2, 1),
-    ...xf([...tank('タンク', len, 0.062, { n: 12, bands: [-0.12, 0.2], stripe: 0.3 }), ...[0, 1, 2].flatMap(fin)], at)], ['mech']), bare: true };
+    ...xf([...tank('タンク', len, 0.062, { n: 12, bands: [-0.12, 0.2], stripe: 0.3 })], at)], ['mech']), bare: true };
 })();
 
 // ---- 遠隔砲台（漏斗形）3 基：吊り柱の下の棒に、口の細い円錐を 3 つ下げる ----
@@ -73,13 +72,14 @@ const finPods = (() => {
     ...[-0.105, 0, 0.105].flatMap(one)], ['mech']);
 })();
 
-// ---- オーブ（ORB：アウトレンジバレル。相手の射程の外から撃つ、射程がいちばん長い遠隔砲台）5 基：発生器の翼の後ろの縁につながる、長い砲身の砲台。5 基とも同じ長さで、先は尖らせず砲口で止める。
+// ---- オーブ（ORB：アウトレンジバレル。相手の射程の外から撃つ、射程がいちばん長い遠隔砲台）5 基：発生器の翼の後ろの縁につながる、長い砲身の砲台。5 基とも同じ長さで、先は尖らせず砲口で止める。扇に開く並びと、平行にそろえた並びの 2 種類。
 //      並びは光の刃（エフェクト）と同じ扇。受け・機関部（下に動力の箱、小さな安定板 2 枚）・長い砲身（上に装甲の覆い、下に支えの桁と 2 つの留め具）・差し色の帯・砲口 ----
 const ORB_LEN = 1.5;
-const orb = (() => {
+/** dirOf(j)：j 番目の砲身の向き */
+const orbSet = (id, name, dirOf) => {
   const { A, d0, n, ch } = LIGHT_EMITTER, out = [], STEEL = '#4a4f57', L = ORB_LEN;
   for (let j = 0; j < 5; j++) {
-    const o = add3(add3(A, mul3(d0, 0.12 + 0.11 * j)), mul3(ch, -0.13 + 0.008 * j)), d = unit([0.3 + 0.13 * j, -1 + 0.14 * j, -0.38]), q = unit(cross(n, d)), nm = `砲台 ${j + 1}`;
+    const o = add3(add3(A, mul3(d0, 0.12 + 0.11 * j)), mul3(ch, -0.13 + 0.008 * j)), d = unit(dirOf(j)), q = unit(cross(n, d)), nm = `砲台 ${j + 1}`;
     // r は長さに対する割合、dq は幅の向き（扇の面の中）、dn は厚みの向き（面の前後）へのずれ
     const at = (r, dq = 0, dn = 0) => add3(add3(add3(o, mul3(d, r * L)), mul3(q, dq)), mul3(n, dn));
     const box = (name, r0, r1, size, o2 = {}, pos = [0, 0], tp = {}) => piece(`${nm}の${name}`, prism(at(r0, pos[0], pos[1]), at(r1, pos[0], pos[1]), size, n, tp), o2);
@@ -98,10 +98,13 @@ const orb = (() => {
       box('砲口の中', 0.985, 1.004, [0.045, 0.04], { color: BEAM, glow: true }),
       ...[-1, 1].flatMap(sg => strip(`${nm}の安定板（${sg > 0 ? '前' : '後ろ'}）`, [{ a: at(0.08, 0, sg * 0.04), b: at(0.2, 0, sg * 0.04), t: 0.016, k: 0.4, n: q }, { a: at(0.14, 0, sg * 0.11), b: at(0.2, 0, sg * 0.1), t: 0.006, k: 0.4, n: q }], { color: STEEL })));
   }
-  return G('wgorb', 'オーブ（ORB：アウトレンジバレル 5 基）', 'light', [1.6, 1.7, 0.8], out, ['light']);
-})();
+  return G(id, name, 'light', [1.6, 1.7, 0.8], out, ['light']);
+};
+// 扇に開く並び（光の刃と同じ向き）と、5 基とも同じ向きにそろえた平行の並び（扇の真ん中の向き）
+const orb = orbSet('wgorb', 'オーブ（ORB：アウトレンジバレル 5 基・扇）', j => [0.3 + 0.13 * j, -1 + 0.14 * j, -0.38]);
+const orbPar = orbSet('wgorbpar', 'オーブ（ORB：アウトレンジバレル 5 基・平行）', () => [0.56, -0.72, -0.38]);
 
 // ---- 発生器のエンジン（円錐）：背中の真ん中の後ろに付く。光の輪（エフェクト）の真ん中に置ける ----
 const core = G('wgcore', '発生器のエンジン（短い円錐）', 'center', [0.32, 0.32, 0.55], coreEngine(0.49));
 
-export default [rackPart, wingTank, pods, finPods, orb, core];
+export default [rackPart, wingTank, pods, finPods, orb, orbPar, core];
