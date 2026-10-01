@@ -519,7 +519,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '9c9f94c';
+const BUILD = '992e3a3';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -616,6 +616,8 @@ const DEFAULTS = {
   side: null, top: null,   // extrude only: outlines seen from the side [[z, y], ...] and from above [[x, z], ...]; null = none
   planes: null,            // kind 'hull' only: the planes of a convex solid [[nx, ny, nz, d, bevel?], ...] (hull.js); n·p ≤ d is kept
   mesh: null,              // kind 'mesh' only: the id of an imported mesh (IndexedDB), shown instead of an outline
+  tris: null, nors: null,  // kind 'tri' only: the triangles themselves (positions and normals, 9 numbers a triangle), from 機体エディタ Ver2's
+  trisLow: null,           //     parts editor (pushed-out / turned / cut blocks: partgeo.js); trisLow: the plainer shape for the far LODs
   joint: null,             // imported meshes: where the bone this part rides on turns, in the part's own frame
   rig: null,               // a skinned imported mesh: { bone name: [x, y, z] } where each bone turns, in the part's frame
   joints: null,            // an imported mesh cut by joint spheres: { joint: { p: [x, y, z], r } } in the part's frame
@@ -700,9 +702,18 @@ function latheLoop(p) {
 
 function buildLocalGeometry(p) {
   if (p.kind === 'mesh') return meshGeometry(p);
-  const key = JSON.stringify([p.kind, p.pts, p.depth, p.bevel, p.bevelSegs, p.corner, p.cornerSegs, p.taper, p.tiltY, p.ridge, p.segments, p.side, p.top, p.planes]);
+  const key = p.kind === 'tri' ? `tri${p.tris?.length ?? 0}${p._lod ? 'L' : ''}` : JSON.stringify([p.kind, p.pts, p.depth, p.bevel, p.bevelSegs, p.corner, p.cornerSegs, p.taper, p.tiltY, p.ridge, p.segments, p.side, p.top, p.planes]);
   if (p._geoKey === key) return p._geo;
   let g;
+  if (p.kind === 'tri') {   // triangles as they are (Ver2's parts editor made the shape: partgeo.js)
+    const low = p._lod && p.trisLow;
+    g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(low || p.tris || [], 3));
+    if (!low && p.nors?.length === p.tris?.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(p.nors, 3)); else g.computeVertexNormals();
+    p._geo?.dispose();
+    p._geo = g; p._geoKey = key;
+    return g;
+  }
   if (p.kind === 'hull') {   // a convex solid cut out by its planes, its edges bevelled (hull.js)
     const h = buildHull(p.planes ?? [], { bevel: p.bevel, bevelSegs: p.bevelSegs, reach: hullReach(p.planes ?? []) });
     g = new THREE.BufferGeometry();
@@ -1111,7 +1122,7 @@ function renderProps() {
   );
   else if (p.kind === 'lathe') sliders.push(['回転体', [slider('分割数', 'segments', 3, 64, 1)]]);
   else if (p.kind === 'hull') sliders.push(['面で作る部品の辺', [slider('面取り幅', 'bevel', 0, 0.05, 0.001), slider('段数', 'bevelSegs', 1, 8, 1)]]);
-  if (p.kind !== 'mesh' && p.kind !== 'hull') sliders.push(['角（断面の頂点）', [slider('面取り幅', 'corner', 0, 0.5, 0.005), slider('段数', 'cornerSegs', 1, 8, 1)]]);
+  if (p.kind !== 'mesh' && p.kind !== 'hull' && p.kind !== 'tri') sliders.push(['角（断面の頂点）', [slider('面取り幅', 'corner', 0, 0.5, 0.005), slider('段数', 'cornerSegs', 1, 8, 1)]]);
   sliders.push(
     ['繰り返し', [slider('個数', 'arrayCount', 1, 16, 1), slider('間隔 X', 'arrayStep', -1, 1, 0.01, 0),
       slider('間隔 Y', 'arrayStep', -1, 1, 0.01, 1), slider('間隔 Z', 'arrayStep', -1, 1, 0.01, 2)]],
@@ -1138,7 +1149,8 @@ function renderProps() {
     <div class="seg"><button id="pJoints" class="on" ${MESHES.has(p.mesh) ? '' : 'disabled'}>関節と切り分け（3 面図）</button></div>
     <div class="seg"><button id="pBlocks" ${MESHES.has(p.mesh) ? '' : 'disabled'} title="骨ごとに形を塊に分け、塊ごとに正面・横・上から見た輪郭の重なりで部品にする（試作）">ブロックの部品に変換（試作）</button></div>` : ''}
     ${p.kind === 'hull' ? `<h2>面で作る部品</h2><p class="hint">平面の集まりで囲った形（${(p.planes ?? []).length} 面）です。頭ジェネレーターが作ります。形は描き直せませんが、位置・回転・拡大、辺の面取り、質感は変えられます。</p>` : ''}
-    <div ${p.kind === 'mesh' || p.kind === 'hull' ? 'hidden' : ''}>
+    ${p.kind === 'tri' ? `<h2>三角形の部品</h2><p class="hint">機体エディタ Ver2 のパーツエディタで作った形（${(p.tris ?? []).length / 9} 三角形）です。形は Ver2 で直します。位置・回転・拡大、質感は変えられます。</p>` : ''}
+    <div ${p.kind === 'mesh' || p.kind === 'hull' || p.kind === 'tri' ? 'hidden' : ''}>
     <h2>断面 ${p.kind === 'extrude' ? '（押し出し）' : '（回転体：右半分を描く）'}</h2>
     ${p.kind === 'extrude' ? `<div class="seg" id="pFace">${Object.entries(FACE_LABEL).map(([k, v]) => `<button data-face="${k}">${v}${k !== 'front' && p[FACE_KEY[k]] ? ' ●' : ''}</button>`).join('')}</div>
     <p class="hint" id="pFaceNote"></p>` : ''}
