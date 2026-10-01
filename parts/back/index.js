@@ -5,7 +5,7 @@
 import packs from './packs.js';
 import gear from './gear.js';
 import wings from './wings.js';
-import wingear from './wingear.js';
+import wingear, { RACK_DROP } from './wingear.js';
 import fx, { FX_CAT, FX_COLORS } from './fx.js';
 export const BACK = [packs, gear, wings, wingear, fx].flat();
 export const backById = Object.fromEntries(BACK.map(p => [p.id, p]));
@@ -33,7 +33,10 @@ export function placementOfBack(def, items = []) {
   if (def.cat === '翼') return { mov: WING_AT.slice(), pair: true };
   const find = cat => items.find(it => backById[it.part]?.cat === cat && (it.mov?.[0] ?? 0) >= 0) ?? null;
   const pack = find('バックパック'), wing = find('翼');
-  return { mov: mountOf(def, pack, wing), pair: isPairBack(def), based: def.slot !== 'center' && !!(def.cat === 'バックパックの装備' ? pack : def.cat === '翼の装備' ? wing : wing ?? pack) };
+  const mov = mountOf(def, pack, wing);
+  // ラック（ひれ付きの吊り柱）を置いてあれば、吊り柱の無い装備はその下の端に付く
+  if (def.bare && items.some(it => it.part === 'wgrack')) mov[1] -= RACK_DROP;
+  return { mov, pair: isPairBack(def), based: def.slot !== 'center' && !!(def.cat === 'バックパックの装備' ? pack : def.cat === '翼の装備' ? wing : wing ?? pack) };
 }
 const r4 = v => Math.round(v * 1e4) / 1e4;
 const one = (part, mov) => [{ part, mov: mov.map(r4) }];
@@ -55,7 +58,8 @@ export function packSet(pack, { side = null, top = null, back = null, fx: fxIds 
 /** 翼と装備・エフェクトの 1 式。ids は装備・エフェクトの id の並び */
 export function wingSet(wing, ids = []) {
   const base = { part: wing, mov: WING_AT, scal: [1, 1, 1] };
-  return [...two(wing, WING_AT), ...ids.flatMap(g => put(g, null, base))];
+  const racked = ids.includes('wgrack');
+  return [...two(wing, WING_AT), ...ids.flatMap(g => put(g, null, base).map(it => (racked && backById[g].bare ? { ...it, mov: [it.mov[0], r4(it.mov[1] - RACK_DROP), it.mov[2]] } : it)))];
 }
 export const BACK_SAMPLES = {
   'タンク 2 本と円錐エンジン': packSet('backpack', { side: 'geartank', back: 'gearengine' }),
@@ -67,12 +71,13 @@ export const BACK_SAMPLES = {
   '放射の翼と光の輪（緑）': wingSet('wingradial', ['fxring_green']),
   '刃の翼と遠隔砲台': wingSet('wingblade', ['wgfinpod']),
   '戦闘機の翼とタンク': wingSet('wingjet', ['wgtank']),
+  '戦闘機の翼とラックに吊ったタンク': wingSet('wingjet', ['wgrack', 'wgtank']),
   '大きなバインダー': wingSet('wingbinder'),
   '羽根の翼と光の帯（オレンジ）': wingSet('wingfeather', ['fxribbon_orange']),
   '骨組みの翼': wingSet('wingbat'),
   '発生器の翼と光の刃（青）': wingSet('winglight', ['fxblade_blue']),
   '発生器の翼と光の刃・光の帯（緑）': wingSet('winglight', ['fxblade_green', 'fxribbon_green']),
-  '発生器の翼と遠隔砲台（刃の形）': wingSet('winglight', ['wgbladepod']),
+  '発生器の翼とロングレンジバレル': wingSet('winglight', ['wglrb']),
   '透ける板の羽': wingSet('winginsect'),
 };
 /**
@@ -91,8 +96,8 @@ export function randomBack(rnd = Math.random, which = null) {
     return packSet(pick(of('バックパック')).id, { side, top: rnd() < 0.4 ? pick(bySlot('top')) : null, back, fx: back === 'gearcore' && rnd() < 0.7 ? [`fxring_${col}`] : [] });
   }
   const wing = pick(of('翼')), ids = [];
-  if (wing.mounts.hang && rnd() < 0.6) ids.push(pick(of('翼の装備').filter(g => g.slot === 'hang')).id);
-  if (wing.kind === 'light' && rnd() < 0.9) ids.push(rnd() < 0.5 ? `fxblade_${col}` : 'wgbladepod');   // 光の刃か、同じ形の遠隔砲台
+  if (wing.mounts.hang && rnd() < 0.6) { const g = pick(of('翼の装備').filter(x => x.slot === 'hang' && x.id !== 'wgrack')); if (g.bare && rnd() < 0.5) ids.push('wgrack'); ids.push(g.id); }   // タンクは半分はラックに吊る
+  if (wing.kind === 'light' && rnd() < 0.9) ids.push(rnd() < 0.5 ? `fxblade_${col}` : 'wglrb');   // 光の刃か、同じ並びの遠隔砲台（長い砲身）
   if (wing.id === 'wingradial' ? rnd() < 0.85 : rnd() < 0.2) { if (wing.id !== 'wingradial' || rnd() < 0.5) ids.push('wgcore'); ids.push(`fxring_${col}`); }
   if (rnd() < 0.25) ids.push(`fxribbon_${col}`);
   return wingSet(wing.id, ids);
