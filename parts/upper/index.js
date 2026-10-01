@@ -49,11 +49,9 @@ export function randomUpper(rnd = Math.random) {
   const ids = cat => UPPER.filter(p => p.cat === cat).map(p => p.id);
   const pick = list => list[Math.floor(rnd() * list.length)];
   const deco = ids('胸の飾り').filter(() => rnd() < 0.3);
-  // 動力パイプ：3 回に 1 回くらい、胴のもの 1 つ。腕のものはそれとは別に 4 回に 1 回くらい
-  if (rnd() < 0.33) deco.push(pick(ids('動力パイプ')));
-  const armPipe = rnd() < 0.25 ? pick(ids('肩の動力パイプ')) : null;
+  // 動力パイプはランダムでは付けない（画面の「動力パイプをランダムに」で足す）
   if (deco.includes('chestvent') && deco.includes('chestventlong')) deco.splice(deco.indexOf('chestvent'), 1);
   // 4 回に 1 回くらいは、とても大きな肩アーマー（1.35〜2 倍）
   const big = rnd() < 0.25 ? 1.35 + 0.65 * rnd() : 1;
-  return sample([pick(ids('胸')), pick(ids('背中')), pick(ids('腹')), pick(ids('脇腹')), rnd() < 0.85 ? pick(ids('襟')) : null, rnd() < 0.9 ? pick(ids('バックパック')) : null, ...deco], [pick(ids('肩関節')), pick(ids('肩アーマー')), armPipe], Math.round(big * 100) / 100);
+  return sample([pick(ids('胸')), pick(ids('背中')), pick(ids('腹')), pick(ids('脇腹')), rnd() < 0.85 ? pick(ids('襟')) : null, rnd() < 0.9 ? pick(ids('バックパック')) : null, ...deco], [pick(ids('肩関節')), pick(ids('肩アーマー'))], Math.round(big * 100) / 100);
 }

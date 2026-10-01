@@ -51,9 +51,9 @@ export function randomLower(rnd = Math.random) {
   const maekake = fam === 'joined' ? 'maekakecenter' : rnd() < 0.25 ? null : pick(ids('前掛け').filter(id => id !== 'maekakecenter'));
   const rear = fam === 'joined' ? 'skirtrearcenter' : pick(ids('後ろ腰').filter(id => id !== 'skirtrearcenter'));
   const waist = fam === 'joined' ? 'waistwide' : pick(ids('腰').filter(id => id !== 'waistwide'));
-  // 腰の飾り：ベルト（半分くらい、幅広の帯には幅広の帯用）・筒・動力パイプ（3 回に 1 回くらい）
+  // 腰の飾り：ベルト（半分くらい、幅広の帯には幅広の帯用）・筒。動力パイプはランダムでは付けない（カタログから足す）
   const belt = rnd() < 0.5 ? (waist === 'waistwide' ? 'beltwide' : pick(ids('ベルト').filter(id => id !== 'beltwide'))) : null;
-  const deco = [belt, rnd() < 0.3 ? pick(ids('腰の筒')) : null, rnd() < 0.35 ? pick(ids('動力パイプ')) : null];
+  const deco = [belt, rnd() < 0.3 ? pick(ids('腰の筒')) : null];
   return sample([waist, pick(ids('腹')), rear, maekake, ...deco], [pick(ids('股関節')), pick(ids('脚の台')), front, side, back]);
 }
 export const SAMPLE = SAMPLES['標準のスカート'];

@@ -27,8 +27,8 @@ function shoulderToArm(rr, rc, n) {
     fitting(path[n], '肩から腕への動力パイプの受け（腕）', rr * 0.9, [0.13, -0.3, 0], 0.4)].map(pc => ({ ...pc, bone: 'arm', pivot: 'none' }));
 }
 export default [
-  { id: 'pipechesthead', name: '動力パイプ（胸から頭へ）', cat: '動力パイプ', size: [0.56, 0.22, 0.2], pieces: chestToHead(0.024, 0.018, 8) },
-  { id: 'pipechestheadthick', name: '動力パイプ（胸から頭へ・太い）', cat: '動力パイプ', size: [0.58, 0.24, 0.22], pieces: chestToHead(0.032, 0.025, 7) },
+  { id: 'pipechesthead', name: '動力パイプ（胸から頭へ）', cat: '胴の動力パイプ', size: [0.56, 0.22, 0.2], pieces: chestToHead(0.024, 0.018, 8) },
+  { id: 'pipechestheadthick', name: '動力パイプ（胸から頭へ・太い）', cat: '胴の動力パイプ', size: [0.58, 0.24, 0.22], pieces: chestToHead(0.032, 0.025, 7) },
   { id: 'pipearm', name: '動力パイプ（肩から腕へ）', cat: '肩の動力パイプ', size: [0.2, 0.26, 0.14], pieces: shoulderToArm(0.024, 0.018, 7) },
   { id: 'pipearmthick', name: '動力パイプ（肩から腕へ・太い）', cat: '肩の動力パイプ', size: [0.22, 0.28, 0.16], pieces: shoulderToArm(0.032, 0.025, 6) },
 ];
