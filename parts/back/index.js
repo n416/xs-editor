@@ -72,6 +72,7 @@ export const BACK_SAMPLES = {
   '骨組みの翼': wingSet('wingbat'),
   '発生器の翼と光の刃（青）': wingSet('winglight', ['fxblade_blue']),
   '発生器の翼と光の刃・光の帯（緑）': wingSet('winglight', ['fxblade_green', 'fxribbon_green']),
+  '発生器の翼と遠隔砲台（刃の形）': wingSet('winglight', ['wgbladepod']),
   '透ける板の羽': wingSet('winginsect'),
 };
 /**
@@ -91,7 +92,7 @@ export function randomBack(rnd = Math.random, which = null) {
   }
   const wing = pick(of('翼')), ids = [];
   if (wing.mounts.hang && rnd() < 0.6) ids.push(pick(of('翼の装備').filter(g => g.slot === 'hang')).id);
-  if (wing.kind === 'light' && rnd() < 0.9) ids.push(`fxblade_${col}`);
+  if (wing.kind === 'light' && rnd() < 0.9) ids.push(rnd() < 0.5 ? `fxblade_${col}` : 'wgbladepod');   // 光の刃か、同じ形の遠隔砲台
   if (wing.id === 'wingradial' ? rnd() < 0.85 : rnd() < 0.2) { if (wing.id !== 'wingradial' || rnd() < 0.5) ids.push('wgcore'); ids.push(`fxring_${col}`); }
   if (rnd() < 0.25) ids.push(`fxribbon_${col}`);
   return wingSet(wing.id, ids);
