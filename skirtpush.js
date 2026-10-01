@@ -59,16 +59,22 @@ export function bandedOutlines(tris, band = 0.05) {
   return out;
 }
 
+/** スカートの、x の幅 x0〜x1 にかかる所の形。同じ幅は覚えておく（脚の部品の帯は姿勢が変わっても同じ幅なので、何度も同じ形を求めない） */
+function plateFor(skirt, x0, x1, pad) {
+  const memo = (skirt._plates ??= new Map()), key = `${Math.round(x0 * 1e4)},${Math.round(x1 * 1e4)},${pad}`;
+  if (!memo.has(key)) memo.set(key, outlineFor(skirt.tris, x0, x1, pad));
+  return memo.get(key);
+}
 /**
  * 押されて開く角度（ラジアン、0 以上）。skirt = { poly, hinge: [y, z], dir, x: [x0, x1], tris? }（tris があれば脚ごとに
  * その脚の幅にかかる所の形で調べる）、legs = [{ poly, pivot: [y, z], x: [x0, x1], angle, knee?: [y, z], kneeAngle? }]
  * （angle は脚を前へ上げる角、ラジアン。three では rotation.x = −angle。すねは knee と kneeAngle（ゲームの shin の x、
  * 曲げると負）を付けると、ひざで曲げてから股関節で回す）
  */
-export function pushAngle(skirt, legs, { margin = 0.006, max = 1.9, step = 0.01 } = {}) {
+export function pushAngle(skirt, legs, { margin = 0.006, max = 1.9, step = 0.01, min = 0 } = {}) {
   const pairs = legs.filter(l => l.x[0] < skirt.x[1] && skirt.x[0] < l.x[1]).map(l => ({
     leg: rot2(l.knee ? rot2(l.poly, l.knee, -(l.kneeAngle ?? 0)) : l.poly, l.pivot, -l.angle),
-    plate: skirt.tris ? outlineFor(skirt.tris, l.x[0], l.x[1], l.pad ?? 0.01) : skirt.poly,
+    plate: skirt.tris ? plateFor(skirt, l.x[0], l.x[1], l.pad ?? 0.01) : skirt.poly,
   })).filter(p => p.plate).filter(p => {
     // 板の届く範囲（蝶番からいちばん遠い点まで）の外にある脚の形は、どう開いても当たらないので外す（結果は変わらない。速くするだけ）
     const reach = Math.max(...p.plate.map(q => Math.hypot(q[0] - skirt.hinge[0], q[1] - skirt.hinge[1])));
@@ -77,7 +83,7 @@ export function pushAngle(skirt, legs, { margin = 0.006, max = 1.9, step = 0.01 
     return Math.hypot(c[0] - skirt.hinge[0], c[1] - skirt.hinge[1]) - r <= reach + margin;
   });
   if (!pairs.length) return 0;
-  for (let t = 0; t <= max; t += step) {
+  for (let t = min; t <= max; t += step) {   // min：ここから探す（脚の形を分けて別々に求めた角度の大きいほうより下に、全部を避ける角度は無い）
     if (!pairs.some(p => overlaps(rot2(p.plate, skirt.hinge, -skirt.dir * t), p.leg, margin))) return t;
   }
   return max;
