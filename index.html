@@ -304,6 +304,7 @@ button.liked { border-color: #ff7a9a; color: #ff9ab2; }
           <button id="bShare">みんなの機体</button>
           <button id="bAi">AIで作る</button>
           <button id="bHeadGen" title="部品カタログから頭の殻・目・あご・トサカ・首などを置いて頭を組み、今の機体の頭と入れ替える（ランダムに組むこともできる）">頭ジェネレーター</button>
+          <button id="bBodyGen" title="部品カタログから上半身・背中（バックパックか翼）・腕・下半身・脚を選んで体を組み、今の機体の体と入れ替える（頭と手持ちの武器は残る。ランダムに組むこともできる）">体ジェネレーター</button>
           <button id="bImport" title="Blender などで作った .glb を、部位ごとの部品に分けて取り込む（スキン）">外の形を取り込む（glb）</button>
           <button id="bRigAi" title="パソコンの AI（Claude など）に Blender で骨を付けてもらい、できた .glb を取り込む">AI に骨を付けてもらう（Blender）</button>
           <input type="file" id="importFile" accept=".glb,.gltf,model/gltf-binary" hidden>
@@ -492,6 +493,7 @@ import { MeshBVH } from 'three-mesh-bvh';
 import { openHeadAsm } from './xsasm-editor.js';
 import { buildHull, hullReach } from './hull.js';
 import { hull2, pushAngle } from './skirtpush.js';
+import { doubleJoint, ELBOW_AXES, KNEE_AXES, BEND } from './doublejoint.js';
 
 const $ = s => document.querySelector(s);
 // a question in the page's own dialog instead of the browser's confirm(): resolves true for the main button
@@ -515,7 +517,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '3a901b2';
+const BUILD = 'b731fd7';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -603,6 +605,10 @@ const DEFAULTS = {
   name: '部品', kind: 'extrude', op: 'add', color: '#c3c9d2', mirror: false,
   pts: rect(0.8, 0.8), depth: 0.4, bevel: 0.04, bevelSegs: 1, corner: 0, cornerSegs: 1, taper: 1, tiltY: 0, ridge: 0,
   segments: 24, arrayCount: 1, arrayStep: [0, 0.15, 0], metal: 0.55, rough: 0.38, blockout: false, bone: 'auto', team: false, glow: null, pivot: 'auto',
+  noHit: false,            // not counted in the joint check's cutting-in (power pipes, lights)
+  noHeight: false,         // not counted in the XS's height (wings and back gear that rise above the head)
+  gun: null,               // a hand weapon the game hides for melee: true / false, null = by its name
+  opacity: null,           // a see-through part (lights from the body generator): 0..1, null = solid
   pos: [0, 0, 0], rot: [0, 0, 0], scl: [1, 1, 1],
   side: null, top: null,   // extrude only: outlines seen from the side [[z, y], ...] and from above [[x, z], ...]; null = none
   planes: null,            // kind 'hull' only: the planes of a convex solid [[nx, ny, nz, d, bevel?], ...] (hull.js); n·p ≤ d is kept
@@ -907,7 +913,8 @@ function rebuild() {
       });
       continue;
     }
-    const mat = new THREE.MeshStandardMaterial({ color: p.color, metalness: p.metal, roughness: p.rough });
+    const mat = new THREE.MeshStandardMaterial({ color: p.color, metalness: p.metal, roughness: p.rough,
+      ...(isLight(p) ? { emissive: p.color, emissiveIntensity: 0.85, side: THREE.DoubleSide } : {}), ...(p.opacity != null ? { transparent: true, opacity: p.opacity, depthWrite: false } : {}) });
     let first = true;
     for (const g of worldGeometries(p)) {
       let brush = new Brush(g); brush.updateMatrixWorld();
@@ -925,7 +932,7 @@ function rebuild() {
       mesh.userData.ownMaterial = first; first = false;
       resultGroup.add(mesh);
       tris += brush.geometry.attributes.position.count / 3;
-      if (showEdges) resultGroup.add(new THREE.LineSegments(creaseEdges(brush.geometry, 30), edgeMat));
+      if (showEdges && !isLight(p)) resultGroup.add(new THREE.LineSegments(creaseEdges(brush.geometry, 30), edgeMat));
     }
   }
   if (viewPose !== '待機') applyViewPose();
@@ -1123,6 +1130,7 @@ function renderProps() {
     <label class="check"><input type="checkbox" id="pTeam" ${p.team ? 'checked' : ''}> 陣営色で塗る（マテリアル team_color）</label>
     <label class="check"><input type="checkbox" id="pGlow" ${isGlow(p) ? 'checked' : ''}> 発光する（目・センサーなど）</label>
     <label class="check"><input type="checkbox" id="pNoHit" ${p.noHit ? 'checked' : ''}> 当たり判定なし（関節チェックでめり込みを見ない。動力パイプなど）</label>
+    <label class="check"><input type="checkbox" id="pNoHeight" ${p.noHeight ? 'checked' : ''}> 全高に数えない（頭より高い翼・背中の装備。ゲームは残りの高さを 18 m にそろえる）</label>
     ${p.kind === 'mesh' ? `<h2>取り込んだ形</h2><p class="hint">外から取り込んだ形（スキン用）です。形は描き直せませんが、位置・回転・拡大、質感は変えられます。どこで曲がるかは「関節と切り分け」で、関節の球を置いて決めます。${MESHES.has(p.mesh) ? '' : '（形を読み込み中、またはこのブラウザに形がありません）'}</p>
     <div class="seg"><button id="pJoints" class="on" ${MESHES.has(p.mesh) ? '' : 'disabled'}>関節と切り分け（3 面図）</button></div>
     <div class="seg"><button id="pBlocks" ${MESHES.has(p.mesh) ? '' : 'disabled'} title="骨ごとに形を塊に分け、塊ごとに正面・横・上から見た輪郭の重なりで部品にする（試作）">ブロックの部品に変換（試作）</button></div>` : ''}
@@ -1155,6 +1163,7 @@ function renderProps() {
   $('#pPivot').onchange = e => { p.pivot = e.target.value; save(); if (viewPose !== '待機') applyViewPose(); };
   $('#pGlow').onchange = e => { p.glow = e.target.checked; save(); };
   $('#pNoHit').onchange = e => { p.noHit = e.target.checked; save(); };
+  $('#pNoHeight').onchange = e => { p.noHeight = e.target.checked; save(); };
   $('#pSnap').onchange = e => { snap = e.target.checked; };
   if ($('#pJoints')) $('#pJoints').onclick = () => openJointTool(p);
   if ($('#pBlocks')) $('#pBlocks').onclick = async () => {
@@ -1454,7 +1463,7 @@ $('#bCheck').onclick = () => {
 const TOUCH = 0.004;
 function checkConnections() {
   rebuild();
-  return connectivity(resultGroup.children.filter(o => o.isMesh).map(m => ({ m, g: m.geometry, id: m.userData.partId })));
+  return connectivity(resultGroup.children.filter(o => o.isMesh && !isLight(getPart(o.userData.partId))).map(m => ({ m, g: m.geometry, id: m.userData.partId })));   // lights hang in the air
 }
 // items: [{ g: world geometry, id: part id, ... }] -> { total, floating: [{ members, gap, near }] }
 function connectivity(list) {
@@ -1602,7 +1611,7 @@ $('#bExport').onclick = () => {
 // generated by simplifying and then boxing the parts. The editor faces +Z; the game faces -Z with the
 // sole at y = 0, so everything is turned 180° about Y and dropped onto the ground.
 const GAME_LIMITS = { tris: [30000, 5000, 800], drawCalls: 5 };
-const BONE_CHOICES = { auto: '自動（部品名から）', head: '頭', torso: '胴', hips: '腰', arm: '腕（肩〜ひじ）', fore: '前腕・手', leg: '太もも', shin: 'すね', foot: '足（足首から下）', cannon: '大砲の砲身' , wing: '翼（背中・ゲームが開く）', skirt: 'スカート（腰の蝶番・脚に押されて開く）' };
+const BONE_CHOICES = { auto: '自動（部品名から）', head: '頭', torso: '胴', hips: '腰', arm: '腕（肩〜ひじ）', elbow: 'ひじの節（2 重関節）', fore: '前腕・手', leg: '太もも', knee: 'ひざの節（2 重関節）', shin: 'すね', foot: '足（足首から下）', cannon: '大砲の砲身' , wing: '翼（背中・ゲームが開く）', skirt: 'スカート（腰の蝶番・脚に押されて開く）' };
 // first match wins; the order keeps e.g. 「ウイングの腕」 on the torso and 「肩の付け根」 on the chest
 const BONE_RULES = [
   ['hips', /キャタピラ|履帯|車体|転輪|起動輪|誘導輪/],
@@ -1639,22 +1648,30 @@ const boneGroupOf = p => {
   else if (pv) g = JOINT_PARENT[pv];
   else if (CANNON_RE.test(p.name) && !GUN_RE.test(p.name)) g = 'cannon';   // a rifle's barrel stays with the gun
   else for (const [k, re] of BONE_RULES) if (re.test(p.name)) { g = k; break; }
-  return isTracked() && (g === 'leg' || g === 'shin' || g === 'foot') ? 'hips' : g;
+  return isTracked() && (g === 'leg' || g === 'knee' || g === 'shin' || g === 'foot') ? 'hips' : g;
 };
 const isGlow = p => p.glow ?? GLOW_RE.test(p.name);
+// a light (the body generator's effects): glows, takes no hits, is not joined to the body
+const isLight = p => !!p && !!p.noHit && p.glow === true;
 // editor +X is the XS's left (it faces +Z), so after the 180° turn it lands on the game's -X = left
 // a skirt plate goes on skirt_front_* in front of the hips (+Z) and skirt_back_* behind them
 const sided = (group, cx, cz = 0) => group === 'skirt' ? `skirt_${cz >= 0 ? 'front' : 'back'}_${cx >= 0 ? 'l' : 'r'}`
-  : ['arm', 'leg', 'shin', 'foot', 'fore', 'wing'].includes(group) ? `${group === 'fore' ? 'forearm' : group}_${cx >= 0 ? 'l' : 'r'}` : group;
+  : ['arm', 'elbow', 'leg', 'knee', 'shin', 'foot', 'fore', 'wing'].includes(group) ? `${group === 'fore' ? 'forearm' : group}_${cx >= 0 ? 'l' : 'r'}` : group;
 const GAME_BONES = [['hips', null], ['torso', 'hips'], ['head', 'torso'], ['arm_l', 'torso'], ['arm_r', 'torso'],
-  ['leg_l', 'hips'], ['shin_l', 'leg_l'], ['leg_r', 'hips'], ['shin_r', 'leg_r'],
+  ['leg_l', 'hips'], ['knee_l', 'leg_l'], ['shin_l', 'leg_l'], ['leg_r', 'hips'], ['knee_r', 'leg_r'], ['shin_r', 'leg_r'],   // knee_*: the link of a double knee (below)
   ['foot_l', 'shin_l'], ['foot_r', 'shin_r'],         // ankles: the game keeps the soles level with the ground (only exported when a part is on them)
+  ['elbow_l', 'arm_l'], ['elbow_r', 'arm_r'],       // the link of a double elbow (only exported when a part is on it)
   ['forearm_l', 'arm_l'], ['forearm_r', 'arm_r'],   // elbows: extra bones the spec allows
   ['cannon', 'torso'],                                // tracked XS: the cannon mount (only exported when it carries barrels)
   ['wing_l', 'torso'], ['wing_r', 'torso'],           // wings the game opens with the thrust (only exported when used)
   ['skirt_front_l', 'hips'], ['skirt_front_r', 'hips'], ['skirt_back_l', 'hips'], ['skirt_back_r', 'hips']];   // skirts the legs push open (docs/models.md「スカート」)
 const SKIRT_BONES = ['skirt_front_l', 'skirt_front_r', 'skirt_back_l', 'skirt_back_r'];
-const OPTIONAL_BONES = new Set(['foot_l', 'foot_r', 'cannon', 'wing_l', 'wing_r', ...SKIRT_BONES]);
+const OPTIONAL_BONES = new Set(['foot_l', 'foot_r', 'elbow_l', 'elbow_r', 'knee_l', 'knee_r', 'cannon', 'wing_l', 'wing_r', ...SKIRT_BONES]);
+// Double joints (doublejoint.js, docs/models.md「2 重関節」): a link (elbow_* / knee_*) between the upper and the lower
+// part. The link turns about its own bone (the upper axis), the lower part (forearm_* / shin_*) about its bone (the
+// lower axis). The game turns the lower bone as ever; up to `first` only the lower axis bends, past it the link turns
+// by the rest and carries the lower bone with it. [lower bone group]: [link, first (rad), the side it folds to]
+const LINKS = { forearm: ['elbow', ELBOW_AXES[2], BEND.elbow], shin: ['knee', KNEE_AXES[2], BEND.knee] };
 
 function materialClass(p) {
   if (p.kind === 'mesh') return 'skin:' + (MESHES.get(p.mesh)?.texId ?? '');
@@ -1716,6 +1733,11 @@ function jointPositions(pieces) {
   for (const pc of pieces) (boxes[pc.bone] ||= new THREE.Box3()).union(pc.geo.boundingBox);
   const B = n => boxes[n] || null;
   const whole = new THREE.Box3(); Object.values(boxes).forEach(b => whole.union(b));
+  // parts marked 全高に数えない (the body generator's wings and back gear) may rise above the head without making the body
+  // smaller in the game: the XS's height is that of the rest (the export writes it into the model; client/src/models.ts scales by it)
+  whole.userData = { top: whole.max.y };
+  const counted = new THREE.Box3(); for (const pc of pieces) if (!pc.part.noHeight) counted.union(pc.geo.boundingBox);
+  if (!counted.isEmpty() && counted.max.y < whole.max.y) whole.max.y = counted.max.y;
   const H = whole.max.y - whole.min.y;
   const at = {};
   const legTop = Math.max(B('leg_l')?.max.y ?? -Infinity, B('leg_r')?.max.y ?? -Infinity);
@@ -1772,6 +1794,9 @@ function jointPositions(pieces) {
     at[pc.bone] = cut[pc.bone] = new THREE.Vector3(...p.joint).applyMatrix4(p.proxy.matrixWorld);
   }
   if (cut.leg_l && cut.leg_r) at.hips = new THREE.Vector3(0, (cut.leg_l.y + cut.leg_r.y) / 2, (cut.leg_l.z + cut.leg_r.z) / 2);
+  // a link (double joint) without a point of its own: a little above its lower bone
+  for (const s of ['l', 'r']) for (const [link, low, d] of [['elbow', 'forearm', 0.1], ['knee', 'shin', 0.2]])
+    if (boxes[`${link}_${s}`] && !cut[`${link}_${s}`]) at[`${link}_${s}`] = at[`${low}_${s}`].clone().add(new THREE.Vector3(0, d * H / 3, 0));
   // a skinned import: its rig says where every bone turns
   const rigged = pieces.find(pc => pc.part.rig && !pc.part.mirror)?.part;
   if (rigged) {
@@ -1797,7 +1822,9 @@ function attachPoints(pieces) {
   const rigged = pieces.find(pc => pc.part.rig?.hand_r)?.part;
   if (!out.hand_r && rigged) { rigged.proxy.updateMatrixWorld(); out.hand_r = { pos: new THREE.Vector3(...rigged.rig.hand_r).applyMatrix4(rigged.proxy.matrixWorld), bone: 'forearm_r' }; }
   out.muzzle = find(/マズル|銃口/, null);
-  const thr = s => pieces.filter(pc => /スラスター|ブースター|バーニア/.test(pc.part.name) && pc.part.kind === 'lathe' && pc.bone === 'torso'
+  // (the body generator's nozzles are hulls named 噴射口)
+  const nozzle = p => (/スラスター|ブースター|バーニア/.test(p.name) && p.kind === 'lathe') || (p.kind === 'hull' && /噴射口/.test(p.name) && !/噴射口の(台|奥)/.test(p.name));
+  const thr = s => pieces.filter(pc => nozzle(pc.part) && pc.bone === 'torso'
     && (s === 'l' ? pc.geo.boundingBox.max.x > 0.02 : pc.geo.boundingBox.min.x < -0.02))
     .sort((a, b) => Math.abs(a.geo.boundingBox.getCenter(new THREE.Vector3()).x) - Math.abs(b.geo.boundingBox.getCenter(new THREE.Vector3()).x))[0];
   for (const s of ['l', 'r']) { const t = thr(s); if (t) out['thruster_' + s] = { pos: t.geo.boundingBox.getCenter(new THREE.Vector3()), bone: 'torso' }; }
@@ -1944,8 +1971,8 @@ const pivotOf = p => {
 function skirtOutlines(pieces, at) {
   const sets = {};
   for (const pc of pieces) {
-    if (!SKIRT_BONES.includes(pc.bone) && !/^(leg|shin)_/.test(pc.bone)) continue;   // (the feet do not reach the skirts)
-    const e = (sets[pc.bone] ||= { yz: [], tris: [], x: [Infinity, -Infinity] }), pos = pc.geo.attributes.position;   // geo は三角形ごとの頂点の並び
+    if (!SKIRT_BONES.includes(pc.bone) && !/^(leg|knee|shin)_/.test(pc.bone) || pc.part.noHit) continue;   // (the feet do not reach the skirts)
+    const e = (sets[pc.bone.replace(/^knee_/, 'leg_')] ||= { yz: [], tris: [], x: [Infinity, -Infinity] }), pos = pc.geo.attributes.position;   // geo は三角形ごとの頂点の並び
     for (let i = 0; i < pos.count; i++) { e.yz.push([pos.getY(i), pos.getZ(i)]); e.tris.push(pos.getX(i), pos.getY(i), pos.getZ(i)); e.x[0] = Math.min(e.x[0], pos.getX(i)); e.x[1] = Math.max(e.x[1], pos.getX(i)); }
   }
   const yz = v => [v.y, v.z];
@@ -1975,6 +2002,7 @@ function poseMatrices(at, pose, height) {
   for (const [name, parent] of GAME_BONES) {
     let r = pose[name] || {};
     const p = at[name];
+    if (!p) continue;   // a link this model does not have
     // the ankle: as the game turned it (poses.json), or by the game's rule (the sole level with the ground:
     // client/src/legs.ts ankleAngle), within what this model's ankle can turn (safeAnkle)
     if (name.startsWith('foot_')) {
@@ -1987,7 +2015,16 @@ function poseMatrices(at, pose, height) {
     // hips.dy drops the hips; cannon.fwd shoves the cannons along the barrels as they point now (game metres; the
     // editor's front is +Z)
     const shove = new THREE.Vector3(0, 0, (r.fwd || 0) * height / 18).applyMatrix4(rot);
-    const local = new THREE.Matrix4().makeTranslation(p.x + shove.x, p.y + (r.dy || 0) * height / 18 + shove.y, p.z + shove.z)
+    // a double joint: the link turns about its bone by what is past `first`, and carries the lower bone's pivot
+    let o = p;
+    const lk = LINKS[name.slice(0, -2)], P1 = lk && at[lk[0] + name.slice(-2)];
+    if (P1) {
+      const dj = doubleJoint(new THREE.Quaternion().setFromRotationMatrix(rot), p, [P1.y - p.y, 0, lk[1]], lk[2]);
+      M[lk[0] + name.slice(-2)] = M[parent].clone().multiply(new THREE.Matrix4().makeTranslation(P1.x, P1.y, P1.z))
+        .multiply(new THREE.Matrix4().makeRotationFromQuaternion(dj.link)).multiply(new THREE.Matrix4().makeTranslation(-P1.x, -P1.y, -P1.z));
+      o = new THREE.Vector3(P1.x, P1.y, P1.z).add(new THREE.Vector3(0, p.y - P1.y, 0).applyQuaternion(dj.link));
+    }
+    const local = new THREE.Matrix4().makeTranslation(o.x + shove.x, o.y + (r.dy || 0) * height / 18 + shove.y, o.z + shove.z)
       .multiply(rot).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z));
     M[name] = parent ? M[parent].clone().multiply(local) : local;
   }
@@ -2233,6 +2270,8 @@ function jointCheck(id = roleId()) {
     const moved = pc => M[pc.bone];
     const hidden = /^saber|^knife|^throw/.test(name) ? pc => isHeld(pc.part) : () => false;   // the game hides the gun then
     const same = (a, b) => moved(a).equals(moved(b));
+    // the saber's two-handed grip brings both hands to the one hilt: the left forearm and hand against the right are not counted
+    const twoHands = /^saber/.test(name) ? (a, b) => /^forearm_/.test(a.bone) && /^forearm_/.test(b.bone) && a.bone !== b.bone : () => false;
     // 1) off the body: keep the rest contacts that still hold in this pose, then look for islands
     const adj = pieces.map(() => []);
     for (const [a, b] of touch) {
@@ -2248,13 +2287,13 @@ function jointCheck(id = roleId()) {
     }
     const sizes = new Array(c).fill(0); comp.forEach(k => sizes[k]++);
     const body = sizes.indexOf(Math.max(...sizes));
-    const off = [...new Set(pieces.filter((pc, k) => comp[k] !== body && !hidden(pc)).map(pieceLabel))];
+    const off = [...new Set(pieces.filter((pc, k) => comp[k] !== body && !hidden(pc) && !isLight(pc.part)).map(pieceLabel))];
     // 2) cutting in: pairs moving differently that intersect now but were apart at rest (parts marked 当たり判定なし, like power pipes, are skipped)
     const cut = new Set();
     const boxes = pieces.map(pc => pc.geo.boundingBox.clone().applyMatrix4(moved(pc)));
     for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
       const pa = pieces[a], pb = pieces[b];
-      if (same(pa, pb) || hidden(pa) || hidden(pb) || pa.part.noHit || pb.part.noHit || restPair.has(a + ',' + b) || !boxes[a].intersectsBox(boxes[b])) continue;
+      if (same(pa, pb) || hidden(pa) || hidden(pb) || twoHands(pa, pb) || pa.part.noHit || pb.part.noHit || restPair.has(a + ',' + b) || !boxes[a].intersectsBox(boxes[b])) continue;
       const gb = into(pa, moved(pa), pb, moved(pb));
       if (!pa.bvh.intersectsGeometry(gb, I)) continue;
       // grazing contact at a joint's rim is fine; only real cutting-in counts
@@ -2396,6 +2435,7 @@ function buildGameModel() {
   const floor = whole.min.y, H = whole.max.y - whole.min.y;
   const tracked = isTracked();
   const root = new THREE.Group(); root.name = 'xs';
+  if (whole.userData.top > whole.max.y + 1e-6) root.userData.height = Math.round(H * 1e4) / 1e4;   // wings above the head: the body's height
   // skeleton: a tracked XS has no leg bones; the cannon mount only when barrels ride on it
   const gameBones = GAME_BONES.filter(([n]) => !(tracked && /^(leg|shin|foot)_/.test(n)) && (!OPTIONAL_BONES.has(n) || lods[0].some(pc => pc.bone === n || pc.part.rig?.[n])));
   const bones = {};
@@ -2415,6 +2455,8 @@ function buildGameModel() {
   const ankle = bones.foot_l || bones.foot_r ? safeAnkle(lods[0], at, H) : null;
   ankleNow = ankle;
   if (ankle) for (const n of ['foot_l', 'foot_r']) if (bones[n]) bones[n].userData.ankle = ankle;
+  // double joints: how far the lower axis bends before the link turns (the link bones' extras; client/src/doublejoint.ts reads it)
+  for (const [link, first] of [['elbow', ELBOW_AXES[2]], ['knee', KNEE_AXES[2]]]) for (const s of ['l', 'r']) if (bones[`${link}_${s}`]) bones[`${link}_${s}`].userData.first = Math.round(first * 1e4) / 1e4;
   root.updateMatrixWorld(true);
   const boneList = gameBones.map(([n]) => bones[n]);
   const skeleton = new THREE.Skeleton(boneList);
@@ -2477,7 +2519,7 @@ function buildGameModel() {
       let metal = 0, rough = 0, n = 0;
       const partRanges = [];   // LOD0: which triangles belong to which part, for checks outside the editor (tools/jointcheck.ts)
       for (const pc of list) {
-        if (level === 0) partRanges.push([pieceLabel(pc), pc.bone, P.length / 9, pc.geo.attributes.position.count / 3, isHeld(pc.part) ? 1 : 0]);
+        if (level === 0) partRanges.push([pieceLabel(pc), pc.bone, P.length / 9, pc.geo.attributes.position.count / 3, (isHeld(pc.part) ? 1 : 0) | (pc.part.noHit ? 2 : 0) | (isLight(pc.part) ? 4 : 0)]);
         const pos = pc.geo.attributes.position, nor = pc.geo.attributes.normal;
         const col = cls === 'skin' ? new THREE.Color(0xffffff) : new THREE.Color(pc.part.color), bi = boneIndex[pc.bone];
         const uv = cls === 'skin' ? pc.geo.attributes.uv : null;
@@ -2509,7 +2551,7 @@ function buildGameModel() {
       });
       const mesh = new THREE.SkinnedMesh(merged, mat);
       mesh.name = `xs_${mat.name}${level ? '_lod' + level : ''}`;
-      if (level === 0) mesh.userData.xsParts = partRanges;   // glTF extras: [label, bone, first triangle, triangles, gun]
+      if (level === 0) mesh.userData.xsParts = partRanges;   // glTF extras: [label, bone, first triangle, triangles, flags: 1 hand weapon, 2 takes no hits, 4 a light]
       if (cls === 'gun' || cls === 'bazooka') {   // gun / bazooka nodes the game shows and hides
         let held = root.getObjectByName(cls);
         if (!held) { held = new THREE.Group(); held.name = cls; root.add(held); }
@@ -2616,6 +2658,23 @@ window.__xs = {
     }, reject, { binary: true });
   }),
   ready: () => Object.keys(MOVES).length > 0,
+  /** load a document; the document as it is now */
+  load: doc => loadScene(structuredClone(doc.parts), doc.ai, doc.role ?? ''),
+  doc: () => ({ ai: sceneAi, role: sceneRole, parts: parts.map(serialize) }),
+  /** put a body from the body generator (the items of lowerasm.html's 組み立て JSON) on the loaded model: its head and hand weapons stay */
+  applyBody: async (items, adj = {}) => {
+    const m = await import('./bodyparts.js');
+    const { parts: list, anchors } = m.bodyParts(m.register(items).filter(it => m.byId[it.part]), adj);
+    return applyBody(list, anchors);
+  },
+  /** both checks on the loaded model: floating groups and the joint check's findings */
+  check: id => {
+    const label = it => getPart(it.id)?.name ?? '?';
+    const floating = checkConnections().floating.map(f => [...new Set(f.members.map(label))].slice(0, 4).join('、') + (f.gap === undefined ? '' : `（本体まで ${f.gap.toFixed(3)}）`));
+    const joints = jointCheck(XS_INFO[id] ? id : '');
+    const loose = Object.entries(joints).filter(([k, r]) => !k.startsWith('__') && (r.off.length || r.cut.length)).map(([name, r]) => `${name}: ${[...r.off.map(x => x + ' が外れる'), ...r.cut.slice(0, 4).map(x => x + ' がめり込む')].join('、')}`);
+    return { floating, loose, depths: joints.__depths };
+  },
 };
 $('#bGame').onclick = () => {
   if (!parts.some(p => p.op === 'add' && !p.blockout)) { ask('書き出す部品がありません。', { cancel: null }); return; }
@@ -5465,6 +5524,60 @@ const headGenApi = {
   ask,
   look: (center, dist) => { orbit.target.set(center[0], center[1], center[2]); camera.position.set(center[0] + dist * 0.5, center[1] + dist * 0.3, center[2] + dist * 1.1); },
 };
+// ---------- 体ジェネレーター (lowerasm.html in a frame over the editor): its body replaces this model's body ----------
+// What stays: the head (and neck), the hand weapons (gun / bazooka), blockouts. The head is set on the new neck and the
+// weapons follow the right hand. The new parts are hulls with their bone and the point it turns at (joint).
+function applyBody(list, anchors) {
+  rebuild();
+  const boxOf = (ps, pick = () => true) => { const b = new THREE.Box3(); for (const p of ps) for (const g of worldGeometries(p)) if (pick(g)) b.union(g.boundingBox); return b; };
+  const solid = parts.filter(p => p.op === 'add' && !p.blockout);
+  const stays = p => p.blockout || boneGroupOf(p) === 'head' || isHeld(p);
+  const oldHand = boxOf(solid.filter(p => !isHeld(p) && boneGroupOf(p) === 'fore' && /手/.test(p.name) && !/手首/.test(p.name)), g => g.boundingBox.min.x + g.boundingBox.max.x < 0);
+  const head = boxOf(solid.filter(p => boneGroupOf(p) === 'head' && !/^首/.test(p.name)));
+  const gone = new Set(parts.filter(p => !stays(p)).map(p => p.id));
+  for (const p of parts) if (gone.has(p.id)) { proxyGroup.remove(p.proxy); p._geo?.dispose(); }
+  parts = parts.filter(p => !gone.has(p.id));
+  const shift = (p, d) => { p.proxy.position.x += p.mirror ? 0 : d.x; p.proxy.position.y += d.y; p.proxy.position.z += d.z; };
+  if (anchors?.hand_r && !oldHand.isEmpty()) { const d = new THREE.Vector3(...anchors.hand_r).sub(oldHand.getCenter(new THREE.Vector3())); for (const p of parts) if (!p.blockout && isHeld(p)) shift(p, d); }
+  const added = list.map(d => makePart({ metal: d.glow ? 0 : 0.45, rough: 0.5, ...d }));
+  parts.push(...added);
+  // the head: with a neck (parts named 首…), the head sits just over the neck's root and the neck goes down into the collar;
+  // without one, it is set down onto what the new chest has under it (2 cm into it, so that it is joined)
+  if (anchors?.neck && !head.isEmpty()) {
+    const heads = parts.filter(p => !p.blockout && boneGroupOf(p) === 'head' && !isHeld(p));
+    let y = anchors.neck[1] + 0.02;
+    if (!heads.some(p => /^首/.test(p.name))) {
+      const c = head.getCenter(new THREE.Vector3()), col = new THREE.Box3(new THREE.Vector3(c.x - 0.05, -Infinity, c.z - 0.05), new THREE.Vector3(c.x + 0.05, Infinity, c.z + 0.05));
+      const under = boxOf(added.filter(p => boneGroupOf(p) === 'torso' && !isLight(p)), g => g.boundingBox.intersectsBox(col));
+      if (!under.isEmpty()) y = under.max.y - 0.02;
+    }
+    const d = new THREE.Vector3(0, y - head.min.y, 0);
+    for (const p of heads) shift(p, d);
+  }
+  select(null); renderList(); rebuild(); save();
+  return { added: list.length, removed: gone.size, head: !head.isEmpty(), weapons: parts.some(p => !p.blockout && isHeld(p)) };
+}
+let bodyFrame = null;
+function openBodyGen() {
+  if (!bodyFrame) {
+    bodyFrame = document.createElement('div');
+    bodyFrame.id = 'bodyGen';
+    bodyFrame.style.cssText = 'position:fixed;inset:0;z-index:60;background:#14161a';
+    bodyFrame.innerHTML = '<iframe src="./lowerasm.html?embed=1" title="体ジェネレーター" style="width:100%;height:100%;border:0"></iframe>';
+    document.body.appendChild(bodyFrame);
+  }
+  bodyFrame.hidden = false;
+}
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || !bodyFrame || e.source !== bodyFrame.querySelector('iframe').contentWindow) return;
+  if (e.data?.type === 'xs-body-close') bodyFrame.hidden = true;
+  if (e.data?.type === 'xs-body-commit' && Array.isArray(e.data.parts)) {
+    bodyFrame.hidden = true;
+    const r = applyBody(e.data.parts, e.data.anchors);
+    ask(`体を入れ替えました（新しい部品 ${r.added} 個。前の体の部品 ${r.removed} 個は消しました。「元に戻す」で戻せます）。${r.head ? '頭は新しい首の位置へ移しました。' : '頭がありません（頭ジェネレーターで付けられます）。'}${r.weapons ? '手持ちの武器は右手へ移しました。' : '手持ちの武器（「銃」「ライフル」）がありません。'}「チェックする」でつながりと関節を確かめてください。`, { cancel: null });
+  }
+});
+$('#bBodyGen').onclick = () => { $('#menuPop').hidden = true; if (isVehicle()) ask('体ジェネレーターは XS 用です。', { cancel: null }); else openBodyGen(); };
 $('#bHeadGen').onclick = () => { $('#menuPop').hidden = true; if (isVehicle()) ask('頭ジェネレーターは XS 用です（艦には頭がありません）。', { cancel: null }); else openHeadAsm(headGenApi); };
 $('#aClose').onclick = closeAi;
 closeOnBackdrop($('#aiBox'), closeAi);
