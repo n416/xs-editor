@@ -1,7 +1,7 @@
 // 胸（胴の前の上、胴の骨 torso）：胴を胸・背中・腹・脇腹に分けたうちの前の上。y 0.2〜0.555、z −0.03 より前。原点は胸の下端の中心（y 2.1）。
 // 種類ごとに輪郭（前・横・上から見た形）から違う。広い面は垂直にも水平にもしない（どれも傾けるか丸める）。
 //   鳩胸：上の胸が大きく前へせり出す。上の面は襟から前へ下る斜面で、左右に通気口。前の面は下ほど奥
-//   丸い胴：上から見て円に近い樽形。前にハッチ、腰寄りに暗い帯
+//   丸い胴：上から見て円に近い樽形。前にハッチ、腰寄りに暗い帯（ハッチの無い「飾りなし」も）
 //   逆三角：肩の方へ広がる V 字の大きな装甲（先は腹の上まで下がる）と、下ほど細い芯
 //   角ばった塊：上下 2 つの重い塊（間に暗い溝）。前は上ほど前へ、横は下ほどすぼまる。下の塊に横長の通気口
 //   コクピットの張り出し：左右の胸の装甲の真ん中から、四角い操縦席の塊が前へ突き出る
@@ -46,14 +46,15 @@ function pigeon() {
     hull('張り出しの下の段', ptsBoth([[0.22, 0.26, 0.17], [0, 0.255, 0.185], [0.22, 0.225, 0.14], [0, 0.22, 0.155], [0.22, 0.24, 0.05], [0, 0.23, 0.05]]), { color: DARK })]);
 }
 
-// ---- 丸い胴 ----
-function barrel() {
+// ---- 丸い胴（plain：真ん中のハッチを付けない） ----
+function barrel(plain = false) {
   const rings = [[0.2, 0.25, 0.2], [0.3, 0.29, 0.265], [0.42, 0.3, 0.285], [0.5, 0.275, 0.255], [top, 0.19, 0.17]];
   const ring = (y, rx, rz, k = 20) => Array.from({ length: k + 1 }, (_, j) => { const a = Math.PI * j / k; return [rx * Math.cos(a), y, Math.max(-0.03, rz * Math.sin(a))]; });
   const shell = hull('胸（丸い胴）', rings.flatMap(([y, rx, rz]) => ring(y, rx, rz)));
   const rz = y => { const i = Math.max(1, rings.findIndex(r => r[0] >= y)), [y0, , z0] = rings[i - 1], [y1, , z1] = rings[i]; return z0 + (z1 - z0) * (y - y0) / (y1 - y0); };
-  return C('chestbarrel', '胸（丸い胴）', [0.62, 0.36, 0.34], [shell,
-    hull('胸の帯', [...ring(0.265, 0.285, 0.25), ...ring(0.295, 0.297, 0.268)].map(p => [p[0] * 1.03, p[1], p[2] * 1.035]), { color: DARK }),
+  const band = hull('胸の帯', [...ring(0.265, 0.285, 0.25), ...ring(0.295, 0.297, 0.268)].map(p => [p[0] * 1.03, p[1], p[2] * 1.035]), { color: DARK });
+  if (plain) return C('chestbarrelplain', '胸（丸い胴・飾りなし）', [0.62, 0.36, 0.34], [shell, band]);
+  return C('chestbarrel', '胸（丸い胴）', [0.62, 0.36, 0.34], [shell, band,
     piece('胸のハッチ', slab('z', 1, (x, y) => rz(y) + 0.012 - 1.6 * x * x, [-0.1, 0.1], [0.34, 0.49], { bev: 0.012, depth: 0.05, na: 4, nb: 3 })),
     piece('ハッチの縁', slab('z', 1, (x, y) => rz(y) + 0.004 - 1.6 * x * x, [-0.115, 0.115], [0.325, 0.505], { bev: 0.004, depth: 0.05, na: 4, nb: 3 }), { color: DARK })]);
 }
@@ -143,5 +144,5 @@ export default [
     piece('胸の中央の稜', slab('z', 1, (x, y) => (y > 0.3 ? face(0, y) : Math.min(face(0, 0.3), frontZ(y) + 0.06)) + 0.014 - 3 * x * x,
       [-0.036, 0.036], [0.22, top - 0.02], { bev: 0.011, depth: 0.09, na: 2, nb: 6, extra: [P([0, 1, 0.9], [0, top - 0.035, face(0, top - 0.035) + 0.01])] })),
     ...pairPl('胸の装甲の板', slab('z', 1, (x, y) => face(x, y) + 0.012, [0.075, wt - 0.07], [0.35, 0.505], { bev: 0.012, depth: 0.04, extra: [P([1, -0.35, 0], [wt - 0.07, 0.35, 0])] }))]),
-  pigeon(), barrel(), vee(), block(), cockpit(), frame(), cornerExhaust(),
+  pigeon(), barrel(), barrel(true), vee(), block(), cockpit(), frame(), cornerExhaust(),
 ];
