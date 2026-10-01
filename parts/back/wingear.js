@@ -2,13 +2,12 @@
 //   slot 'hang'  ：翼の吊り下げる所（機械の翼だけ。左右の対）。下 −y へ吊る。ひれ付きのラック（吊り柱）は独立した部品で、
 //                  ラックを置いてあれば、吊り柱の無い装備（bare：プロペラントタンク）はラックの下の端に付く
 //   slot 'root'  ：翼の付け根（左右の対）
-//   slot 'center'：背中の真ん中の後ろ（1 個）
-//   slot 'light' ：発生器の翼の後ろの縁（左右の対。原点は翼の付け根）
+//   slot 'spine' ：背中の板の真ん中（1 個）
+//   slot 'dock'  ：ORB 収納ラックの収納口（左右の対。1 基ずつ、空いている収納口へ入る）
 // 光そのもの（輪・帯・刃）は、別の部品（fx.js のエフェクト）。
 import { piece, MAIN, DARK, ACCENT } from '../../xsasm-lib.js';
 import { xf, xfPt, named, lathePlanes, strip, rod, prism, unit, cross, add3, mul3 } from './kit.js';
 import { tank, coreEngine } from './gear.js';
-import { LIGHT_EMITTER } from './wings.js';
 
 const G = (id, name, slot, size, pieces, forKind = null) => ({ id, name, cat: '翼の装備', slot, size, pieces, ...(forKind ? { forKind } : {}) });
 const BEAM = '#ff8ad8';
@@ -41,9 +40,23 @@ const rackPart = G('wgrack', 'ラック（ひれ付きの吊り柱）', 'hang', 
 const wingTank = (() => {
   const at = { rot: [-84, 0, 0], mov: [0, -0.078, -0.26] }, len = 0.74;
   const lug = (s, i) => { const p = xfPt([0, s * len, 0], at); return piece(`タンクの留め金 ${i + 1}`, prism([0, 0.03, p[2]], [0, p[1] + 0.03, p[2]], [0.05, 0.05], [0, 0, 1], { w1: 0.075, h1: 0.05 }), { color: DARK }); };
-  return { ...G('wgtank', '翼のプロペラントタンク', 'hang', [0.2, 0.2, 0.8], [lug(-0.12, 0), lug(0.2, 1),
+  return { ...G('wgtank', '翼のプロペラントタンク（横）', 'hang', [0.2, 0.2, 0.8], [lug(-0.12, 0), lug(0.2, 1),
     ...xf([...tank('タンク', len, 0.062, { n: 12, bands: [-0.12, 0.2], stripe: 0.3 })], at)], ['mech']), bare: true };
 })();
+
+/**
+ * 縦のプロペラントタンク：原点から −y へ下がる。上に受けと首。翼の吊り下げる所に吊るほか、ORB 収納ラックの収納口にも挿せる（dockable：
+ * 収納口のある翼では、オーブと同じく空いている収納口へ入り、収納口の向きを向く）。hangRot は、吊るときの傾き（度）
+ */
+const hangTank = (id, name, hangRot = null) => {
+  const len = 0.74, r = 0.062;
+  return { ...G(id, name, 'hang', [0.14, 0.85, 0.14], [
+    piece('タンクの受け', prism([0, 0.045, 0], [0, -0.05, 0], [0.08, 0.075], [0, 0, 1]), { color: DARK }),
+    piece('タンクの首', lathePlanes([[-0.085, 0.05], [-0.06, 0.036], [-0.035, 0.036]], 10), { color: DARK }),
+    ...xf(tank('タンク', len, r, { n: 12, bands: [-0.2, 0.22], stripe: 0.32 }), { mov: [0, -0.07 - len / 2, 0] })]), bare: true, dockable: true, ...(hangRot ? { hangRot } : {}) };
+};
+const tankDiag = hangTank('wgtankdiag', '翼のプロペラントタンク（斜め下）', [0, 0, 30]);   // 下の端が外へ 30° 開く
+const tankVert = hangTank('wgtankvert', '翼のプロペラントタンク（垂直）');
 
 // ---- 遠隔砲台（漏斗形）3 基：吊り柱の下の棒に、口の細い円錐を 3 つ下げる ----
 const funnel = () => [
@@ -72,39 +85,33 @@ const finPods = (() => {
     ...[-0.105, 0, 0.105].flatMap(one)], ['mech']);
 })();
 
-// ---- オーブ（ORB：アウトレンジバレル。相手の射程の外から撃つ、射程がいちばん長い遠隔砲台）5 基：発生器の翼の後ろの縁につながる、長い砲身の砲台。5 基とも同じ長さで、先は尖らせず砲口で止める。扇に開く並びと、平行にそろえた並びの 2 種類。
-//      並びは光の刃（エフェクト）と同じ扇。受け・機関部（下に動力の箱、小さな安定板 2 枚）・長い砲身（上に装甲の覆い、下に支えの桁と 2 つの留め具）・差し色の帯・砲口 ----
-const ORB_LEN = 1.5;
-/** dirOf(j)：j 番目の砲身の向き */
-const orbSet = (id, name, dirOf) => {
-  const { A, d0, n, ch } = LIGHT_EMITTER, out = [], STEEL = '#4a4f57', L = ORB_LEN;
-  for (let j = 0; j < 5; j++) {
-    const o = add3(add3(A, mul3(d0, 0.12 + 0.11 * j)), mul3(ch, -0.13 + 0.008 * j)), d = unit(dirOf(j)), q = unit(cross(n, d)), nm = `砲台 ${j + 1}`;
-    // r は長さに対する割合、dq は幅の向き（扇の面の中）、dn は厚みの向き（面の前後）へのずれ
-    const at = (r, dq = 0, dn = 0) => add3(add3(add3(o, mul3(d, r * L)), mul3(q, dq)), mul3(n, dn));
-    const box = (name, r0, r1, size, o2 = {}, pos = [0, 0], tp = {}) => piece(`${nm}の${name}`, prism(at(r0, pos[0], pos[1]), at(r1, pos[0], pos[1]), size, n, tp), o2);
-    out.push(
-      box('受け', -0.03, 0.05, [0.08, 0.075], { color: DARK }),
-      box('機関部', 0.03, 0.24, [0.13, 0.1], {}, [0, 0], { w1: 0.115, h1: 0.09 }),
-      box('動力の箱', 0.06, 0.2, [0.07, 0.06], { color: DARK }, [-0.085, 0]),
-      box('機関部の覆い', 0.07, 0.22, [0.08, 0.035], { color: ACCENT }, [0.01, 0.055], { w1: 0.065, h1: 0.028 }),
-      box('砲身', 0.22, 0.9, [0.06, 0.06], { color: STEEL }),
-      box('砲身の覆い', 0.24, 0.66, [0.085, 0.03], {}, [0.012, 0.038], { w1: 0.07, h1: 0.024 }),
-      box('支えの桁', 0.2, 0.8, [0.024, 0.024], { color: DARK }, [-0.055, 0]),
-      box('留め具 1', 0.44, 0.47, [0.1, 0.075], { color: DARK }, [-0.02, 0]),
-      box('留め具 2', 0.76, 0.79, [0.1, 0.075], { color: DARK }, [-0.02, 0]),
-      box('差し色の帯', 0.7, 0.725, [0.072, 0.072], { color: ACCENT }),
-      box('砲口', 0.88, 1.0, [0.095, 0.085], { color: DARK }, [0, 0], { w1: 0.088, h1: 0.078 }),
-      box('砲口の中', 0.985, 1.004, [0.045, 0.04], { color: BEAM, glow: true }),
-      ...[-1, 1].flatMap(sg => strip(`${nm}の安定板（${sg > 0 ? '前' : '後ろ'}）`, [{ a: at(0.08, 0, sg * 0.04), b: at(0.2, 0, sg * 0.04), t: 0.016, k: 0.4, n: q }, { a: at(0.14, 0, sg * 0.11), b: at(0.2, 0, sg * 0.1), t: 0.006, k: 0.4, n: q }], { color: STEEL })));
-  }
-  return G(id, name, 'light', [1.6, 1.7, 0.8], out, ['light']);
+// ---- オーブ（ORB：アウトレンジバレル。相手の射程の外から撃つ、射程がいちばん長い遠隔砲台）：長い砲身の砲台 1 基。先は尖らせず砲口で止める。
+//      ORB 収納ラック（wings.js）の収納口に 1 基ずつ入る（slot 'dock'）。原点は収納口、砲身は −y へ伸び、幅は x、厚みは z。大きさは 小・中・大 の 3 つ
+//      受け・機関部（横に動力の箱、小さな安定板 2 枚）・長い砲身（上に装甲の覆い、横に支えの桁と 2 つの留め具）・差し色の帯・砲口 ----
+const orbUnit = (id, name, L, k) => {
+  const STEEL = '#4a4f57', nm = 'オーブ';
+  // r は長さに対する割合、dq は幅の向き（x）、dn は厚みの向き（z）へのずれ
+  const at = (r, dq = 0, dn = 0) => [dq * k, -r * L, dn * k];
+  const box = (part, r0, r1, size, o2 = {}, pos = [0, 0], tp = {}) => piece(`${nm}の${part}`, prism(at(r0, pos[0], pos[1]), at(r1, pos[0], pos[1]), size.map(v => v * k), [0, 0, 1], Object.fromEntries(Object.entries(tp).map(([a, v]) => [a, v * k]))), o2);
+  return G(id, name, 'dock', [0.2 * k, L, 0.25 * k], [
+    box('受け', -0.045 / L, 0.05, [0.08, 0.075], { color: DARK }),
+    box('機関部', 0.03, 0.24, [0.13, 0.1], {}, [0, 0], { w1: 0.115, h1: 0.09 }),
+    box('動力の箱', 0.06, 0.2, [0.07, 0.06], { color: DARK }, [-0.085, 0]),
+    box('機関部の覆い', 0.07, 0.22, [0.08, 0.035], { color: ACCENT }, [0.01, 0.055], { w1: 0.065, h1: 0.028 }),
+    box('砲身', 0.22, 0.9, [0.06, 0.06], { color: STEEL }),
+    box('砲身の覆い', 0.24, 0.66, [0.085, 0.03], {}, [0.012, 0.038], { w1: 0.07, h1: 0.024 }),
+    box('支えの桁', 0.2, 0.8, [0.024, 0.024], { color: DARK }, [-0.055, 0]),
+    box('留め具 1', 0.44, 0.47, [0.1, 0.075], { color: DARK }, [-0.02, 0]),
+    box('留め具 2', 0.76, 0.79, [0.1, 0.075], { color: DARK }, [-0.02, 0]),
+    box('差し色の帯', 0.7, 0.725, [0.072, 0.072], { color: ACCENT }),
+    box('砲口', 0.88, 1.0, [0.095, 0.085], { color: DARK }, [0, 0], { w1: 0.088, h1: 0.078 }),
+    box('砲口の中', 0.985, 1.004, [0.045, 0.04], { color: BEAM, glow: true }),
+    ...[-1, 1].flatMap(sg => strip(`${nm}の安定板（${sg > 0 ? '前' : '後ろ'}）`, [{ a: at(0.08, 0, sg * 0.04), b: at(0.2, 0, sg * 0.04), t: 0.016 * k, k: 0.4, n: [1, 0, 0] }, { a: at(0.14, 0, sg * 0.11), b: at(0.2, 0, sg * 0.1), t: 0.006 * k, k: 0.4, n: [1, 0, 0] }], { color: STEEL })),
+  ], ['rack']);
 };
-// 扇に開く並び（光の刃と同じ向き）と、5 基とも同じ向きにそろえた平行の並び（扇の真ん中の向き）
-const orb = orbSet('wgorb', 'オーブ（ORB：アウトレンジバレル 5 基・扇）', j => [0.3 + 0.13 * j, -1 + 0.14 * j, -0.38]);
-const orbPar = orbSet('wgorbpar', 'オーブ（ORB：アウトレンジバレル 5 基・平行）', () => [0.56, -0.72, -0.38]);
+const orbs = [orbUnit('wgorbs', 'オーブ（ORB・小）', 1.0, 0.8), orbUnit('wgorb', 'オーブ（ORB・中）', 1.5, 1), orbUnit('wgorbl', 'オーブ（ORB・大）', 2.0, 1.25)];
 
-// ---- 発生器のエンジン（円錐）：背中の真ん中の後ろに付く。光の輪（エフェクト）の真ん中に置ける ----
-const core = G('wgcore', '発生器のエンジン（短い円錐）', 'center', [0.32, 0.32, 0.55], coreEngine(0.49));
+// ---- 発生器のエンジン（円錐）：背中の板の真ん中に直に付く（slot 'spine'）。首の円柱は無い ----
+const core = G('wgcore', '発生器のエンジン（短い円錐）', 'spine', [0.32, 0.32, 0.32], coreEngine());
 
-export default [rackPart, wingTank, pods, finPods, orb, orbPar, core];
+export default [rackPart, wingTank, tankDiag, tankVert, pods, finPods, ...orbs, core];

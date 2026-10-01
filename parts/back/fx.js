@@ -2,7 +2,7 @@
 // 色は 2 色のグラデーションで、オレンジ系・緑系・青系の 3 つ。どれも光り、透け、当たり判定なし（noHit）。
 //   光の輪（slot 'center'：背中の真ん中の後ろ）：中が大きく抜けた幅広の帯に、細い同心の線。内の色から外の色へ。少し皿形（外ほど後ろ）
 //   光の帯（slot 'root'：左右の対）：後ろへ流れる細い帯 3 本。根元の色から先の色へ
-//   光の刃（slot 'light'：発生器の翼の後ろの縁。左右の対）：細く鋭い刃 5 本。芯が内の色、外が外の色
+//   光の刃（slot 'light'：ORB 収納ラック（一列・扇）の後ろの縁。左右の対）：細く鋭い刃 5 本。芯が内の色、外が外の色
 import { hull, strip, unit, cross, add3, mul3, mix } from './kit.js';
 import { LIGHT_EMITTER } from './wings.js';
 
@@ -42,7 +42,7 @@ function ribbon(key) {
   });
   return F(`fxribbon_${key}`, `光の帯（${label}・後ろへ流れる 3 本）`, 'root', [1.0, 1.2, 2.6], out);
 }
-/** 光の刃：発生器の翼（wings.js の winglight）の後ろの縁から、下と外へ扇に伸びる刃 5 本（外ほど長い）。原点は翼の付け根 */
+/** 光の刃：ORB 収納ラック（一列・扇。wings.js の wingrackfan）の後ろの縁から、下と外へ扇に伸びる刃 5 本（外ほど長い）。原点は翼の付け根 */
 function blades(key) {
   const [label, c0, c1] = FX_COLORS[key], { A, d0, n, ch } = LIGHT_EMITTER, out = [];
   for (let j = 0; j < 5; j++) {
@@ -50,7 +50,7 @@ function blades(key) {
     const blade = (name, w, tk, len, o2) => { const st = (r, f) => { const c = add3(o, mul3(d, r * len)); return { a: add3(c, mul3(q, w * f / 2)), b: add3(c, mul3(q, -w * f / 2)), t: tk, k: 0.5 }; }; return strip(name, [st(0, 0.45), st(0.06, 1), st(0.5, 0.7), st(1, 0.02)], o2); };
     out.push(...blade(`光の刃 ${j + 1}`, 0.17, 0.012, l, { ...LIGHT, color: c1, opacity: 0.5 }), ...blade(`光の刃 ${j + 1}の芯`, 0.06, 0.022, l * 0.8, { ...LIGHT, color: mix(c0, '#ffffff', 0.45), opacity: 0.9 }));
   }
-  return F(`fxblade_${key}`, `光の刃（${label}・5 本）`, 'light', [1.9, 1.9, 0.8], out, { forKind: ['light'] });
+  return F(`fxblade_${key}`, `光の刃（${label}・5 本）`, 'light', [1.9, 1.9, 0.8], out, { forKind: ['rack'] });
 }
 
 export default Object.keys(FX_COLORS).flatMap(k => [ring(k), ribbon(k), blades(k)]);

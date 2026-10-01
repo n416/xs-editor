@@ -1,10 +1,11 @@
 // 翼（胴の骨 torso）。左右の対で、+x 側の 1 枚を作る（反対側は鏡像で置く）。バックパックとは同時に付けない。
 // 原点は翼の付け根（背中の板の上、胸の下端の中心から x 0.11・y 0.4・z −0.19）。x は外、y は上、z は前（翼は後ろ −z へ伸びる）。
 // 付け根の台は体の真ん中（x −0.11）まで伸び、左右の台が真ん中で合わさる。置いた翼は、付け根を軸に回転で開き方を変えられる。
-// 部品ごとに、装備を付ける所（mounts）を持つ：hang 吊り下げる所（機械の翼の一部）・root 付け根・light 光の刃を出す所（発生器の翼）。kind：mech 機械・organic 有機・light 光
+// 部品ごとに、装備を付ける所（mounts）を持つ：hang 吊り下げる所（機械の翼の一部）・root 付け根・light 光の刃を出す所（ORB 収納ラック）。kind：mech 機械・organic 生き物の形・rack ORB 収納ラック
 //   機械：刃の翼（刃 6 枚を扇に）・大きなバインダー・戦闘機の翼（翼の下にエンジン）・ひれの翼（長いひれ 3 枚）
 //   生き物の形（作りは機械）：羽根の翼（装甲の腕と刃の羽）・骨組みの翼（関節の骨組みと放熱の膜）・透ける板の羽（4 枚）
-//   光を出す：放射の翼（開くひれ 6 枚。光の輪の出どころ）・発生器の翼（光の刃を出す装甲の腕）。光そのものは別の部品（fx.js）
+//   光を出す：放射の翼（開くひれ 6 枚。光の輪の出どころ）。光そのものは別の部品（fx.js）
+//   遠隔砲台を収める：ORB 収納ラック 5 種類（一列・扇／一列・平行／2・2・1／上向き 3・下向き 2／上下 2 段）。オーブは 1 基ずつ収納口（docks）へ入る
 import { piece, MAIN, DARK, BLACK, ACCENT } from '../../xsasm-lib.js';
 import { hull, xf, named, lathe, lathePlanes, bell, strip, rod, prism, lerp3, unit, cross, aim, add3, sub3, mul3 } from './kit.js';
 
@@ -199,17 +200,55 @@ function insect() {
     ...wing('下の羽', [0.07, -0.05, -0.1], [1.25, -0.12, -0.56], [0.05, 0.22, 0.25, 0.25, 0.23, 0.2, 0.03], unit([-0.05, -1, -0.3]))]);
 }
 
-// ---- 発生器の翼：斜め上へ出た装甲の発生器。後ろの縁の溝から光の刃（エフェクト fx.js の「光の刃」）を出す。光は別の部品 ----
-/** 発生器の位置と向き（光の刃のエフェクトが同じ値を使う）：A 根元、d0 伸びる向き、n 翼の面の向き、ch 幅の向き */
+// ---- ORB 収納ラック：斜め上へ出た装甲の梁の後ろの縁に、オーブ（ORB：長い砲身の遠隔砲台。wingear.js）の収納口を並べた翼。
+//      部品は docks（収納口の位置 at・砲身の向き d・面の向き n）を持ち、オーブは 1 基ずつそこへ入る。形は 5 種類：
+//        一列・扇（外の砲身ほど外へ開く）／一列・平行／2・2・1（2 基・2 基・1 基に分けて間をあける）／
+//        上向き 3・下向き 2（1 本の梁の上の縁に上向き 3 基、下の縁に下向き 2 基）／上下 2 段（上の梁に 3 基、下の後ろの梁に 2 基）
+//      一列・扇の後ろの縁からは、光の刃（エフェクト fx.js）も出せる ----
+/** 一列・扇のラックの梁の位置と向き（光の刃のエフェクトが同じ値を使う）：A 根元、d0 伸びる向き、n 翼の面の向き、ch 幅の向き */
 export const LIGHT_EMITTER = (() => { const A = [0.1, 0.04, -0.1], d0 = unit(sub3([0.62, 0.5, -0.36], A)), n = unit([0.25, 0.1, 1]); return { A, d0, n, ch: unit(cross(n, d0)) }; })();
-function light() {
-  const { A, d0, n, ch } = LIGHT_EMITTER;
-  const g = (r, w, tk, off = 0) => { const c = along(along(A, d0, r), ch, off); return { a: along(c, ch, w / 2), b: along(c, ch, -w / 2), t: tk, k: 0.4 }; };
-  const out = [...rootMech(), ...frameIn('翼の腕', [0.02, 0, -0.03], A, 0.05), ...drum('発生器の関節', A, n, 0.075, 0.07),
-    ...strip('発生器', [g(-0.04, 0.12, 0.09), g(0.12, 0.2, 0.115), g(0.5, 0.15, 0.085), g(0.74, 0.03, 0.025)]),
-    ...strip('発生器の下の枠', [g(0.02, 0.07, 0.1, -0.09), g(0.12, 0.08, 0.125, -0.115), g(0.5, 0.06, 0.09, -0.09), g(0.68, 0.03, 0.04, -0.045)], { color: DARK }),
-    ...strip('発生器の溝', [g(0.1, 0.02, 0.06, -0.16), g(0.6, 0.016, 0.04, -0.105)], { color: BLACK })];
-  return W('winglight', '発生器の翼（光の刃を出す装甲の腕）', 'light', [0.8, 0.7, 0.5], { light: [0, 0, 0] }, out);
+const ORB_DIR = [0.56, -0.72, -0.38], ORB_UP = [0.5, 0.7, -0.62], FAN_DIR = j => [0.3 + 0.13 * j, -1 + 0.14 * j, -0.38];
+/** ラックの梁：P0 から d0 の向きへ長さ len。装甲の覆い・下の枠・溝と、ss（P0 からの距離）の位置の収納口（受け・左右の仕切り板）。pieces と docks を返す。
+ *  ss の値を [距離, 1] と書くと、梁の上の縁の収納口（上向きに挿す）。dirOf(j, side)：j 番目の収納口の砲身の向き（side は下の縁 −1・上の縁 +1） */
+function rackBeam(name, P0, len, ss, dirOf) {
+  const { d0, n, ch } = LIGHT_EMITTER, k = len / 0.74;
+  const g = (r, w, tk, off = 0) => { const c = along(along(P0, d0, r * k), ch, off); return { a: along(c, ch, w / 2), b: along(c, ch, -w / 2), t: tk, k: 0.4 }; };
+  const pieces = [
+    ...strip(name, [g(-0.04, 0.12, 0.09), g(0.12, 0.2, 0.115), g(0.5, 0.17, 0.095), g(0.7, 0.1, 0.06), g(0.76, 0.03, 0.025)]),
+    ...strip(`${name}の下の枠`, [g(0.0, 0.07, 0.1, -0.09), g(0.12, 0.08, 0.125, -0.115), g(0.62, 0.07, 0.1, -0.105), g(0.73, 0.03, 0.04, -0.06)], { color: DARK }),
+    ...strip(`${name}の差し色の筋`, [g(0.14, 0.03, 0.122, 0.03), g(0.48, 0.026, 0.1, 0.025)], { color: ACCENT })];
+  const docks = ss.map((e, j) => {
+    const [s, side] = Array.isArray(e) ? e : [e, -1];
+    const c = along(P0, d0, s), o = along(c, ch, side * 0.15), d = unit(dirOf(j, side)), q = unit(cross(n, d));
+    pieces.push(piece(`${name}の収納口 ${j + 1}`, prism(along(c, ch, side * 0.04), along(o, d, 0.01), [0.07, 0.075], n, { w1: 0.135, h1: 0.065 }), { color: DARK }),
+      ...(side > 0 ? [] : [-1, 1]).map(sg => piece(`${name}の仕切り板 ${j + 1}（${sg > 0 ? '外' : '内'}）`, prism(along(along(o, q, sg * 0.062), d, -0.05), along(along(o, q, sg * 0.062), d, 0.06), [0.012, 0.1], n, { w1: 0.008, h1: 0.07 }))));
+    return { at: o, d, n };
+  });
+  return { pieces, docks };
+}
+function rackWing(id, name, size, beams, extra = () => []) {
+  const { A, n } = LIGHT_EMITTER, built = beams.map(b => rackBeam(b.name, b.P0, b.len, b.ss, b.dir));
+  const w = W(id, name, 'rack', size, { light: [0, 0, 0] }, [...rootMech(), ...frameIn('翼の腕', [0.02, 0, -0.03], A, 0.05), ...drum('ラックの関節', A, n, 0.075, 0.07),
+    ...built.flatMap(b => b.pieces), ...extra()]);
+  return { ...w, docks: built.flatMap(b => b.docks) };
+}
+function racks() {
+  const { A, d0, n } = LIGHT_EMITTER, row = [0.1, 0.235, 0.37, 0.505, 0.64];
+  const lowP0 = along(add3(A, [0.03, -0.34, 0]), n, -0.36);
+  return [
+    rackWing('wingrackfan', 'ORB 収納ラック（一列・扇）', [0.8, 0.7, 0.5], [{ name: 'ラックの梁', P0: A, len: 0.8, ss: row, dir: FAN_DIR }]),
+    rackWing('wingrackrow', 'ORB 収納ラック（一列・平行）', [0.8, 0.7, 0.5], [{ name: 'ラックの梁', P0: A, len: 0.8, ss: row, dir: () => ORB_DIR }]),
+    rackWing('wingrack221', 'ORB 収納ラック（2・2・1）', [1.0, 0.8, 0.6], [{ name: 'ラックの梁', P0: A, len: 1.0, ss: [0.1, 0.24, 0.45, 0.59, 0.8], dir: () => ORB_DIR }]),
+    rackWing('wingrackud', 'ORB 収納ラック（上向き 3・下向き 2）', [0.8, 0.9, 0.5], [{ name: 'ラックの梁', P0: A, len: 0.8, ss: [[0.32, 1], [0.48, 1], [0.64, 1], 0.2, 0.4], dir: (j, side) => (side > 0 ? ORB_UP : ORB_DIR) }]),
+    rackWing('wingracktwo', 'ORB 収納ラック（上下 2 段）', [0.7, 1.0, 0.7], [
+      { name: 'ラックの上の梁', P0: A, len: 0.6, ss: [0.1, 0.25, 0.4], dir: () => ORB_DIR },
+      { name: 'ラックの下の梁', P0: lowP0, len: 0.46, ss: [0.1, 0.25], dir: () => ORB_DIR }],
+    () => [
+      ...frameIn('下の段の腕', [0.0, -0.04, -0.06], lowP0, 0.045),
+      piece('段をつなぐ柱（内）', prism(along(A, d0, 0.06), along(lowP0, d0, 0.06), [0.05, 0.045], d0), { color: DARK }),
+      piece('段をつなぐ柱（外）', prism(along(A, d0, 0.5), along(lowP0, d0, 0.38), [0.045, 0.04], d0), { color: DARK }),
+      piece('段をつなぐ筋交い', prism(along(A, d0, 0.1), along(lowP0, d0, 0.34), [0.028, 0.028], d0), { color: STEEL })]),
+  ];
 }
 
 // ---- 放射の翼：背中の後ろへ出した軸の台から、細長いひれ 3 枚（左右で 6 枚）を放射状に開く。上と下の白いひれは体の高さほどの長さ、真ん中の差し色のひれは短い。
@@ -242,4 +281,4 @@ function radial() {
   return W('wingradial', '放射の翼（開く長いひれ 6 枚）', 'mech', [2.0, 4.2, 0.8], {}, out);
 }
 
-export default [blades(), radial(), binder(), jet(), plates(), feathers(), bat(), insect(), light()];
+export default [blades(), radial(), binder(), jet(), plates(), feathers(), bat(), insect(), ...racks()];

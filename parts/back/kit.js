@@ -148,3 +148,12 @@ export function mix(a, b, t) {
   const h = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)), [p, q] = [h(a), h(b)];
   return '#' + p.map((v, i) => Math.round(v + (q[i] - v) * t).toString(16).padStart(2, '0')).join('');
 }
+/**
+ * 部品の x・−y・z を、世界の q（幅）・d（伸びる向き）・n（面の向き）へ向ける回転（度。組み立ての順 Ry · Rx · Rz）。
+ * q は n × d、z は q と d に直角な向きに取り直す
+ */
+export function rotOfFrame(d, n) {
+  const dd = unit(d), q = unit(cross(n, dd)), z = cross(q, dd.map(v => -v));
+  const M = [[q[0], -dd[0], z[0]], [q[1], -dd[1], z[1]], [q[2], -dd[2], z[2]]];
+  return [Math.asin(Math.max(-1, Math.min(1, -M[1][2]))) / R, Math.atan2(M[0][2], M[2][2]) / R, Math.atan2(M[1][0], M[1][1]) / R];
+}
