@@ -1,5 +1,5 @@
 // 上半身（胴の骨 torso）の部品の目次。1 部品 1 ファイル。胴は胸・背中・腹・脇腹の 4 つに分け、部位ごとに差し替える。
-// 肩アーマーは腕の骨（arm）に付き、腕と一緒に回る。
+// 肩アーマーは腕の骨（arm）に付き、腕と一緒に回る。バックパックと翼は背中の部品（parts/back）。
 // 置き場所は骨格図の標準の寸法（xsbody.js の makeSheet()）：胸の下端の中心 (0, 2.1, 0)、肩関節の中心 (±0.45, 2.5, 0)
 import chest from './chest.js';
 import back from './back.js';
@@ -8,10 +8,9 @@ import flank from './flank.js';
 import shoulder from './shoulder.js';
 import shoulderarmor from './shoulderarmor.js';
 import collar from './collar.js';
-import backpack from './backpack.js';
 import chestdeco from './chestdeco.js';
 import powerpipe from './powerpipe.js';
-export const UPPER = [chest, back, abdomen, flank, shoulder, shoulderarmor, collar, backpack, chestdeco, powerpipe].flat();
+export const UPPER = [chest, back, abdomen, flank, shoulder, shoulderarmor, collar, chestdeco, powerpipe].flat();
 export const upperById = Object.fromEntries(UPPER.map(p => [p.id, p]));
 
 export const CHEST_AT = [0, 2.1, 0], SHOULDER_AT = [0.45, 2.5, 0];
@@ -32,19 +31,19 @@ const sample = (mid, sides, armorScale = 1) => [
 /** 胴の 4 つ（胸・背中・腹・脇腹）の id */
 const torso = (c = 'chest', b = 'back', a = 'abdomen', f = 'flank') => [c, b, a, f];
 export const UPPER_SAMPLES = {
-  標準: sample([...torso(), 'collar', 'backpack'], ['shoulderjoint', 'shoulderarmor']),
-  '丸い胸と盾': sample([...torso('chestbarrel', 'backhump', 'abdomenband', 'flankbulge'), 'collarlow', 'backpackbooster', 'chestpipe'], ['shoulderjointdrum', 'shoulderarmorshield']),
-  '横の稜と箱形': sample([...torso('chestvee', 'back', 'abdomenvee', 'flankslats'), 'collarwide', 'backpack', 'chestventlong'], ['shoulderjoint', 'shoulderarmorbox']),
-  '重ねた板と重ね板': sample([...torso('chestframe', 'backspine', 'abdomenbellows', 'flank'), 'collar', 'backpackslim'], ['shoulderjoint', 'shoulderarmorlayer']),
-  '大きな張り出しととげ': sample([...torso('chestpigeon', 'backfins', 'abdomenplate', 'flankbig'), 'collarlow', 'backpackbooster', 'chestpipethick'], ['shoulderjointdrum', 'shoulderarmorspike']),
-  '差し色と大きな丸い肩': sample([...torso('chestcockpit', 'backhump', 'abdomen', 'flankbulge'), 'collarlow', 'backpack'], ['shoulderjoint', 'shoulderarmorbig']),
-  '段付きの丸い肩': sample([...torso('chest', 'backblades', 'abdomenband', 'flankbig'), 'collar', 'backpackslim', 'chestpipe'], ['shoulderjointdrum', 'shoulderarmorstep']),
-  'とても大きな丸い肩': sample([...torso(), 'collar', 'backpackbooster'], ['shoulderjointdrum', 'shoulderarmorsphere'], 1.8),
-  'とても大きな盾': sample([...torso('chestvee', 'backhump', 'abdomenvee', 'flankslats'), 'collarwide', 'backpack'], ['shoulderjoint', 'shoulderarmorshield'], 1.5),
-  '角の排気口ととげ': sample([...torso('chestexhaust', 'backhump', 'abdomenbellows', 'flank'), 'collarlow', 'backpack', 'pipechestheadthick'], ['shoulderjoint', 'shoulderarmorspike', 'pipearmthick']),
-  '通気口とハッチ': sample([...torso(), 'collar', 'backpack', 'chestvent', 'chesthatch'], ['shoulderjoint', 'shoulderarmorbox']),
+  標準: sample([...torso(), 'collar'], ['shoulderjoint', 'shoulderarmor']),
+  '丸い胸と盾': sample([...torso('chestbarrel', 'backhump', 'abdomenband', 'flankbulge'), 'collarlow', 'chestpipe'], ['shoulderjointdrum', 'shoulderarmorshield']),
+  '横の稜と箱形': sample([...torso('chestvee', 'back', 'abdomenvee', 'flankslats'), 'collarwide', 'chestventlong'], ['shoulderjoint', 'shoulderarmorbox']),
+  '重ねた板と重ね板': sample([...torso('chestframe', 'backspine', 'abdomenbellows', 'flank'), 'collar'], ['shoulderjoint', 'shoulderarmorlayer']),
+  '大きな張り出しととげ': sample([...torso('chestpigeon', 'backfins', 'abdomenplate', 'flankbig'), 'collarlow', 'chestpipethick'], ['shoulderjointdrum', 'shoulderarmorspike']),
+  '差し色と大きな丸い肩': sample([...torso('chestcockpit', 'backhump', 'abdomen', 'flankbulge'), 'collarlow'], ['shoulderjoint', 'shoulderarmorbig']),
+  '段付きの丸い肩': sample([...torso('chest', 'backblades', 'abdomenband', 'flankbig'), 'collar', 'chestpipe'], ['shoulderjointdrum', 'shoulderarmorstep']),
+  'とても大きな丸い肩': sample([...torso(), 'collar'], ['shoulderjointdrum', 'shoulderarmorsphere'], 1.8),
+  'とても大きな盾': sample([...torso('chestvee', 'backhump', 'abdomenvee', 'flankslats'), 'collarwide'], ['shoulderjoint', 'shoulderarmorshield'], 1.5),
+  '角の排気口ととげ': sample([...torso('chestexhaust', 'backhump', 'abdomenbellows', 'flank'), 'collarlow', 'pipechestheadthick'], ['shoulderjoint', 'shoulderarmorspike', 'pipearmthick']),
+  '通気口とハッチ': sample([...torso(), 'collar', 'chestvent', 'chesthatch'], ['shoulderjoint', 'shoulderarmorbox']),
 };
-/** ランダムに組む：部位ごとに 1 つ（胴の 4 つは必ず、襟・バックパックはたいてい付け、胸の飾りは 0〜2 個。肩アーマーはときどきとても大きく） */
+/** ランダムに組む：部位ごとに 1 つ（胴の 4 つは必ず、襟はたいてい付け、胸の飾りは 0〜2 個。肩アーマーはときどきとても大きく） */
 export function randomUpper(rnd = Math.random) {
   const ids = cat => UPPER.filter(p => p.cat === cat).map(p => p.id);
   const pick = list => list[Math.floor(rnd() * list.length)];
@@ -53,5 +52,5 @@ export function randomUpper(rnd = Math.random) {
   if (deco.includes('chestvent') && deco.includes('chestventlong')) deco.splice(deco.indexOf('chestvent'), 1);
   // 4 回に 1 回くらいは、とても大きな肩アーマー（1.35〜2 倍）
   const big = rnd() < 0.25 ? 1.35 + 0.65 * rnd() : 1;
-  return sample([pick(ids('胸')), pick(ids('背中')), pick(ids('腹')), pick(ids('脇腹')), rnd() < 0.85 ? pick(ids('襟')) : null, rnd() < 0.9 ? pick(ids('バックパック')) : null, ...deco], [pick(ids('肩関節')), pick(ids('肩アーマー'))], Math.round(big * 100) / 100);
+  return sample([pick(ids('胸')), pick(ids('背中')), pick(ids('腹')), pick(ids('脇腹')), rnd() < 0.85 ? pick(ids('襟')) : null, ...deco], [pick(ids('肩関節')), pick(ids('肩アーマー'))], Math.round(big * 100) / 100);
 }
