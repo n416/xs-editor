@@ -517,7 +517,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = 'b731fd7';
+const BUILD = 'c449110';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -606,6 +606,7 @@ const DEFAULTS = {
   pts: rect(0.8, 0.8), depth: 0.4, bevel: 0.04, bevelSegs: 1, corner: 0, cornerSegs: 1, taper: 1, tiltY: 0, ridge: 0,
   segments: 24, arrayCount: 1, arrayStep: [0, 0.15, 0], metal: 0.55, rough: 0.38, blockout: false, bone: 'auto', team: false, glow: null, pivot: 'auto',
   noHit: false,            // not counted in the joint check's cutting-in (power pipes, lights)
+  orb: null,               // a part of an orb (ORB) from the body generator: { i: its number, size: 's' | 'm' | 'l', len, dock: [x, y, z] its dock in the part's frame }
   noHeight: false,         // not counted in the XS's height (wings and back gear that rise above the head)
   gun: null,               // a hand weapon the game hides for melee: true / false, null = by its name
   opacity: null,           // a see-through part (lights from the body generator): 0..1, null = solid
@@ -1690,7 +1691,7 @@ function lodPieces(level) {
       const cx = (g.boundingBox.min.x + g.boundingBox.max.x) / 2, cz = (g.boundingBox.min.z + g.boundingBox.max.z) / 2;
       const geo = g.index ? g.toNonIndexed() : g;   // imported meshes are indexed
       geo.computeBoundingBox();
-      out.push({ geo, part: p, bone: sided(boneGroupOf(p), cx, cz) });
+      out.push({ geo, part: p, bone: sided(boneGroupOf(p), cx, cz), orb: p.orb ? 'orb_' + p.orb.i : null });
     }
   };
   const solid = parts.filter(p => p.op === 'add' && !p.blockout);
@@ -2457,11 +2458,33 @@ function buildGameModel() {
   if (ankle) for (const n of ['foot_l', 'foot_r']) if (bones[n]) bones[n].userData.ankle = ankle;
   // double joints: how far the lower axis bends before the link turns (the link bones' extras; client/src/doublejoint.ts reads it)
   for (const [link, first] of [['elbow', ELBOW_AXES[2]], ['knee', KNEE_AXES[2]]]) for (const s of ['l', 'r']) if (bones[`${link}_${s}`]) bones[`${link}_${s}`].userData.first = Math.round(first * 1e4) / 1e4;
+  // orbs (ORB, the body generator's): each orb's parts ride on a bone of its own, orb_<n> (a child of the torso, at the orb's
+  // dock, turned so that its -Y runs along the barrel and its +Z is the dock's face), so the game can hide one orb (scale
+  // 0) and send its own flying one out; orb_dock_<n> is the same place as a plain node, which the game does not scale.
+  // The bones' extras: size ('s' | 'm' | 'l') and len (the barrel's length in the editor's units)
+  const orbNames = [];
+  {
+    const seen = new Map();
+    for (const pc of lods[0]) if (pc.orb && !seen.has(pc.orb)) seen.set(pc.orb, pc.part);
+    const flipQ = new THREE.Quaternion(0, 1, 0, 0);
+    for (const [name, p] of [...seen].sort((a, b) => a[1].orb.i - b[1].orb.i)) {
+      p.proxy.updateMatrixWorld();
+      const w = toGame(new THREE.Vector3(...p.orb.dock).applyMatrix4(p.proxy.matrixWorld), floor).sub(toGame(at.torso, floor));
+      const q = flipQ.clone().multiply(p.proxy.getWorldQuaternion(new THREE.Quaternion())).multiply(flipQ.clone().invert());
+      for (const nm of [name, name.replace('orb_', 'orb_dock_')]) {
+        const b = new THREE.Bone(); b.name = nm; b.position.copy(w); b.quaternion.copy(q);
+        b.userData = { size: p.orb.size, len: p.orb.len };
+        bones.torso.add(b);
+        if (nm === name) { bones[name] = b; orbNames.push(name); }
+      }
+    }
+  }
   root.updateMatrixWorld(true);
-  const boneList = gameBones.map(([n]) => bones[n]);
+  const boneNames = [...gameBones.map(([n]) => n), ...orbNames];
+  const boneList = boneNames.map(n => bones[n]);
   const skeleton = new THREE.Skeleton(boneList);
-  const boneIndex = Object.fromEntries(gameBones.map(([n], i) => [n, i]));
-  const report = { tris: [], calls: [], materials: [], bones: gameBones.map(([n]) => n), tracked, belts: [], ankle };
+  const boneIndex = Object.fromEntries(boneNames.map((n, i) => [n, i]));
+  const report = { tris: [], calls: [], materials: [], bones: boneNames, tracked, belts: [], ankle };
 
   lods.forEach((pieces, level) => {
     // LOD0 of a tracked XS: the belts are their own meshes (track_l / track_r) so the game can scroll their texture
@@ -2521,7 +2544,7 @@ function buildGameModel() {
       for (const pc of list) {
         if (level === 0) partRanges.push([pieceLabel(pc), pc.bone, P.length / 9, pc.geo.attributes.position.count / 3, (isHeld(pc.part) ? 1 : 0) | (pc.part.noHit ? 2 : 0) | (isLight(pc.part) ? 4 : 0)]);
         const pos = pc.geo.attributes.position, nor = pc.geo.attributes.normal;
-        const col = cls === 'skin' ? new THREE.Color(0xffffff) : new THREE.Color(pc.part.color), bi = boneIndex[pc.bone];
+        const col = cls === 'skin' ? new THREE.Color(0xffffff) : new THREE.Color(pc.part.color), bi = boneIndex[pc.orb] ?? boneIndex[pc.bone];
         const uv = cls === 'skin' ? pc.geo.attributes.uv : null;
         const si = pc.part.rig ? pc.geo.attributes.skinIndex : null, sw = si ? pc.geo.attributes.skinWeight : null;
         const map = si ? IMPORT_BONES.map(n => boneIndex[n] ?? boneIndex.torso) : null;
