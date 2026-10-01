@@ -6,21 +6,28 @@ import knee from './knee.js';
 import shin from './shin.js';
 import shindeco from './shindeco.js';
 import foot from './foot.js';
-// 釣鐘のすねの 2 式（卵形・丸い樽の太もも、丸いひざ当て、釣鐘のすね、厚い靴底・幅広の足、すねの動力パイプ）は、まだ見せられる出来でないので外してある
-const HOLD = new Set(['thighegg', 'thighround', 'kneepad', 'kneesmall', 'shinbell', 'shinbigbell', 'footsole', 'footwide', 'shinpipe', 'shinpipethick']);
+// すねの動力パイプは、すねの形を作り直したので合わせ直すまで外してある
+const HOLD = new Set(['shinpipe', 'shinpipethick']);
 export const LEG = [thigh, knee, shin, shindeco, foot].flat().filter(p => !HOLD.has(p.id));
 export const legById = Object.fromEntries(LEG.map(p => [p.id, p]));
 export const LEG_AT = [0.175, 1.14, 0];
-export const LEG_CAT = new Set(['太もも', 'ひざ', 'すね', 'すねの飾り', '足']);
+export const LEG_CAT = new Set(['太もも', 'ひざ当て', 'すね', 'すねの飾り', '足']);
 export const placementOfLeg = () => ({ mov: LEG_AT.slice(), pair: true });
 
 const sample = ids => [1, -1].flatMap(s => ids.filter(Boolean).map(part => ({ part, mov: [s * LEG_AT[0], LEG_AT[1], LEG_AT[2]], scal: [s, 1, 1] })));
 export const LEG_SAMPLES = {
-  '細身（縦長のひざ当て・とがったふくらはぎ）': sample(['thigh', 'knee', 'shin', 'foot']),
+  '細身（とがったふくらはぎ）': sample(['thigh', 'knee', 'shin', 'foot']),
+  '推進器つき': sample(['thigharmor', 'kneeaccent', 'shinthruster', 'footsplit']),
+  '重装（大きな盾のひざ当て）': sample(['thighvent', 'kneeshield', 'shinheavy', 'footheavy']),
+  '高機動（長いひざ当て）': sample(['thighframe', 'kneeblade', 'shinblade', 'footheel']),
+  '丸み': sample(['thighround', 'kneesmall', 'shinround', 'foot']),
+  '裾が大きく広がる重い脚': sample(['thighround', 'kneepad', 'shinflare', 'footheavy']),
+  'フレーム': sample(['thighframe', 'kneesmall', 'shinframe', 'footclaw']),
+  'タンクつき': sample(['thigharmor', 'knee', 'shintank', 'footsplit']),
 };
 /** ランダムに組む：太もも・ひざ当て・すね・足を 1 つずつ */
 export function randomLeg(rnd = Math.random) {
   const ids = cat => LEG.filter(p => p.cat === cat).map(p => p.id);
   const pick = list => list[Math.floor(rnd() * list.length)];
-  return sample([pick(ids('太もも')), pick(ids('ひざ')), pick(ids('すね')), pick(ids('足'))]);
+  return sample([pick(ids('太もも')), pick(ids('ひざ当て')), pick(ids('すね')), pick(ids('足'))]);
 }

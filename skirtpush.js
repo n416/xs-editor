@@ -44,6 +44,22 @@ export function outlineFor(tris, x0, x1, pad = 0.01) {
 }
 
 /**
+ * 凸の部品 1 個（tris は三角形を x, y, z で並べた数の列）を、x の幅 band ごとの帯に分けて、帯ごとの横から見た形にする。
+ * 幅の広い太ももと、外で後ろへ曲がるスカートのように、x の場所で形が違うものどうしを、同じ x の所どうしで比べるため
+ * （部品まるごとを 1 つの形にすると、外の端の低い所と真ん中の高い所を突き合わせて、当たらないのに当たると出る）
+ */
+export function bandedOutlines(tris, band = 0.05) {
+  let x0 = Infinity, x1 = -Infinity;
+  for (let i = 0; i < tris.length; i += 3) { x0 = Math.min(x0, tris[i]); x1 = Math.max(x1, tris[i]); }
+  const n = Math.max(1, Math.ceil((x1 - x0) / band)), out = [];
+  for (let k = 0; k < n; k++) {
+    const a = x0 + (x1 - x0) * k / n, b = x0 + (x1 - x0) * (k + 1) / n, poly = outlineFor(tris, a, b, 0);
+    if (poly) out.push({ poly, pivot: [0, 0], x: [a, b], angle: 0 });
+  }
+  return out;
+}
+
+/**
  * 押されて開く角度（ラジアン、0 以上）。skirt = { poly, hinge: [y, z], dir, x: [x0, x1], tris? }（tris があれば脚ごとに
  * その脚の幅にかかる所の形で調べる）、legs = [{ poly, pivot: [y, z], x: [x0, x1], angle, knee?: [y, z], kneeAngle? }]
  * （angle は脚を前へ上げる角、ラジアン。three では rotation.x = −angle。すねは knee と kneeAngle（ゲームの shin の x、
@@ -52,8 +68,14 @@ export function outlineFor(tris, x0, x1, pad = 0.01) {
 export function pushAngle(skirt, legs, { margin = 0.006, max = 1.9, step = 0.01 } = {}) {
   const pairs = legs.filter(l => l.x[0] < skirt.x[1] && skirt.x[0] < l.x[1]).map(l => ({
     leg: rot2(l.knee ? rot2(l.poly, l.knee, -(l.kneeAngle ?? 0)) : l.poly, l.pivot, -l.angle),
-    plate: skirt.tris ? outlineFor(skirt.tris, l.x[0], l.x[1]) : skirt.poly,
-  })).filter(p => p.plate);
+    plate: skirt.tris ? outlineFor(skirt.tris, l.x[0], l.x[1], l.pad ?? 0.01) : skirt.poly,
+  })).filter(p => p.plate).filter(p => {
+    // 板の届く範囲（蝶番からいちばん遠い点まで）の外にある脚の形は、どう開いても当たらないので外す（結果は変わらない。速くするだけ）
+    const reach = Math.max(...p.plate.map(q => Math.hypot(q[0] - skirt.hinge[0], q[1] - skirt.hinge[1])));
+    const c = p.leg.reduce((a, q) => [a[0] + q[0] / p.leg.length, a[1] + q[1] / p.leg.length], [0, 0]);
+    const r = Math.max(...p.leg.map(q => Math.hypot(q[0] - c[0], q[1] - c[1])));
+    return Math.hypot(c[0] - skirt.hinge[0], c[1] - skirt.hinge[1]) - r <= reach + margin;
+  });
   if (!pairs.length) return 0;
   for (let t = 0; t <= max; t += step) {
     if (!pairs.some(p => overlaps(rot2(p.plate, skirt.hinge, -skirt.dir * t), p.leg, margin))) return t;
