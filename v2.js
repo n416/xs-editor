@@ -211,6 +211,7 @@ function placeFreeJoints() {
   }
 }
 /** 自由な部品（機体エディタの形式）の Group：形 1 個ずつ（ミラー・繰り返しの写しごと）を、付く骨の入れ物（userData.extra）へ分ける。腰に付くものは g そのもの */
+const draftMat = new THREE.MeshStandardMaterial({ color: 0x5fa8ff, transparent: true, opacity: 0.28, depthWrite: false, roughness: 0.9, metalness: 0 });
 function freeGroup(item, index, def) {
   const g = new THREE.Group();
   g.userData.index = index; g.userData.hinges = []; g.userData.extra = new Map();
@@ -233,13 +234,15 @@ function freeGroup(item, index, def) {
       }
       continue;
     }
-    if (!drawn(pc)) continue;
+    // あたり（下書き。書き出す形には入らない）は、薄い青の形で見せる
+    const draft = !!pc.blockout && !isSub(pc) && pc.kind !== 'mesh';
+    if (!drawn(pc) && !draft) continue;
     const grp = groupOfPart(pc, tracked);
     instGeosOf(def, pc).forEach((geo, k) => {
       if (!geo.boundingBox) geo.computeBoundingBox();
       const bb = geo.boundingBox, cx = (bb.min.x + bb.max.x) / 2 * item.scal[0] + item.mov[0], key = holderKey(grp, cx);
-      const m = new THREE.Mesh(geo, material(pc, def));
-      Object.assign(m.userData, { index, noHit: !!pc.noHit, pc, def, inst: k, ebone: sidedName(grp, cx, (bb.min.z + bb.max.z) / 2) });
+      const m = new THREE.Mesh(geo, draft ? draftMat : material(pc, def));
+      Object.assign(m.userData, { index, noHit: !!pc.noHit || draft, pc, def, inst: k, ebone: sidedName(grp, cx, (bb.min.z + bb.max.z) / 2) });
       put(key, m);
     });
   }
@@ -1071,7 +1074,7 @@ $('#bNewPart').onclick = () => { if (busy()) return; const t = byId[$('#newPartS
 
 // ---- 塗り：役ごとの色（パレット）とビビッド。色を変えたら、置いてあるパーツの材質だけ付け替える（形は作り直さない） ----
 function applyPaint() {
-  for (const g of groups) for (const t of [g, ...g.userData.extra.values()]) t.traverse(o => { if (o.isMesh && o.userData.pc) o.material = material(o.userData.pc, o.userData.def); });
+  for (const g of groups) for (const t of [g, ...g.userData.extra.values()]) t.traverse(o => { if (o.isMesh && o.userData.pc) o.material = o.userData.pc.blockout && o.userData.def?.free ? draftMat : material(o.userData.pc, o.userData.def); });
 }
 const ROLE_KEYS = ['main', 'sub', 'frame', 'accent', 'glow'];
 function showPaint() {
@@ -1215,7 +1218,7 @@ $('#bGlb').onclick = async () => {
     const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');
     setPose([]); root.updateMatrixWorld(true);
     const g = new THREE.Group();
-    for (const grp of groups) for (const t of [grp, ...grp.userData.extra.values()]) t.traverse(o => { if (o.isMesh && o.userData.pc && o.material !== flashMat) { const geo = o.geometry.clone().applyMatrix4(o.matrixWorld); g.add(new THREE.Mesh(geo, o.material)); } });
+    for (const grp of groups) for (const t of [grp, ...grp.userData.extra.values()]) t.traverse(o => { if (o.isMesh && o.userData.pc && !o.userData.pc.blockout && o.material !== flashMat) { const geo = o.geometry.clone().applyMatrix4(o.matrixWorld); g.add(new THREE.Mesh(geo, o.material)); } });
     const data = await new Promise((ok, ng) => new GLTFExporter().parse(g, ok, ng, { binary: true }));
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: 'model/gltf-binary' })); a.download = `${safeName(unitName)}.glb`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     $('#gameOut').textContent = `${safeName(unitName)}.glb を書き出しました（${(data.byteLength / 1048576).toFixed(1)} MB。骨なし・立った姿勢。ゲームには「書き出す」のほうを使う）`;
@@ -1639,6 +1642,15 @@ const AI = initAi({
 $('#bAi').onclick = () => AI.open();
 // ---- みんなの機体（v2-share.js）：投稿するのは機体の JSON（Ver2 の形）。名前に使えない文字（< > " ' ` と制御文字）は抜いて送る ----
 const IMPORT_SAMPLES = ['./samples/wings-import.json'];
+// あたりだけの体：[名前, 幅, 高さ, 厚み, x, y, z, 左右ミラー]。太めにすると幅と厚みが増える（k）[独自]
+const ROUGH = [
+  ['あたり・頭', 0.26, 0.28, 0.3, 0, 2.87, 0.01], ['あたり・胸', 0.62, 0.5, 0.4, 0, 2.38, 0], ['あたり・腹', 0.34, 0.22, 0.3, 0, 2.03, 0],
+  ['あたり・腰', 0.5, 0.25, 0.36, 0, 1.8, 0], ['あたり・肩', 0.26, 0.26, 0.3, 0.45, 2.52, 0, 1], ['あたり・上腕', 0.14, 0.42, 0.16, 0.5, 2.18, 0, 1],
+  ['あたり・前腕', 0.17, 0.46, 0.19, 0.5, 1.72, 0.02, 1], ['あたり・手', 0.12, 0.14, 0.12, 0.5, 1.42, 0.03, 1],
+  ['あたり・太もも', 0.2, 0.6, 0.22, 0.15, 1.33, 0, 1], ['あたり・すね', 0.22, 0.8, 0.26, 0.15, 0.6, 0, 1], ['あたり・足', 0.22, 0.14, 0.42, 0.15, 0.07, 0.05, 1],
+];
+const roughBody = k => ROUGH.map(([name, w, h, d, x, y, z, m]) => ({ ...DEFAULTS, name, kind: 'extrude', pts: [[-w * k / 2, -h / 2], [w * k / 2, -h / 2], [w * k / 2, h / 2], [-w * k / 2, h / 2]], depth: d * k, bevel: 0, corner: 0,
+  blockout: true, mirror: !!m, pos: [x * (1 + (k - 1) * 0.55), y, z], rot: [0, 0, 0], scl: [1, 1, 1] }));
 const postText = v => typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>"'`]/g, '').slice(0, 120)
   : Array.isArray(v) ? v.map(postText) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, postText(x)])) : v;
 const postDoc = () => { const d = postText(structuredClone(unitDoc())); delete d.name; return d; };
@@ -1678,7 +1690,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'd2b59f3';
+const BUILD = '7c3c307';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
@@ -1747,6 +1759,17 @@ function renderE1(box) {
       cell.querySelector('button').onclick = () => { if (busy() || !okToLeave(`「${s.name}」を開きます`)) return; $('#saveBox').hidden = true; openShip(s.blank ? blankShip(s.role) : structuredClone(s.parts), s.blank ? `新しい${VEHICLES[s.role].name}` : s.name, s.role, s.hit); };
     }
   }).catch(() => { const el = sh.querySelector('#svShips'); if (el) el.innerHTML = '<span class="hint">艦の見本を読めませんでした</span>'; });
+  // 0 から作る：あたり（大まかな箱）だけの機体から始める（機体エディタ 1 の「この体型で始める」）。機体エディタの部品でできた機体として開く
+  const ro = document.createElement('div');
+  ro.innerHTML = `<h2>0 から作る <span class="hint">あたり（下書きの箱）だけの機体から始める。開いたら「パーツエディタで開く」で、あたりに沿ってブロックを付けていく</span></h2>
+    <div class="now"><label class="hint">細身 <input type="range" id="svBuild" min="1" max="10" step="1" value="4" style="width:160px;vertical-align:middle"> 太め <output id="svBuildOut">4</output></label><button id="svRough" class="acc">この体型で始める</button></div>`;
+  box.appendChild(ro);
+  ro.querySelector('#svBuild').oninput = e => { ro.querySelector('#svBuildOut').textContent = e.target.value; };
+  ro.querySelector('#svRough').onclick = () => {
+    if (busy() || !okToLeave('あたりだけの機体を開きます')) return;
+    openE1(roughBody(0.85 + (Number(ro.querySelector('#svBuild').value) - 1) * 0.75 / 9), 'あたりから作る機体', $('#gameId').value.replace(/^[ab]_/, ''));
+    $('#saveBox').hidden = true;
+  };
   // 取り込みの見本：外で作った形（.glb）を取り込んで関節で切り分けた機体（形はパックで配る：samples/*.xsmesh）
   const im = document.createElement('div');
   im.innerHTML = '<h2>取り込みの見本 <span class="hint">3D 生成 AI などで作った形を取り込んで、関節で切り分けた機体（骨に合わせて曲がるスキン）</span></h2><div class="svcells" id="svImports"><span class="hint">読み込み中…</span></div>';
