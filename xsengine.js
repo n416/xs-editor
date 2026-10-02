@@ -581,7 +581,12 @@ function attachPoints(pieces) {
     return { pos: box.getCenter(new THREE.Vector3()), bone: pc.bone };
   };
   const out = {};
-  out.hand_r = find(/^手$|^手の甲$/, 'forearm_r') || find(/手/, 'forearm_r');
+  // the right hand: a part named 手 / 手の甲, else the middle of every part of the right forearm with 手 in its name
+  // but not 手首 (the wrist). (It used to be the first such part, which for a unit of 機体エディタ Ver2 was the wrist:
+  // the blade and the hand weapons came out of the wrist)
+  const handPieces = pieces.filter(pc => pc.bone === 'forearm_r' && /手/.test(pc.part.name) && !/手首/.test(pc.part.name) && !isHeld(pc.part));
+  out.hand_r = find(/^手$|^手の甲$/, 'forearm_r')
+    || (handPieces.length ? { pos: handPieces.reduce((b, c) => b.union(c.geo.boundingBox), new THREE.Box3()).getCenter(new THREE.Vector3()), bone: 'forearm_r' } : null);
   // a skinned import: its right hand is in its rig
   const rigged = pieces.find(pc => pc.part.rig?.hand_r)?.part;
   if (!out.hand_r && rigged) { rigged.proxy.updateMatrixWorld(); out.hand_r = { pos: new THREE.Vector3(...rigged.rig.hand_r).applyMatrix4(rigged.proxy.matrixWorld), bone: 'forearm_r' }; }
