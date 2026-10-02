@@ -17,7 +17,7 @@ const CSS = `
 #shareBox .top { display: flex; gap: 8px; align-items: center; }
 #shareBox .top b { flex: 1; font-size: 14px; }
 #shareBox .bar2 { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
-#shareBox .bar2 input { width: 200px; }
+#shareBox .bar2 input { width: 200px; max-width: 100%; background: #12151a; color: var(--text); border: 1px solid #3a3f49; border-radius: 4px; padding: 3px 5px; font: inherit; }
 #shareBox .who { color: var(--text); }
 #shareBox select { width: auto; }
 #shareBox .tabs2 button.on { border-color: var(--acc); color: var(--acc); }

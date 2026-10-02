@@ -111,6 +111,29 @@
   .pgcells button { padding: 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: normal; }
   .pgcells canvas { width: 100%; aspect-ratio: 1; border-radius: 4px; background: #14161a; }
   .pgcells span { font-size: 11px; color: var(--dim); }
+  /* スマホ（幅 760px まで）：3D を上いっぱいに、下に 1 枚だけ出す（下のタブで選ぶ：パーツ＝左の欄、調整＝右の欄、3D だけ）。上の帯は 1 行で横に送る */
+  #mnav { display: none; }
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto auto; height: 100dvh; }
+    header { grid-row: 1; flex-wrap: nowrap; overflow-x: auto; gap: 4px 10px; padding: 6px 8px; scrollbar-width: none; }
+    header::-webkit-scrollbar { display: none; }
+    header .grp, header h1 { flex: none; }
+    main { grid-row: 2; grid-column: 1; }
+    aside.left, aside.right { display: none; grid-row: 3; grid-column: 1; height: 44vh; border: 0; border-top: 1px solid var(--line); }
+    body[data-sheet=parts] aside.left { display: flex; }
+    body[data-sheet=adjust] aside.right { display: block; }
+    #mnav { display: flex; grid-row: 4; grid-column: 1; height: 48px; background: var(--panel); border-top: 1px solid var(--line); }
+    #mnav button { flex: 1; border: 0; border-radius: 0; background: none; color: var(--dim); font-size: 13px; }
+    #mnav button.on { color: var(--acc); box-shadow: inset 0 2px 0 var(--acc); }
+    button { padding: 7px 10px; }
+    button.small { padding: 6px 8px; font-size: 12px; }
+    #views, #gizmo { flex-wrap: wrap; max-width: calc(100% - 20px); }
+    #gizmo { top: auto; bottom: 10px; }
+    #note { bottom: 46px; right: 10px; }
+    #saveBox .now input { width: 100%; }
+    #unitName { max-width: 120px; }
+    #updBar { flex-wrap: wrap; }
+  }
 </style>
 <script type="importmap">
 { "imports": {
@@ -294,6 +317,7 @@
   <div class="step"><b>5</b><div><button id="howCheck" class="small">チェックだけする</button></div><span class="hint">つながり（離れている部品）と関節（ゲームの動きで外れる・めり込む）を調べる。結果は右の「ゲーム用に書き出す」に出る。浮いた部品は別の部品でつなぐ</span></div>
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
-<script type="module" src="./v2.js?v=cbfd67f"></script>
+<nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
+<script type="module" src="./v2.js?v=d2b59f3"></script>
 </body>
 </html>

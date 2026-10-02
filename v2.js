@@ -1667,6 +1667,10 @@ const SHARE = initShare({
   openScene: (parts, title, role, ai) => { const def = openE1(parts, title, role); if (ai) { def.ai = ai; persistUser(); } },
 });
 $('#bShare').onclick = () => { if (!busy()) SHARE.open(); };
+// ---- スマホ：下のタブで、下に出す欄を選ぶ（パーツ＝左の欄、調整＝右の欄、3D だけ）。広い画面では使わない（CSS が無視する）----
+function setSheet(k) { document.body.dataset.sheet = k; for (const b of document.querySelectorAll('#mnav button')) b.classList.toggle('on', b.dataset.sheet === k); }
+for (const b of document.querySelectorAll('#mnav button')) b.onclick = () => setSheet(b.dataset.sheet);
+setSheet('parts');
 // ---- 作り方（手順）----
 $('#bHow').onclick = () => { $('#howBox').hidden = false; };
 $('#howClose').onclick = () => { $('#howBox').hidden = true; };
@@ -1674,7 +1678,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'cbfd67f';
+const BUILD = 'd2b59f3';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
