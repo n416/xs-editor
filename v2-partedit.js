@@ -61,6 +61,7 @@ function prism(c, [w, h, d], n) {
 /** 断面から作る形（機体エディタの「＋ 部品」と同じ顔ぶれ）。大きさは足すときにパーツに合わせて縮める。at：置き方（top = 選んだブロックの上、front = 前の面に埋める） */
 const rect = (w, h) => [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]];
 const SHAPES = {
+  あたり箱: { kind: 'extrude', pts: rect(0.6, 0.6), depth: 0.6, bevel: 0, corner: 0, blockout: true },   // 下書き（書き出す形に入らない）。機体エディタの部品でできたパーツだけ
   面取り箱: { kind: 'extrude', pts: rect(0.8, 0.8), depth: 0.8, bevel: 0.05, bevelSegs: 1 },
   丸箱: { kind: 'extrude', pts: rect(0.8, 0.8), depth: 0.8, bevel: 0.1, bevelSegs: 4, corner: 0.15, cornerSegs: 4 },
   装甲板: { kind: 'extrude', pts: [[-0.8, -0.5], [0.5, -0.5], [0.8, -0.15], [0.8, 0.5], [-0.55, 0.5], [-0.8, 0.25]], depth: 0.2, bevel: 0.035, corner: 0.06 },
@@ -341,7 +342,7 @@ export function initPartEdit(ctx) {
       <div class="pebar"><button id="peUp" title="一覧の上へ">↑</button><button id="peDown" title="一覧の下へ">↓</button><button id="peDup" title="同じブロックをもう 1 つ（Ctrl+D）">複製</button><button id="peMir" title="左右（x）を反転した写しを足す">反転の複製</button><button id="peDel" title="選んだブロックを消す（Delete）">消す</button></div>
       <div class="hint">「−」は引くブロック：自分より上に並ぶブロックを削る</div>
       <h2>ブロックを足す</h2>
-      ${GROUPS.map(([title, names, how]) => `<div class="hint">${title}</div><div class="pegrid">${names.map(k => `<button data-${how === 'prim' ? 'prim' : 'shape'}="${k}" class="${SHAPES[k]?.op === 'sub' || k === '箱で削る' ? 'subp' : ''}">${k}</button>`).join('')}</div>`).join('')}
+      ${GROUPS.map(([title, names, how]) => `<div class="hint">${title}</div><div class="pegrid">${(how === 'shape' && names[0] === '面取り箱' && st.def.free ? ['あたり箱', ...names] : names).map(k => `<button data-${how === 'prim' ? 'prim' : 'shape'}="${k}" class="${SHAPES[k]?.op === 'sub' || k === '箱で削る' ? 'subp' : ''}">${k}</button>`).join('')}</div>`).join('')}
       <div class="hint">足した形は、選んでいるブロックに合わせた大きさで出る。削る形は、選んでいるブロックの前の面に埋めて出る</div>`;
     for (const el of E.left.querySelectorAll('[data-i]')) el.onclick = () => selectBlock(+el.dataset.i);
     for (const el of E.left.querySelectorAll('[data-prim]')) el.onclick = () => addPrim(el.dataset.prim);
