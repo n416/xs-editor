@@ -498,6 +498,10 @@ export function initPartEdit(ctx) {
       bind('noHit', () => !!pc.noHit, v => { pc.noHit = v; });
       bind('noHeight', () => !!pc.noHeight, v => { pc.noHeight = v; });
       bind('blockout', () => !!pc.blockout, v => { pc.blockout = v; });
+      // 質感（機体エディタの部品だけ。カタログ型のパーツは色の役で決まる）
+      bind('metal', () => pc.metal ?? 0.55, v => { pc.metal = Math.max(0, Math.min(1, v)); });
+      bind('rough', () => pc.rough ?? 0.38, v => { pc.rough = Math.max(0.02, Math.min(1, v)); });
+      html.push('<h2>質感</h2>', slider('金属感', 'metal', 0, 1, 0.01), slider('粗さ', 'rough', 0.02, 1, 0.01));
       html.push('<h2>ゲーム用</h2>',
         `<div class="row"><label>付く骨</label><select id="peBone">${Object.entries(BONE_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.bone ?? 'auto') === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + autoB : ''}</option>`).join('')}</select></div>`,
         `<div class="row"><label>回転の中心</label><select id="pePivot">${Object.entries(PIVOT_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.pivot ?? 'auto') === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + autoP : ''}</option>`).join('')}</select></div>`,
