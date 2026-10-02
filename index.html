@@ -519,7 +519,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '0005eaf';
+const BUILD = '6877908';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -2711,7 +2711,16 @@ window.__xs = {
     const m = await import('./unitparts.js');
     m.registerUnit(doc);
     const u = m.unitParts(doc);
-    return applyBody(u.parts, u.anchors, { replaceHead: u.head, ...opt });
+    const done = applyBody(u.parts, u.anchors, { replaceHead: u.head, ...opt });
+    // imported meshes (kind 'mesh'): load them and cut them at their joints before anything is checked or exported
+    const ids = [...new Set(parts.filter(p => p.kind === 'mesh' && p.mesh).map(p => p.mesh))];
+    if (ids.length) {
+      ensureMeshes(ids);
+      for (let i = 0; i < 300 && !ids.every(id => MESHES.has(id)); i++) await new Promise(r => setTimeout(r, 100));
+      for (const p of parts) if (p.kind === 'mesh' && p.joints && MESHES.has(p.mesh)) applyJoints(p);
+      rebuild();
+    }
+    return done;
   },
   /** the loaded model's hand weapons and where its right hand is (to make a weapon set for samples/) */
   weapons: () => {
@@ -2815,6 +2824,7 @@ const meshGeo = (m, index) => {
 };
 const textureCache = new Map();    // texture id -> Promise<THREE.Texture>
 function textureOf(texId) {
+  if (!texId) return Promise.resolve(null);   // (a shape without a texture: asking the database for the key null throws, and the shape never loaded)
   if (!textureCache.has(texId)) textureCache.set(texId, dbGet('tex', texId).then(async blob => {
     if (!blob) return null;
     const t = new THREE.Texture(await createImageBitmap(blob, { imageOrientation: 'none' }));
