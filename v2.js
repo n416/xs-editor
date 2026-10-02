@@ -61,7 +61,7 @@ const NO_RANDOM_HEAD = new Set(['boxhelm']);
 const randomHeadV2 = () => randomHead(Math.random, HEAD_RAW.filter(d => !NO_RANDOM_HEAD.has(d.id))).map(asHead);
 /** いくつでも付けられる部位（カタログを押すと増える）。ほかの部位は 1 つだけ（押すと、置いてある同じ部位のパーツと入れ替わる）。
  *  左右の対は、左右で 1 組。オーブ・挿せるタンクは収納口の数まで増える */
-const MULTI = new Set(['ベルト', '腰の筒', '動力パイプ', '胸の飾り', '胴の動力パイプ', '肩の動力パイプ', 'バックパックの装備', '翼の装備', 'エフェクト（光）', '前腕の飾り', '顔', '飾り', 'トサカ']);
+const MULTI = new Set(['ベルト', '腰の筒', '動力パイプ', '胸の飾り', '胴の動力パイプ', '肩の動力パイプ', 'バックパックの装備', '翼の装備', 'エフェクト（光）', '前腕の飾り', '顔', '飾り', 'トサカ', '首当て']);   // （首当ては首に足して付ける。首と同じ部位にしていたら、首当てを選ぶと首が外れた）
 const isMulti = def => MULTI.has(def.cat);
 /** 1 つだけの部位：置いてある同じ部位（同じ部分の、同じ部位名）のパーツを外す */
 function dropSameCat(def) {
@@ -750,7 +750,10 @@ function placeHeadPart(def) {
   }
   if (!headShell()) items.push({ part: HP + 'headshell', mov: [0, 0, -0.125], rot: [0, 0, 0], scal: [3, 3.1, 2.2] });
   if (!isMulti(def) && !addOnly) dropSameCat(def);
-  const add = placementsFor(raw, rawHead(headShell()), () => 0.5).map(it => asHead({ part: it.part, mov: it.mov.map(r4), rot: it.rot.map(v => round(v, 1)), scal: it.scal.map(v => round(v, 3)) }));
+  const placed = id => placementsFor(id, rawHead(headShell()), () => 0.5).map(it => asHead({ part: it.part, mov: it.mov.map(r4), rot: it.rot.map(v => round(v, 1)), scal: it.scal.map(v => round(v, 3)) }));
+  // 首当ては首に足して付ける：首の無い頭に置いたら、標準の首も一緒に置く（首の無い頭にしない）
+  if (def.cat === '首当て' && !addOnly && !items.some(it => isHead(it.part) && byId[it.part]?.cat === '首')) items.push(...placed('neck'));
+  const add = placed(raw);
   const same = m => items.some(it => it.part === def.id && Math.abs(it.mov[0] - m[0]) < 1e-6 && Math.abs(it.mov[1] - m[1]) < 1e-6 && Math.abs(it.mov[2] - m[2]) < 1e-6);
   for (let k = 0; k < 20 && add.some(it => same(it.mov)); k++) for (const it of add) it.mov[1] = round(it.mov[1] - 0.03, 4);
   addItems(add);
@@ -1681,7 +1684,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '8d00088';
+const BUILD = '02a4591';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

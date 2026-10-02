@@ -72,11 +72,13 @@ export function unitParts(doc) {
   const { k, at } = headPlace(items, adj);
   const head = items.filter(it => isHead(it.part)).flatMap(it => {
     // 頭の組み立て（xsasm.js の placeItem）と同じ置き方。形は partgeo.js の shapesOf（パーツエディタで作った形は三角形で）
-    const def = byId[it.part], mov = it.mov.map((v, i) => at[i] + k * v), scal = it.scal.map(v => v * k), R = rotMatrix(it.rot ?? [0, 0, 0]), e = new THREE.Euler().setFromRotationMatrix(R, 'XYZ');
+    // 首は胴に付く（骨 torso。首当ては頭の後ろを包むので、頭と一緒に動く）。ゲームは歩くとき、胴が前へ傾いた分だけ頭を起こす：首まで頭と一緒に回すと、首の付け根が背中の板にめり込む。
+    // 首の上端の「段」（pivot が head のブロック）が頭の回転の中心になる
+    const def = byId[it.part], onBody = def.cat === '首', mov = it.mov.map((v, i) => at[i] + k * v), scal = it.scal.map(v => v * k), R = rotMatrix(it.rot ?? [0, 0, 0]), e = new THREE.Euler().setFromRotationMatrix(R, 'XYZ');
     return shapesOf(def).map(({ pc, shape }) => {
       const off = new THREE.Vector3(pc.pos[0] * scal[0], pc.pos[1] * scal[1], pc.pos[2] * scal[2]).applyMatrix4(R), { pos, ...rest } = pc;
       return { ...rest, name: `頭・${it.name ?? def.name}・${pc.name}`, ...shape, pos: [mov[0] + off.x, mov[1] + off.y, mov[2] + off.z], rot: [e.x, e.y, e.z], scl: scal.slice(),
-        bone: 'head', pivot: 'none', gun: false, glow: !!pc.glow, noHit: !!pc.noHit, ...paintOf(pc, def) };
+        bone: onBody ? 'torso' : 'head', pivot: onBody && pc.pivot === 'head' ? 'head' : 'none', gun: false, glow: !!pc.glow, noHit: !!pc.noHit, ...paintOf(pc, def) };
     });
   });
   const body = bodyParts(items.filter(it => !isHead(it.part)), adj, null);

@@ -18,4 +18,5 @@ import backfin from './backfin.js';
 import thruster from './thruster.js';
 import cheekguard from './cheekguard.js';
 import headpipe from './headpipe.js';
-export const EXTRA = [vfin, headband, collar, maska, china, finplate, horn, antenna, visorhelm, boxhelm, earblock, chinguard, neck, monoeye, twineyes, backfin, thruster, cheekguard, headpipe].flat();
+// （首は首当ての前：カタログに「首」「首当て」の順で並ぶ）
+export const EXTRA = [vfin, headband, maska, china, finplate, horn, antenna, visorhelm, boxhelm, earblock, chinguard, neck, collar, monoeye, twineyes, backfin, thruster, cheekguard, headpipe].flat();

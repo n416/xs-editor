@@ -78,7 +78,8 @@ export function randomHead(rng = Math.random, parts = PARTS) {
   const sw = rnd(2.6, 3.4), sh = rnd(2.8, 3.4), sd = rnd(2.0, 2.4);
   const shell = pick(shells);
   const shellItem = { part: shell.id, mov: [0, 0, -0.125], rot: [0, 0, 0], scal: [sw, sh, sd] };
-  const SLOT_ODDS = { 顔: 0.85, あご: 0.7, トサカ: 0.75, 飾り: 0.85, 首: 0.9 };
+  // 首は必ず付く（首の無い頭は作らない）。首当て（襟）は首に足して付けるもので、ときどき
+  const SLOT_ODDS = { 顔: 0.85, あご: 0.7, トサカ: 0.75, 飾り: 0.85, 首: 1, 首当て: 0.3 };
   const out = [shellItem];
   for (const [cat, odds] of Object.entries(SLOT_ODDS)) {
     const cands = parts.filter(p => p.cat === cat);

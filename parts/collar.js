@@ -1,7 +1,7 @@
 // 首当て（襟）：首のまわりを後ろから包み、頭の後ろまで立ち上がる襟。上から見ると前が開いた U 字で、板を扇形に並べた
 // 多面体の輪。後ろがいちばん高く、前の端へ向かって低くなる。上へ向かって外へ開く（漏斗のように）。上の縁の外側は少し落とす。
 // 足元に薄いつば。座標は首の中心が原点、y 0 がつばの上面（襟の底）、前が +z。attach は頭の殻の座標での置き場所
-import { P, YH, YL, piece, MAIN, DARK } from '../xsasm-lib.js';
+import { P, YH, YL, piece, planesFromPoints, MAIN, DARK } from '../xsasm-lib.js';
 
 const D = Math.PI / 180;
 const dir = th => [Math.sin(th * D), 0, Math.cos(th * D)];          // 角 th（度、0 が前）の水平の向き
@@ -35,7 +35,9 @@ export function collar({ id = 'collar', name = '首当て（襟）', r = 0.105, 
     pieces.push(piece(`つば ${i + 1}`, [P([d[0], 0, d[2]], [(r + t + 0.018) * d[0], 0, (r + t + 0.018) * d[2]]), P([-d[0], 0, -d[2]], [(r - 0.004) * d[0], 0, (r - 0.004) * d[2]]),
       P([-ta[0], 0, -ta[2]], [0, 0, 0]), P([tb[0], 0, tb[2]], [0, 0, 0]), YL(-0.01), YH(0.0), P([d[0], -1.2, d[2]], [(r + t + 0.018) * d[0], -0.004, (r + t + 0.018) * d[2]])], { color: DARK }));
   }
-  return { id, name, cat: '首', size: [2 * (r + t + 0.018), hBack + 0.01, 2 * (r + t + 0.018)], attach: [0, -0.09, -0.02], pieces };
+  // 広い襟は、頭の殻の後ろに届かない（1 cm 離れて、どこにもつながっていなかった）。後ろの真ん中に、襟の内の面（上ほど外へ開く）から頭の殻の中へ入る暗い付け根を足す
+  if (r > 0.11) pieces.push(piece('襟の付け根', planesFromPoints([-1, 1].flatMap(sx => [[sx * 0.03, 0.08, -(r + 0.08 * tf + 0.005)], [sx * 0.03, 0.135, -(r + 0.135 * tf + 0.005)], [sx * 0.018, 0.088, -0.06], [sx * 0.018, 0.14, -0.06]])), { color: DARK }));
+  return { id, name, cat: '首当て', size: [2 * (r + t + 0.018), hBack + 0.01, 2 * (r + t + 0.018)], attach: [0, -0.09, -0.02], pieces };
 }
 
 export default [
