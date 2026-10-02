@@ -1,6 +1,6 @@
-// V 字アンテナ（トサカ）：額の低い台座から左右へ開く、薄く長く鋭い 2 枚の刃。刃は板で、上の縁は刃のように研いであり、
+// V 字アンテナ（トサカ。額に付く）：額の台座から左右へ開く、薄く長く鋭い 2 枚の刃。刃は板で、上の縁は刃のように研いであり、
 // 先へ向かって細り、後ろへ少し倒れる。台座は額になじむ低いくさびで、前面に細い光る溝（本当のくぼみ）。y 0 が台座の底、前が +z
-import { P, XH, XL, YH, YL, ZH, ZL, both, box, piece, mir, rotXAt, MAIN, DARK, BLACK, GLOW } from '../xsasm-lib.js';
+import { P, XH, XL, YH, YL, ZH, ZL, both, box, piece, mir, rotXAt, movePl, MAIN, DARK, BLACK, GLOW } from '../xsasm-lib.js';
 
 // 刃 1 枚（右）：x-y 面に立つ板。根元 x 0.018〜0.05、先 (0.28, 0.2)。厚み z ±0.004、上の縁と下の縁を研ぐ
 const T = 0.004;
@@ -16,9 +16,14 @@ const BLADE_R = [
 const blade = rotXAt(BLADE_R, 18, 0, 0);                          // 後ろへ 18 度倒す（根元の軸で）
 // 台座は、広い面（作ったときの上面）を正面に向けて立てる：作った向きのまま、横の軸で 90 度前へ起こす（底だった面が後ろ＝頭の側、上面だった面が前）。
 // 形は変えない。前は寝かせたままで、広い面が上を向いていた
-const up = planes => rotXAt(planes, -90, 0, 0);
+// 厚み：作ったときの高さ 0.016 が、起こすと前後の厚みになり、薄い板に見えた（幅 0.11・高さ 0.05 に対して 0.016）。厚みだけを THICK 倍にする（正面から見た形は変えない）。
+// 厚くする分は、前と後ろへ半分ずつ
+const THICK = 3, T0 = 0.016;
+const thicken = planes => planes.map(([nx, ny, nz, d, ...r]) => { const l = Math.hypot(nx, ny / THICK, nz); return [nx / l, ny / THICK / l, nz / l, d / l, ...r]; });
+const up = planes => movePl(rotXAt(thicken(planes), -90, 0, 0), [0, 0, -T0 * (THICK - 1) / 2]);
 export default {
   id: 'vfin', name: 'V 字アンテナ', cat: 'トサカ', size: [0.56, 0.2, 0.08],
+  brow: [0.005, -0.01],   // 額に当てる所（部品の座標 y・z）：台座の後ろの面の少し中。置くときに殻の額の点（face.brow）へ合わせる（xsasm-random.js）。頭頂ではなく額に付く
   pieces: [
     // 台座：低いくさび（以下の寸法は起こす前の向きで書いてある）。前面は上へ向かって後ろへ倒れ、両端は斜めに落ちる。上面は後ろへ下がる
     piece('台座', up([YL(0), YH(0.016), ZL(-0.03), P([0, 0.35, 1], [0, 0, 0.02]), ...both(P([1, 0.6, 0], [0.055, 0, 0])), P([0, 1, -0.3], [0, 0.016, 0])])),
