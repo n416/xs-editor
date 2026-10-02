@@ -23,6 +23,7 @@ export const HP = 'h·';
 /** 頭のパーツ（id に h· を付けたもの）。目次 byId にも入れる */
 export const HEAD = HEAD_RAW.map(d => ({ ...d, id: HP + d.id }));
 for (const d of HEAD) byId[d.id] = d;
+byId[HP + 'boxhelm'] = byId[HP + 'headshell'];   // 消した殻（角ばった頭）を持つ機体は、「頭の殻」として読む（xsasm-parts.js）
 export const isHead = id => String(id).startsWith(HP);
 export const rawHead = it => ({ ...it, part: it.part.slice(HP.length) });
 export const asHead = it => ({ ...it, part: HP + it.part });
@@ -53,7 +54,7 @@ export const headShell = items => items.find(it => isHead(it.part) && byId[it.pa
 /**
  * 頭の置き方：頭の殻の高さが 0.3（骨格図の頭）× 頭の大きさ になるよう縮め、あごの下の端を首の付け根の少し上（＋首の長さ）へ、
  * 前後の真ん中を体の中心（＋頭の前後）へ。殻が無ければ、標準の殻の大きさで。戻り値 { k, at }：体の座標 = at + k · 頭の座標
- * 底が「頭の殻」より低い殻（バイザーの頭・角ばった頭）は、殻の face.lift の分だけ上へ置く：同じ高さに置くと立ち襟の中に沈み、歩いて頭を起こすと後頭部が襟の後ろにめり込んだ
+ * 底が「頭の殻」より低い殻（バイザーの頭）は、殻の face.lift の分だけ上へ置く：同じ高さに置くと立ち襟の中に沈み、歩いて頭を起こすと後頭部が襟の後ろにめり込んだ
  */
 export function headPlace(items, adj = ADJ0) {
   const shell = headShell(items), H = headDims(shell ? rawHead(shell) : { mov: [0, 0, -0.125], scal: [3, 3.1, 2.2] }), k = 0.3 / H.h * (adj.headK ?? 1);

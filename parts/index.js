@@ -9,7 +9,6 @@ import finplate from './finplate.js';
 import horn from './horn.js';
 import antenna from './antenna.js';
 import visorhelm from './visorhelm.js';
-import boxhelm from './boxhelm.js';
 import earblock from './earblock.js';
 import chinguard from './chinguard.js';
 import neck from './neck.js';
@@ -20,4 +19,4 @@ import thruster from './thruster.js';
 import cheekguard from './cheekguard.js';
 import headpipe from './headpipe.js';
 // （首は首当ての前：カタログに「首」「首当て」の順で並ぶ）
-export const EXTRA = [vfin, headband, maska, mask, china, finplate, horn, antenna, visorhelm, boxhelm, earblock, chinguard, neck, collar, monoeye, twineyes, backfin, thruster, cheekguard, headpipe].flat();
+export const EXTRA = [vfin, headband, maska, mask, china, finplate, horn, antenna, visorhelm, earblock, chinguard, neck, collar, monoeye, twineyes, backfin, thruster, cheekguard, headpipe].flat();

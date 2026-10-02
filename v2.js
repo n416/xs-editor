@@ -56,9 +56,7 @@ const HEAD_SAMPLES = { 'バイザーとマスクと耳ブロック': [
   { part: 'headshell', mov: [0, 0, -0.125], rot: [0, 0, 0], scal: [3.1, 3.2, 2.2] }, { part: 'facemask', mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] },
   { part: 'jawblock', mov: [0, -0.175, -0.175], rot: [10, -180, 0], scal: [2.2, 1.2, 1.3] }, { part: 'fin', mov: [0.3, 0.175, 0], rot: [-20, 10, -110], scal: [1, 1, 1] },
   { part: 'fin', mov: [-0.3, 0.175, 0], rot: [-20, -10, 110], scal: [-1, 1, 1] }, { part: 'crest', mov: [0, 0.3, 0.025], rot: [20, 0, 0], scal: [1, 1, 0.6] }].map(asHead) };
-/** ランダムに組む頭：角ばった頭（boxhelm）は選ばない（依頼主の指示。カタログには残り、手で置ける） */
-const NO_RANDOM_HEAD = new Set(['boxhelm']);
-const randomHeadV2 = () => randomHead(Math.random, HEAD_RAW.filter(d => !NO_RANDOM_HEAD.has(d.id))).map(asHead);
+const randomHeadV2 = () => randomHead(Math.random, HEAD_RAW).map(asHead);
 /** いくつでも付けられる部位（カタログを押すと増える）。ほかの部位は 1 つだけ（押すと、置いてある同じ部位のパーツと入れ替わる）。
  *  左右の対は、左右で 1 組。オーブ・挿せるタンクは収納口の数まで増える */
 const MULTI = new Set(['ベルト', '腰の筒', '動力パイプ', '胸の飾り', '胴の動力パイプ', '肩の動力パイプ', 'バックパックの装備', '翼の装備', 'エフェクト（光）', '前腕の飾り', '顔', '飾り', 'トサカ', '首当て']);   // （首当ては首に足して付ける。首と同じ部位にしていたら、首当てを選ぶと首が外れた）
@@ -1708,7 +1706,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'd098edf';
+const BUILD = 'ffd2d3f';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
