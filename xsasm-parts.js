@@ -15,6 +15,7 @@ const EGG_BACK = [...ellipsoid([0.086, 0.098, 0.135], [0, 0.045, 0], 12, LATS, 0
 const UNDER = P([0, -0.14, -0.074], [0, 0, -0.08]);   // 下面：首すじ（後ろ、y 0）から あご（前）へ下がる
 const headshell = {
   id: 'headshell', name: '頭の殻', cat: '頭蓋', size: [0.19, 0.216, 0.29],
+  face: { eye: [0.023, 0.112], mouth: [-0.03, 0.0868, 24] },   // 顔の部品を付ける所（xsasm-random.js の faceOf）：目は光る帯の前面、口もとは中心の稜の上
   pieces: [
     piece('頭蓋', [...EGG, YL(0.035)]),                                                        // まゆのひさしより上
     // ひさしの下：後ろは卵の続き（角は 45 度）、横は平らな側板（頭蓋の縁より少し外へ出て、肩のような段になる）
@@ -99,8 +100,11 @@ const crest = {
 };
 
 // 頭の殻（目なし）：光る目の帯の代わりに、奥へ引いた暗い帯（溝の奥の壁）。目は別の部品（ツインアイなど）を入れる
-const headshellplain = { ...headshell, id: 'headshellplain', name: '頭の殻（目なし）',
+const headshellplain = { ...headshell, id: 'headshellplain', name: '頭の殻（目なし）', face: { ...headshell.face, eye: [0.023, 0.098] },   // 目は溝の奥の暗い壁へ
   pieces: headshell.pieces.map(pc => pc.name === '目の帯' ? { ...pc, name: '溝の奥', planes: movePl(pc.planes, [0, 0, -0.014]), color: BLACK, glow: false, metal: 0.45, rough: 0.5 } : pc) };
 
-export const PARTS = [headshell, headshellplain, facemask, jawblock, fin, crest, ...EXTRA];
+// カタログに並ぶ部位の順（ここに無い部位は、その後ろに、出てきた順）
+const CAT_ORDER = ['頭蓋', '顔', 'マスク', 'あご', '飾り', 'トサカ', '首', '首当て'];
+const catRank = d => { const k = CAT_ORDER.indexOf(d.cat); return k < 0 ? CAT_ORDER.length : k; };
+export const PARTS = [headshell, headshellplain, facemask, jawblock, fin, crest, ...EXTRA].map((d, i) => [d, i]).sort((a, b) => catRank(a[0]) - catRank(b[0]) || a[1] - b[1]).map(([d]) => d);
 export const byId = Object.fromEntries(PARTS.map(p => [p.id, p]));

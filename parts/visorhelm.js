@@ -18,6 +18,7 @@ const GROOVE = [-90, ...FRONT, 90];                                         // �
 
 const visorhelm = {
   id: 'visorhelm', name: 'バイザーの頭', cat: '頭蓋', size: [0.19, 0.22, 0.29],
+  face: { eye: [0.0275, 0.132], mouth: [-0.03, 0.1185, 40], under: [-0.0582, -0.147], lift: 0.016 },   // 顔の部品を付ける所：目は溝の中の光る帯の前面、口もとは「口もと」の板の正面（強く倒れた面。板は横にまっすぐ広いので、面より 0.008 前に置く：マスクの左右の端が沈まないように）
   pieces: [
     piece('頭蓋', [...shell([5, 30, 55, 80]), YL(VT)]),                                        // 溝より上：面取りした卵
     piece('後頭', [...shell([-30, 5], false), YH(VT + 0.002), UNDER, ZH(-0.02)]),               // 溝の後ろ：卵の続き、首すじへすぼまりながら下りる
@@ -37,6 +38,7 @@ const visorhelm = {
 };
 
 // バイザーの頭（目なし）：溝の奥の光る帯を外したもの（溝の奥の暗い壁は残る）。目は別の部品を入れる
-const visorhelmplain = { ...visorhelm, id: 'visorhelmplain', name: 'バイザーの頭（目なし）', pieces: visorhelm.pieces.filter(pc => pc.name !== '目の帯') };
+const visorhelmplain = { ...visorhelm, id: 'visorhelmplain', name: 'バイザーの頭（目なし）', face: { ...visorhelm.face, eye: [0.0275, 0.123] },   // 目は溝の奥の暗い壁へ
+  pieces: visorhelm.pieces.filter(pc => pc.name !== '目の帯') };
 
 export default [visorhelm, visorhelmplain];
