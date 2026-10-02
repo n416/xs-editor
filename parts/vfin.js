@@ -13,7 +13,7 @@ import { P, XH, XL, YH, YL, ZH, ZL, both, box, piece, mir, rotXAt, movePl, plane
 // 刃 1 枚（右）：x-y 面に立つ板。根元 x 0.018〜0.05、先 (0.28, 0.2)。厚み z ±0.004、上の縁と下の縁を研ぐ
 const T = 0.004;
 const BLADE_R = [
-  ZH(T), ZL(-T),
+  ZH(T), ZL(-T), YL(0),                                           // 根元は y 0 より下へ出さない（内の角が、中央の部品の下へとげのように出ていた。依頼主：刃の根元の角は切ってください）
   P([-1, 0.55, 0], [0.018, 0.0, 0]),                              // 根元の内側（上へ行くほど外へ）
   P([0.62, -1, 0], [0.05, 0.0, 0]),                               // 下の縁：外へ向かって上がる
   P([-0.55, 1, 0], [0.018, 0.028, 0]),                            // 上の縁：下の縁より緩く上がる（先で細る）
@@ -73,7 +73,7 @@ function bladeOf(pts, t, edge) {
       const e = corner(j, k, 0), m = corner(j, k, Math.min(edge, pts[j][2] * 0.8));
       p.push([e[0], e[1], 0], [m[0], m[1], t], [m[0], m[1], -t]);
     }
-    out.push(rotXAt(planesFromPoints(p), LEAN, 0, 0));
+    out.push(rotXAt([...planesFromPoints(p), YL(0)], LEAN, 0, 0));   // 根元の下の角は y 0 で切る（中央の部品の下へ出さない）
   }
   return out;
 }
