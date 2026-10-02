@@ -1142,7 +1142,7 @@ async function exportGame(id) {
   X.load({ parts: own ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
   const applied = await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
   const chk = X.check(id), out = await X.exportNow(id, true);
-  return { ...out, floating: chk.floating, loose: chk.loose, weapons: applied.weapons, own };
+  return { ...out, floating: chk.floating, loose: chk.loose, depths: chk.depths, weapons: applied.weapons, own };
 }
 const GAME_LIMIT = [30000, 5000, 800];
 $('#bGame').onclick = async () => {
@@ -1213,6 +1213,30 @@ ${r.joint}`, X.doc().parts, frees[0].ai ?? '');
       $('#bAiPaste').onclick = () => AI.openPaste(id.replace(/^[ab]_/, ''));
     }
   } catch (e) { box.textContent = '調べられませんでした：' + (e?.message ?? e); }
+};
+/** 持っている武器だけを、武器のモデルとして書き出す（w_<陣営>_<形の名前>.glb：骨なし・メートル・握る所が原点・長さは -Z。docs/model-delivery-design.md）。
+ *  機体の腕の長さや置いた向きには関係なく、その武器を作ったときの形のまま出す */
+async function exportWeaponGlb(def, name) {
+  const X = await editorWorker();
+  const { parts } = unitParts({ items: [{ part: def.id, mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] }], adj: { ...ADJ0 }, paint: null, userParts: {} }, { shaped: true });
+  X.load({ parts, ai: '', role: '' });
+  return X.exportWeapon(def.hand ?? [0, 0, 0]);
+}
+$('#bWeaponGlb').onclick = async () => {
+  if (busy()) return;
+  const box = $('#gameOut'), it = kept().find(x => byId[x.part]?.tab === 'weapon'), def = it && byId[it.part];
+  if (!def) { box.textContent = '武器を持っていません。左の「武器」のタブで、書き出す武器を持たせてください'; return; }
+  const shape = ($('#weaponShape').value.trim() || def.shape || '').replace(/[^a-z0-9_]/gi, '').toLowerCase();
+  if (!shape) { box.textContent = '形の名前（半角の英数字と _。例 heat_axe）を入れてください。ゲームの武器のデータの「held」と同じ名前'; return; }
+  const file = `w_${$('#gameId').value[0] === 'b' ? 'b' : 'a'}_${shape}.glb`;
+  box.textContent = '書き出しています…';
+  try {
+    const r = await exportWeaponGlb(def, shape), p = r.report;
+    const bin = atob(r.glb), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type: 'model/gltf-binary' })); a.download = file; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    box.innerHTML = `<b>${file} を書き出しました</b>（${(u8.length / 1024).toFixed(0)} KB）<br>握る所から先まで ${p.len.toFixed(2)} m・後ろへ ${p.behind.toFixed(2)} m、三角形 ${p.tris.toLocaleString()}、描画 ${p.calls} 回${p.muzzle ? '、弾の出る所あり' : ''}<br>`
+      + `<span class="hint">public/models/${file} に置くと、ゲームがその武器の形として手に持たせる（今つながっているのはヒートアックス：heat_axe）</span>`;
+  } catch (e) { box.textContent = '書き出せませんでした：' + (e?.message ?? e); }
 };
 /** ふつうの .glb：今の形（立った姿勢）を、骨なしで書き出す */
 $('#bGlb').onclick = async () => {
@@ -1684,7 +1708,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '02a4591';
+const BUILD = 'cc35ea9';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
@@ -1789,6 +1813,13 @@ for (const [f, id, name] of [['a', 'w·a', '連合の強襲の 1 式（ライフ
     registerUser({ ...freeDef(id, name, w.parts, { tab: 'weapon', from: 'sample' }), cat: WEAPON_CAT, user: false, hand: w.hand_r });
   } catch (e) { console.warn('weapons', f, e); }
 }
+// 自分のモデルとして書き出す武器（ゲームが手に持たせる 1 つの形。samples/w_<陣営>_<形の名前>.json）。def.shape が、ゲームでの形の名前
+for (const file of ['w_b_heat_axe']) {
+  try {
+    const w = await (await fetch(`./samples/${file}.json`)).json();
+    registerUser({ ...freeDef(`w·${file.slice(2)}`, w.name, w.parts, { tab: 'weapon', from: 'sample' }), cat: WEAPON_CAT, user: false, hand: w.hand_r, shape: w.shape, faction: w.faction });
+  } catch (e) { console.warn('weapon', file, e); }
+}
 // 置き場（IndexedDB）を開く。前の置き場（localStorage）に残っていた機体・パーツは、ここで移る
 const stored = await Store.open();
 loadUser();
@@ -1811,4 +1842,4 @@ save();
 showUnitName();
 requestAnimationFrame(tick);
 // 確かめるための出口（画面の外から、置いた部品と視点を見る）
-window.__asm = { ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, userParts, byId };
+window.__asm = { exportWeaponGlb, ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, userParts, byId };

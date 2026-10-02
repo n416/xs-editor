@@ -291,6 +291,7 @@
       <optgroup label="GIO"><option value="b_raid">GIO・強襲</option><option value="b_heavy">GIO・重撃</option><option value="b_support">GIO・支援</option><option value="b_sniper">GIO・狙撃</option><option value="b_artillery_leg">GIO・砲撃（脚）</option></optgroup>
     </select><button id="bGame" class="acc small">書き出す</button></div>
     <div class="bar"><button id="bCheck" class="small" title="選んだ機体として、つながり（離れている部品）と関節（ゲームの動きで外れる・めり込む）を調べる。ファイルは作らない">チェックだけする</button><button id="bGlb" class="small" title="今の形を、骨の無いふつうの .glb にする（ほかのソフトで開く・見せる用。ゲームには使わない）">ふつうの .glb にする</button></div>
+    <div class="bar xsonly"><input type="text" id="weaponShape" placeholder="武器の形の名前（例 heat_axe）" style="width:150px" title="ゲームでの形の名前（半角の英数字と _）。空なら、その武器に決まっている名前"><button id="bWeaponGlb" class="small" title="今持っている武器だけを、武器のモデル（w_陣営_名前.glb）として書き出す。ゲームがその武器を選んだときに手に持たせる形になる">持っている武器だけを書き出す</button></div>
     <label class="chk"><input type="checkbox" id="paintTeam">差し色をゲームの陣営色にする（ビビッドを使っていないとき）</label>
     <div id="gameOut" class="hint" style="margin-top:4px">選んだ機体として、つながりと関節（その機体に起こる動き）を調べてから .glb を作る</div>
   </details>
@@ -318,6 +319,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=02a4591"></script>
+<script type="module" src="./v2.js?v=cc35ea9"></script>
 </body>
 </html>

@@ -1261,6 +1261,70 @@ function buildVehicle(kind) {
   return { root, report: { kind, name: v.name, len: size.z, width: size.x, height: size.y, wantLen: v.len, wantWidth: v.width, tris: Math.round(tris), calls: groups.size, materials: mats, bridge: !!br } };
 }
 
+// ---------- a hand weapon as a model of its own (docs/model-delivery-design.md) ----------
+// The loaded parts are one weapon, drawn in the hand of an arm hanging down (it points down, -y). `hand`: the middle of
+// that hand (editor space). The model: no bones, metres, the grip at the origin, its length along -Z (away from the
+// hand) and the unit's front along +Y: the frame the game's melee props are made in. Nodes: `muzzle` (a part named
+// マズル / 銃口), `blade_base` (the grip) and `blade_tip` (the far end).
+function buildWeapon(hand) {
+  const pieces = lodPieces(0), h = hand ?? [0, 0, 0];
+  const root = new THREE.Group(); root.name = 'weapon';
+  const groups = new Map();
+  for (const pc of pieces) {
+    const cls = materialClass(pc.part), key = cls === 'glow' ? 'glow:' + pc.part.color + ':' + (pc.part.opacity ?? 1) : cls;
+    (groups.get(key) || groups.set(key, []).get(key)).push(pc);
+  }
+  const at = (x, y, z) => [-(x - h[0]) * UNIT_M, (z - h[2]) * UNIT_M, (y - h[1]) * UNIT_M];
+  let tris = 0, gi = 0;
+  const mats = [], box = new THREE.Box3();
+  for (const [key, list] of groups) {
+    const cls = key.split(':')[0];
+    const P = [], N = [], C = [];
+    let metal = 0, rough = 0, n = 0;
+    for (const pc of list) {
+      const pos = pc.geo.attributes.position, nor = pc.geo.attributes.normal, col = new THREE.Color(pc.part.color);
+      for (let i = 0; i < pos.count; i++) {
+        const p = at(pos.getX(i), pos.getY(i), pos.getZ(i));
+        P.push(...p); box.expandByPoint(new THREE.Vector3(...p));
+        if (nor) N.push(-nor.getX(i), nor.getZ(i), nor.getY(i));
+        C.push(col.r, col.g, col.b);
+      }
+      metal += pc.part.metal * pos.count; rough += pc.part.rough * pos.count; n += pos.count;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    if (N.length === P.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); else g.computeVertexNormals();
+    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    const glowColor = cls === 'glow' ? new THREE.Color(list[0].part.color) : null, op = list[0].part.opacity;
+    const mat = new THREE.MeshStandardMaterial({
+      name: cls === 'team' ? 'team_color' : cls === 'glow' ? `glow_${gi++}` : cls, vertexColors: true,
+      metalness: n ? metal / n : 0.3, roughness: n ? rough / n : 0.5, emissive: glowColor || 0x000000, emissiveIntensity: glowColor ? 1 : 0,
+      ...(cls === 'glow' && op != null && op < 1 ? { transparent: true, opacity: op, depthWrite: false } : {}),
+    });
+    const mesh = new THREE.Mesh(mergeVertices(g, 1e-5), mat);
+    mesh.name = `weapon_${mat.name}`;
+    root.add(mesh);
+    tris += P.length / 9; mats.push(mat.name);
+  }
+  const node = (name, p) => { const o = new THREE.Object3D(); o.name = name; o.position.set(...p); root.add(o); return o; };
+  const mz = parts.find(p => p.op === 'add' && !p.blockout && /マズル|銃口/.test(p.name));
+  if (mz) {
+    const bb = new THREE.Box3();
+    for (const g of worldGeometries(mz)) { g.computeBoundingBox(); bb.union(g.boundingBox); }
+    const c = bb.getCenter(new THREE.Vector3());
+    node('muzzle', at(c.x, c.y, c.z));
+  }
+  // the far end the game's cuts are measured to: the end of a part named 柄 / 刃先 / 先端 when there is one, else of
+  // everything that does not glow
+  const far = list => { const b = new THREE.Box3(); for (const p of list) for (const g of worldGeometries(p)) { const q = g.attributes.position; for (let i = 0; i < q.count; i++) b.expandByPoint(new THREE.Vector3(...at(q.getX(i), q.getY(i), q.getZ(i)))); } return b.isEmpty() ? 0 : b.min.z; };
+  const solid = parts.filter(p => p.op === 'add' && !p.blockout), named = solid.filter(p => /柄|刃先|先端/.test(p.name));
+  const tipZ = far(named.length ? named : solid.filter(p => materialClass(p) !== 'glow'));
+  node('blade_base', [0, 0, 0]);
+  node('blade_tip', [0, 0, tipZ]);
+  const size = box.isEmpty() ? new THREE.Vector3() : box.getSize(new THREE.Vector3());
+  return { root, report: { len: -tipZ, behind: box.isEmpty() ? 0 : box.max.z, width: size.x, height: size.y, tris: Math.round(tris), calls: groups.size, materials: mats, muzzle: !!mz } };
+}
+
 // ---------- a body or a whole unit from 機体エディタ Ver2 / the body tools replaces the loaded model's body ----------
 // What stays: the head (and neck), the hand weapons (gun / bazooka), blockouts. The head is set on the new neck and the
 // weapons follow the right hand. The new parts are hulls with their bone and the point it turns at (joint).
@@ -1421,6 +1485,17 @@ export const XS = {
       resolve({ glb: btoa(bin), report });
     }, reject, { binary: true });
   }),
+  /** the loaded parts as one hand weapon (hand: the middle of the hand it is drawn in) → { glb (base64), report: { len (m, from the grip to the far end), behind, width, height, tris, calls, materials, muzzle } } */
+  exportWeapon: hand => new Promise((resolve, reject) => {
+    const { root, report } = buildWeapon(hand);
+    new GLTFExporter().parse(root, data => {
+      const b = new Uint8Array(data); let bin = '';
+      for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+      resolve({ glb: btoa(bin), report });
+    }, reject, { binary: true });
+  }),
+  /** a weapon's document { parts, hand_r } → its model (tools/exportweapon.ts) */
+  exportWeaponDoc: doc => { XS.load({ parts: doc.parts, ai: '', role: '' }); return XS.exportWeapon(doc.hand_r); },
   /** a document { parts, ai, role } → the game's model (tools/exportxs.ts) */
   exportGame: (doc, id) => { XS.load({ ...doc, role: doc.role ?? id.replace(/^[ab]_/, '') }); return XS.exportNow(id); },
 };

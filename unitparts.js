@@ -14,7 +14,7 @@ import { rotMatrix } from './xsasm.js';
 import { shapesOf, isSub, freeShapes } from './partgeo.js';
 import { freeParts } from './freeparts.js';
 import * as THREE from 'three';
-import { headDims } from './xsasm-random.js';
+import { headDims, faceOf } from './xsasm-random.js';
 import { colorOf, roleOf } from './paint.js';
 import { makeSheet } from './xsbody.js';
 
@@ -53,19 +53,22 @@ export const headShell = items => items.find(it => isHead(it.part) && byId[it.pa
 /**
  * 頭の置き方：頭の殻の高さが 0.3（骨格図の頭）× 頭の大きさ になるよう縮め、あごの下の端を首の付け根の少し上（＋首の長さ）へ、
  * 前後の真ん中を体の中心（＋頭の前後）へ。殻が無ければ、標準の殻の大きさで。戻り値 { k, at }：体の座標 = at + k · 頭の座標
+ * 底が「頭の殻」より低い殻（バイザーの頭・角ばった頭）は、殻の face.lift の分だけ上へ置く：同じ高さに置くと立ち襟の中に沈み、歩いて頭を起こすと後頭部が襟の後ろにめり込んだ
  */
 export function headPlace(items, adj = ADJ0) {
   const shell = headShell(items), H = headDims(shell ? rawHead(shell) : { mov: [0, 0, -0.125], scal: [3, 3.1, 2.2] }), k = 0.3 / H.h * (adj.headK ?? 1);
-  return { k, at: [0, S.neck.y + 0.02 + (adj.up ?? 0) + (adj.neck ?? 0) - k * H.chin, (adj.headZ ?? 0) - k * (H.front + H.back) / 2] };
+  const lift = shell ? (faceOf(rawHead(shell).part).lift ?? 0) * H.sh : 0;
+  return { k, at: [0, S.neck.y + 0.02 + (adj.up ?? 0) + (adj.neck ?? 0) - k * (H.chin - lift), (adj.headZ ?? 0) - k * (H.front + H.back) / 2] };
 }
 
 /**
  * 機体 → { parts: 機体エディタの部品（頭は骨 head、体は bodyParts のとおり。色は塗りの色）, anchors: { neck, hand_r }, head: 頭のパーツがあるか }。
  * paint.team：差し色（ビビッドを使っていないとき）をゲームの陣営色にする（白で「陣営色で塗る」）
  */
-export function unitParts(doc) {
+export function unitParts(doc, { shaped = false } = {}) {
   // 手持ちの武器（def.tab = 'weapon'）は、部品の並びのいちばん前へ：武器の「引く」部品（銃口の穴など）は自分より前の部品だけを削るので、体を削らない
-  const all = (doc.items ?? []).filter(it => byId[it.part]), held = it => byId[it.part].tab === 'weapon';
+  // 自分のモデルとして書き出す武器（def.shape：ゲームでの形の名前。ヒートアックスなど）は、機体のモデルに入れない（shaped: true のときだけ入れる：その武器だけを書き出すとき）
+  const all = (doc.items ?? []).filter(it => byId[it.part] && (shaped || !byId[it.part].shape)), held = it => byId[it.part].tab === 'weapon';
   const items = [...all.filter(held), ...all.filter(it => !held(it))], adj = { ...ADJ0, ...(doc.adj ?? {}) }, paint = doc.paint ?? null;
   const team = !!paint?.team && !(paint.vivid?.colors?.length);
   const paintOf = (pc, def) => (team && roleOf(pc) === 'accent' ? { color: '#f2f2f2', team: true } : { color: colorOf(pc, def.cat, paint) });
