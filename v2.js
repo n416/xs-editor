@@ -20,6 +20,7 @@ import { mirrorOf, randomHead, placementsFor, headDims } from './xsasm-random.js
 import { PARTS as HEAD_RAW } from './xsasm-parts.js';
 import { HP, HEAD, FREE, isHead, rawHead, asHead, halfOf, registerUser, unregisterUser, headShell as headShellIn, headPlace as headPlaceIn, unitParts, registerUnit } from './unitparts.js';
 import { XS } from './xsengine.js';
+import { initAi } from './v2-ai.js';
 import { initPartEdit } from './v2-partedit.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
@@ -1119,9 +1120,22 @@ $('#bCheck').onclick = async () => {
     const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));
     X.load({ parts: own ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
     await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
-    const r = X.check(id);
-    box.innerHTML = `<b>${$('#gameId').selectedOptions[0].textContent} として調べました</b><br>つながり ${r.floating.length ? `✗ 離れている部品 ${r.floating.length} 組` : '✓ 離れている部品なし'}<br>関節 ${r.loose.length ? `✗ ${r.loose.length} 個の動きで外れる・めり込む` : '✓ どの動きでも外れない・めり込まない'}`
-      + [...r.floating.map(f => '離れている：' + esc2(f)), ...r.loose.map(esc2)].map(t => `<br><span style="color:var(--warn)">${t}</span>`).join('');
+    const r = X.report(id), line = (t, ok) => `<div style="white-space:pre-line${ok ? '' : ';color:var(--warn)'}">${esc2(t)}</div>`;
+    box.innerHTML = `<b>${$('#gameId').selectedOptions[0].textContent} として調べました</b>${line(r.conn, r.connOk)}${line(r.joint, r.jointOk)}`;
+    // 機体エディタの部品でできた機体（AI で作った機体・機体エディタ 1 の機体）：結果を AI に渡して直してもらえる
+    const frees = kept().map(it => byId[it.part]);
+    if (!r.ok && frees.length && frees.every(d => d?.free && !d.tab)) {
+      const bar = document.createElement('div'); bar.className = 'bar';
+      bar.innerHTML = '<button class="small" id="bAiFix" title="この結果と今の機体を、AI に直してもらう文章にしてコピーする。AI との会話に貼って送る">結果を AI に渡す用にコピー</button><button class="small" id="bAiPaste" title="AI が直して返してきた答えを貼る（見て・確かめてから、この機体と入れ替える）">AI の答えを貼る</button>';
+      box.appendChild(bar);
+      const text = AI.fixText(`【つながりチェック】
+${r.conn}
+
+【関節チェック】
+${r.joint}`, X.doc().parts, frees[0].ai ?? '');
+      $('#bAiFix').onclick = async () => { $('#bAiFix').textContent = (await AI.copy(text)) ? 'コピーしました' : 'コピーできませんでした'; };
+      $('#bAiPaste').onclick = () => AI.openPaste(id.replace(/^[ab]_/, ''));
+    }
   } catch (e) { box.textContent = '調べられませんでした：' + (e?.message ?? e); }
 };
 /** ふつうの .glb：今の形（立った姿勢）を、骨なしで書き出す */
@@ -1339,6 +1353,17 @@ function showRigRequest() {
   };
   draw(false);
 }
+// ---- AI で作る（v2-ai.js）：AI の機体は、機体エディタの部品の並びなので「自由な機体」として開く ----
+const AI = initAi({
+  busy,
+  take: (list, name, role, ai) => {
+    if (!okToLeave('AI が作った機体にします')) return false;
+    const def = openE1(structuredClone(list), name || 'AI で作った機体', role);
+    if (ai) { def.ai = ai; persistUser(); }   // 使った AI の名前（機体と一緒に残す）
+    return true;
+  },
+});
+$('#bAi').onclick = () => AI.open();
 /** 機体エディタ（1）の部品の並びを、機体として開く */
 function openE1(parts, name, role = '') {
   const def = freeDef(freeId(), name || '機体エディタ 1 の機体', parts, { role, from: 'e1' });
