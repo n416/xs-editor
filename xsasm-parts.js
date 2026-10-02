@@ -1,6 +1,7 @@
 // 頭の組み立て用の部品カタログ（目次）。部品の作り方は xsasm-lib.js、追加の部品は parts/ に 1 部品 1 ファイル。
 import { P, XH, XL, YH, YL, ZH, ZL, both, box, ellipsoid, MAIN, DARK, BLACK, GLOW, piece, pair, movePl } from './xsasm-lib.js';
 import { EXTRA } from './parts/index.js';
+import { vfinOld } from './parts/vfin.js';
 
 // ---- 部品 ----
 // 1) 頭の殻：卵型の頭蓋（前が細く後ろが太い）。まゆのひさしの下に、前から横へ回り込む光る目の帯。その下の顔は あご へすぼまる。
@@ -104,9 +105,11 @@ const headshellplain = { ...headshell, id: 'headshellplain', name: '頭の殻（
   pieces: headshell.pieces.map(pc => pc.name === '目の帯' ? { ...pc, name: '溝の奥', planes: movePl(pc.planes, [0, 0, -0.014]), color: BLACK, glow: false, metal: 0.45, rough: 0.5 } : pc) };
 
 // カタログに並ぶ部位の順（ここに無い部位は、その後ろに、出てきた順）
-const CAT_ORDER = ['頭蓋', '顔', 'マスク', 'あご', '飾り', 'トサカ', '首', '首当て'];
+const CAT_ORDER = ['頭蓋', '顔', 'マスク', 'あご', '飾り', 'トサカ', 'アンテナ（額）', 'アンテナの中央（額）', '首', '首当て'];
 const catRank = d => { const k = CAT_ORDER.indexOf(d.cat); return k < 0 ? CAT_ORDER.length : k; };
 export const PARTS = [headshell, headshellplain, facemask, jawblock, fin, crest, ...EXTRA].map((d, i) => [d, i]).sort((a, b) => catRank(a[0]) - catRank(b[0]) || a[1] - b[1]).map(([d]) => d);
 export const byId = Object.fromEntries(PARTS.map(p => [p.id, p]));
 // 消した殻（「角ばった頭」boxhelm。依頼主：見るのも嫌になってきた。削除で）：保存してある機体がこの id を持っていたら、「頭の殻」として読む（殻の無い頭にしない）。カタログには出ない
 byId.boxhelm = headshell;
+// 分ける前の V 字アンテナ（刃と中央が一体。id vfin）：カタログには出さず、保存してある機体のために残す
+byId.vfin = vfinOld;

@@ -24,6 +24,7 @@ export const HP = 'h·';
 export const HEAD = HEAD_RAW.map(d => ({ ...d, id: HP + d.id }));
 for (const d of HEAD) byId[d.id] = d;
 byId[HP + 'boxhelm'] = byId[HP + 'headshell'];   // 消した殻（角ばった頭）を持つ機体は、「頭の殻」として読む（xsasm-parts.js）
+byId[HP + 'vfin'] = { ...headRawById.vfin, id: HP + 'vfin' };   // 分ける前の V 字アンテナ（刃と中央が一体）。カタログには出さず、保存してある機体のために残す
 export const isHead = id => String(id).startsWith(HP);
 export const rawHead = it => ({ ...it, part: it.part.slice(HP.length) });
 export const asHead = it => ({ ...it, part: HP + it.part });
