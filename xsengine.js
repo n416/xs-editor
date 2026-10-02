@@ -1406,6 +1406,12 @@ export const XS = {
       for (const g of worldGeometries(p)) if (g.boundingBox.min.x + g.boundingBox.max.x < 0) b.union(g.boundingBox);
     return { hand_r: b.isEmpty() ? null : b.getCenter(new THREE.Vector3()).toArray(), parts: parts.filter(p => !p.blockout && isHeld(p)).map(serialize) };
   },
+  /** takes the hand weapons out of the loaded model (they become models of their own: exportWeapon). Returns what weapons() did before: { hand_r, gun: parts, bazooka: parts } */
+  splitWeapons: () => {
+    const w = XS.weapons(), baz = /バズーカ/;
+    parts = parts.filter(p => p.blockout || !isHeld(p));
+    return { hand_r: w.hand_r, gun: w.parts.filter(p => !baz.test(p.name)), bazooka: w.parts.filter(p => baz.test(p.name)) };
+  },
   /** both checks on the loaded model: floating groups and the joint check's findings (id: a_raid ...; the moves of that XS) */
   check: id => {
     const label = it => getPart(it.id)?.name ?? '?';
