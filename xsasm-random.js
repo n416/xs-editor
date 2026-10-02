@@ -21,6 +21,73 @@ export function headDims(shellItem) {
 const FACE0 = { eye: [0.023, 0.098], mouth: [-0.03, 0.0868, 24], under: [-0.0423, -0.5286] };
 export const faceOf = shellId => ({ ...FACE0, ...(byId[shellId]?.face ?? {}) });
 const D = Math.PI / 180;
+// ---- 置いた部品を殻に当てる ----
+// トサカ・飾りは「頭の殻」の寸法で置き場所を決めているので、形の違う殻（バイザーの頭は頭頂が低く、前が細い）では殻に届かず浮いた。
+// 置いたあと、決まった向き（トサカは下、後ろの飾りは前、横の飾りは内）へ、殻に EMBED だけ入る所まで寄せる。もう入っているものは動かさない。
+const EMBED = 0.012;
+const VERTS = new WeakMap();
+/** 面で囲った形（内側は n·x ≤ d）の頂点と、辺の上の点（辺を 6 つに割る：細い板が平らな面をまたぐときは、頂点どうしでは当たりが分からない） */
+function vertsOf(pc) {
+  let out = VERTS.get(pc); if (out) return out;
+  const pl = pc.planes, n = pl.length; out = [];
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) for (let k = j + 1; k < n; k++) {
+    const a = pl[i], b = pl[j], c = pl[k];
+    const cx = b[1] * c[2] - b[2] * c[1], cy = b[2] * c[0] - b[0] * c[2], cz = b[0] * c[1] - b[1] * c[0], det = a[0] * cx + a[1] * cy + a[2] * cz;
+    if (Math.abs(det) < 1e-9) continue;
+    const x = (a[3] * cx + b[3] * (c[1] * a[2] - c[2] * a[1]) + c[3] * (a[1] * b[2] - a[2] * b[1])) / det;
+    const y = (a[3] * cy + b[3] * (c[2] * a[0] - c[0] * a[2]) + c[3] * (a[2] * b[0] - a[0] * b[2])) / det;
+    const z = (a[3] * cz + b[3] * (c[0] * a[1] - c[1] * a[0]) + c[3] * (a[0] * b[1] - a[1] * b[0])) / det;
+    if (pl.every(q => q[0] * x + q[1] * y + q[2] * z <= q[3] + 1e-6) && !out.some(v => Math.abs(v[0] - x) + Math.abs(v[1] - y) + Math.abs(v[2] - z) < 1e-6)) out.push([x, y, z]);
+  }
+  const on = out.map(v => pl.map((q, i) => (Math.abs(q[0] * v[0] + q[1] * v[1] + q[2] * v[2] - q[3]) < 1e-6 ? i : -1)).filter(i => i >= 0)), nv = out.length;
+  for (let i = 0; i < nv; i++) for (let j = i + 1; j < nv; j++) {
+    if (on[i].filter(k => on[j].includes(k)).length < 2) continue;   // 2 つの面を共にする頂点の組が辺
+    for (let t = 1; t < 6; t++) out.push([0, 1, 2].map(k => out[i][k] + (out[j][k] - out[i][k]) * t / 6));
+  }
+  VERTS.set(pc, out);
+  return out;
+}
+const solid = def => (def?.pieces ?? []).filter(pc => pc.planes && pc.op !== 'sub' && !pc.blockout);
+/** 置いた部品の向き（xsasm.js の rotMatrix と同じ：Y → X → Z の順に掛ける）。行ごとの 3×3 */
+function rotOf(rot = [0, 0, 0]) {
+  const [x, y, z] = rot.map(v => v * D), cx = Math.cos(x), sx = Math.sin(x), cy = Math.cos(y), sy = Math.sin(y), cz = Math.cos(z), sz = Math.sin(z);
+  return [[cy * cz + sy * sx * sz, -cy * sz + sy * sx * cz, sy * cx], [cx * sz, cx * cz, -sx], [-sy * cz + cy * sx * sz, sy * sz + cy * sx * cz, cy * cx]];
+}
+const toWorld = (it, R, pc, v) => { const s = [0, 1, 2].map(i => (v[i] + pc.pos[i]) * it.scal[i]); return [0, 1, 2].map(i => it.mov[i] + R[i][0] * s[0] + R[i][1] * s[1] + R[i][2] * s[2]); };
+/** 体の座標の点 o から向き d へ進むとき、置いた部品 it のブロック pc に入る t（当たらなければ null） */
+function enterAt(it, R, pc, o, d) {
+  const loc = (v, pt) => { const w = pt ? [0, 1, 2].map(i => v[i] - it.mov[i]) : v; return [0, 1, 2].map(i => (R[0][i] * w[0] + R[1][i] * w[1] + R[2][i] * w[2]) / it.scal[i] - (pt ? pc.pos[i] : 0)); };
+  const lo = loc(o, true), ld = loc(d, false);
+  let t0 = -Infinity, t1 = Infinity;
+  for (const q of pc.planes) {
+    const den = q[0] * ld[0] + q[1] * ld[1] + q[2] * ld[2], num = q[3] - (q[0] * lo[0] + q[1] * lo[1] + q[2] * lo[2]);
+    if (Math.abs(den) < 1e-12) { if (num < 0) return null; continue; }
+    if (den > 0) t1 = Math.min(t1, num / den); else t0 = Math.max(t0, num / den);
+    if (t0 > t1) return null;
+  }
+  return t0;
+}
+/** 置いた部品 it を、向き d へ、殻に EMBED だけ入る所まで寄せる（殻に届かない向きなら、そのまま） */
+function seat(it, shellItem, d) {
+  const pd = solid(byId[it.part]), sd = solid(byId[shellItem.part]);
+  if (!pd.length || !sd.length) return it;
+  const Rp = rotOf(it.rot), Rs = rotOf(shellItem.rot), back = d.map(v => -v);
+  let touch = Infinity;
+  const take = t => { if (t !== null && t < touch) touch = t; };
+  for (const pc of pd) for (const v of vertsOf(pc)) { const w = toWorld(it, Rp, pc, v); for (const sc of sd) take(enterAt(shellItem, Rs, sc, w, d)); }
+  for (const sc of sd) for (const v of vertsOf(sc)) { const w = toWorld(shellItem, Rs, sc, v); for (const pc of pd) take(enterAt(it, Rp, pc, w, back)); }
+  if (touch === Infinity || touch <= -EMBED) return it;
+  return { ...it, mov: it.mov.map((v, i) => v + d[i] * (touch + EMBED)) };
+}
+/** 殻へ寄せる向き：トサカと頭頂の飾りは下、後ろの飾りは前、横の飾りは内。寄せないものは null */
+function seatDir(def, it, shellItem) {
+  if (def.cat === 'トサカ' || def.id === 'crest') return [0, -1, 0];
+  if (def.cat !== '飾り' || def.id.startsWith('headpipe')) return null;
+  if (def.id === 'backfin' || def.id === 'thruster') return [0, 0, 1];
+  const side = Math.sign(it.mov[0] - shellItem.mov[0]);
+  return side ? [-side, 0, 0] : null;
+}
+
 /** 部品が頭に合う倍率：部位ごとに「頭のどの寸法の何割」かを決め、部品の size から割り出す。jit は軸ごとのばらつき（0 で一様） */
 export function fitScale(id, H, rng = null, jit = 0) {
   const def = byId[id]; if (!def) return [1, 1, 1];
@@ -95,7 +162,7 @@ export function placementsFor(id, shellItem, rng = Math.random) {
       return [it, mirrorOf(it)];
     },
   };
-  return (PLACERS[def.cat] ?? PLACERS['飾り'])(id);
+  return (PLACERS[def.cat] ?? PLACERS['飾り'])(id).map(it => { const d = seatDir(def, it, shellItem); return d ? seat(it, shellItem, d) : it; });
 }
 
 export function randomHead(rng = Math.random, parts = PARTS) {
