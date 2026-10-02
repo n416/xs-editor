@@ -18,7 +18,8 @@ export function headDims(shellItem) {
  *  前は殻が何であっても同じ場所へ置いていて、バイザーの頭では目もマスクも殻の中に埋まった */
 /*  under：殻の下面（首の入る所）の高さ y = under[0] + under[1]·z（殻の座標）。首は、置く前後の位置での下面より少し中まで伸ばす
  *  lift：体に載せるとき、殻をこれだけ上へ置く（殻の座標。unitparts.js の headPlace）。底が「頭の殻」より低い殻が、立ち襟に沈まないように */
-const FACE0 = { eye: [0.023, 0.098], mouth: [-0.03, 0.0868, 24], under: [-0.0423, -0.5286] };
+/*  brow：額（目の溝のすぐ上の面）の、中心線の上の 1 点 [高さ y, 前後 z]。額に付くトサカ（部品に brow がある。V 字アンテナ）は、部品の brow の点をここへ合わせる */
+const FACE0 = { eye: [0.023, 0.098], mouth: [-0.03, 0.0868, 24], under: [-0.0423, -0.5286], brow: [0.053, 0.1445] };
 export const faceOf = shellId => ({ ...FACE0, ...(byId[shellId]?.face ?? {}) });
 const D = Math.PI / 180;
 // ---- 置いた部品を殻に当てる ----
@@ -81,6 +82,7 @@ function seat(it, shellItem, d) {
 }
 /** 殻へ寄せる向き：トサカと頭頂の飾りは下、後ろの飾りは前、横の飾りは内。寄せないものは null */
 function seatDir(def, it, shellItem) {
+  if (def.brow) return [0, 0, -1];   // 額に付くトサカは後ろへ（額の面へ）
   if (def.cat === 'トサカ' || def.id === 'crest') return [0, -1, 0];
   if (def.cat !== '飾り' || def.id.startsWith('headpipe')) return null;
   if (def.id === 'backfin' || def.id === 'thruster') return [0, 0, 1];
@@ -127,7 +129,12 @@ export function placementsFor(id, shellItem, rng = Math.random) {
   const F = faceOf(shellItem.part), [mx, my, mz] = shellItem.mov;
   const PLACERS = {
     頭蓋: id => [{ part: id, mov: shellItem.mov.slice(), rot: [0, 0, 0], scal: [sw, sh, sd] }],
-    トサカ: id => [{ part: id, mov: [0, H.top - rnd(0.01, 0.04), rnd(-0.02, 0.06)], rot: [rnd(-10, 25), 0, 0], scal: fit(id) }],
+    // トサカ：頭頂に置く。額に付くもの（部品に brow がある）は、部品の brow の点を殻の額の点へ（向きは部品のまま。前は頭頂に寝かせて置いていた）
+    トサカ: id => {
+      const d = byId[id], s = fit(id);
+      if (d.brow) return [{ part: id, mov: [mx, my + F.brow[0] * sh - d.brow[0] * s[1] + rnd(-0.01, 0.01), mz + F.brow[1] * sd - d.brow[1] * s[2]], rot: [rnd(-4, 4), 0, 0], scal: s }];
+      return [{ part: id, mov: [0, H.top - rnd(0.01, 0.04), rnd(-0.02, 0.06)], rot: [rnd(-10, 25), 0, 0], scal: s }];
+    },
     顔: id => id === 'facemask'
       ? [{ part: id, mov: [0, rnd(-0.05, 0.05), rnd(-0.03, 0.03)], rot: [0, 0, 0], scal: [rnd(0.8, 1.2), rnd(0.8, 1.2), rnd(0.8, 1.2)] }]
       : (() => { const s = fit(id); return [{ part: id, mov: [0, my + F.eye[0] * sh + rnd(-0.008, 0.008), mz + F.eye[1] * sd - (byId[id].seatZ ?? 0) * s[2] + rnd(0, 0.01)], rot: [0, 0, 0], scal: s }]; })(),   // 目は溝の奥の壁に当てる（部品の seatZ を壁へ）
