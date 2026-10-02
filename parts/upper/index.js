@@ -10,7 +10,8 @@ import shoulderarmor from './shoulderarmor.js';
 import collar from './collar.js';
 import chestdeco from './chestdeco.js';
 import powerpipe from './powerpipe.js';
-export const UPPER = [chest, back, abdomen, flank, shoulder, shoulderarmor, collar, chestdeco, powerpipe].flat();
+import vw from './vw.js';
+export const UPPER = [chest, back, abdomen, flank, shoulder, shoulderarmor, collar, chestdeco, powerpipe, vw].flat();
 export const upperById = Object.fromEntries(UPPER.map(p => [p.id, p]));
 
 export const CHEST_AT = [0, 2.1, 0], SHOULDER_AT = [0.45, 2.5, 0];
@@ -42,6 +43,8 @@ export const UPPER_SAMPLES = {
   'とても大きな盾': sample([...torso('chestvee', 'backhump', 'abdomenvee', 'flankslats'), 'collarwide'], ['shoulderjoint', 'shoulderarmorshield'], 1.5),
   '角の排気口ととげ': sample([...torso('chestexhaust', 'backhump', 'abdomenbellows', 'flank'), 'collarlow', 'pipechestheadthick'], ['shoulderjoint', 'shoulderarmorspike', 'pipearmthick']),
   '通気口とハッチ': sample([...torso(), 'collar', 'chestvent', 'chesthatch'], ['shoulderjoint', 'shoulderarmorbox']),
+  // 可変翼型：機体エディタ 1 の形式の機体から分けた部品（parts/upper/vw.js）。腹だけは標準の輪
+  '可変翼型（コクピットとセンサーの肩）': sample([...torso('chestvw', 'backvw', 'abdomen', 'flankvw'), 'collarvw'], ['shoulderjoint', 'shoulderarmorvw']),
 };
 /** ランダムに組む：部位ごとに 1 つ（胴の 4 つは必ず、襟はたいてい付け、胸の飾りは 0〜2 個。肩アーマーはときどきとても大きく） */
 export function randomUpper(rnd = Math.random) {

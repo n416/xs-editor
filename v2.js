@@ -481,7 +481,7 @@ function posePairs() {
  * 前スカートを押さない、いちばん小さい角度にする。置いた部品の mov・rot を書き換える（あとで手で動かしてもよい）
  */
 function fitKneeGuards() {
-  const isGuard = it => byId[it.part]?.cat === 'ひざ当て' && byId[it.part].pieces[0].bone === 'shin';
+  const isGuard = it => byId[it.part]?.cat === 'ひざ当て' && byId[it.part].pieces[0].bone === 'shin' && !byId[it.part].fixed;   // fixed：倒さないひざ当て（ひざの真ん前に付く盾。parts/leg/vw.js）
   if (!items.some(isGuard)) return;
   const { pairs, moves } = posePairs();
   for (const g of groups) for (const h of g.userData.hinges) h.sub.rotation.x = 0;
@@ -1712,7 +1712,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'a988171';
+const BUILD = 'd81eec6';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

@@ -6,9 +6,10 @@ import knee from './knee.js';
 import shin from './shin.js';
 import shindeco from './shindeco.js';
 import foot from './foot.js';
+import vw from './vw.js';
 // すねの動力パイプは、すねの形を作り直したので合わせ直すまで外してある
 const HOLD = new Set(['shinpipe', 'shinpipethick']);
-export const LEG = [thigh, knee, shin, shindeco, foot].flat().filter(p => !HOLD.has(p.id));
+export const LEG = [thigh, knee, shin, shindeco, foot, vw].flat().filter(p => !HOLD.has(p.id));
 export const legById = Object.fromEntries(LEG.map(p => [p.id, p]));
 export const LEG_AT = [0.175, 1.14, 0];
 export const LEG_CAT = new Set(['太もも', 'ひざ当て', 'すね', 'すねの飾り', '足']);
@@ -24,6 +25,8 @@ export const LEG_SAMPLES = {
   '裾が大きく広がる重い脚': sample(['thighround', 'kneepad', 'shinflare', 'footheavy']),
   'フレーム': sample(['thighframe', 'kneesmall', 'shinframe', 'footclaw']),
   'タンクつき': sample(['thigharmor', 'knee', 'shintank', 'footsplit']),
+  // 可変翼型：機体エディタ 1 の形式の機体から分けた部品（parts/leg/vw.js）。ひざは 1 点で曲がる
+  '可変翼型（裾が広がる・噴射口）': sample(['thighvw', 'kneevw', 'shinvw', 'footvw']),
 };
 /** ランダムに組む：太もも・ひざ当て・すね・足を 1 つずつ */
 export function randomLeg(rnd = Math.random) {
