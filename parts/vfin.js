@@ -4,6 +4,7 @@
 //     刃（太い）            ：幅も厚みも 2 倍ほど
 //     刃（寝てから立つ）    ：水平に近い角度で外へ出て、途中で折れて垂直に近く立つ
 //     刃（45 度から垂直）   ：45 度で外へ出て、途中で折れて垂直に立つ
+//     刃（…・先がとがる）   ：上の 4 種と同じ根元・同じ向き・同じ長さで、先だけが 1 点にとがる（依頼主：アンテナの先がとがったバージョンが同じ組み合わせ数で欲しい）
 //     一本角（斜め前）      ：太めの角 1 本。額の中央から斜め前・上へ
 //   部位「アンテナの中央（額）」：刃の根元を覆う塊。広い面が正面を向く。台形・六角形・五角形・ひし形の柱
 // どれも同じ原点・同じ倍率（fitAs）・同じ額の点（brow）で置かれるので、中央の部品と刃は重ねて置くとそのまま合う。前が +z、原点は刃の根元の高さ
@@ -52,7 +53,7 @@ const SCALE_AS = 'vblade';                        // どの部品も「刃（細
 const base = { brow: BROW, fitAs: SCALE_AS };
 
 /**
- * 折れ線の刃（右）。pts：中心線の点 [x, y, 半分の幅]（根元から先へ）。t：厚みの半分。edge：縁を研ぐ幅。
+ * 折れ線の刃（右）。pts：中心線の点 [x, y, 半分の幅]（根元から先へ）。t：厚みの半分。edge：縁を研ぐ幅。半分の幅が 0 の点は、1 点にとがる（先）。
  * 節ごとに 1 つの凸の板にし、折れ目は両隣の縁の交わる点でつなぐ（すき間も段もできない）。縁は前後から研いで刃にする
  */
 function bladeOf(pts, t, edge) {
@@ -70,6 +71,7 @@ function bladeOf(pts, t, edge) {
   for (let i = 0; i < n - 1; i++) {
     const p = [];
     for (const j of [i, i + 1]) for (const k of [1, -1]) {
+      if (pts[j][2] === 0) { p.push([pts[j][0], pts[j][1], 0]); continue; }   // とがった先：厚みも幅も無い 1 点
       const e = corner(j, k, 0), m = corner(j, k, Math.min(edge, pts[j][2] * 0.8));
       p.push([e[0], e[1], 0], [m[0], m[1], t], [m[0], m[1], -t]);
     }
@@ -87,6 +89,13 @@ const vbladethick = bladePart('vbladethick', '刃（太い）', [0.28, 0.2, 0.09
 const vbladebend = bladePart('vbladebend', '刃（寝てから立つ）', [0.23, 0.22, 0.09], bladeOf([[0.024, 0.01, 0.022], [0.17, 0.044, 0.019], [0.204, 0.205, 0.006]], 0.005, 0.011));
 // 刃（45 度から垂直）：45 度で外へ出て、折れて、まっすぐ上へ立つ
 const vblade45 = bladePart('vblade45', '刃（45 度から垂直）', [0.16, 0.26, 0.1], bladeOf([[0.026, 0.008, 0.022], [0.125, 0.107, 0.019], [0.125, 0.25, 0.006]], 0.005, 0.011));
+
+// 先がとがる刃 4 種：上の 4 種と同じ根元・同じ折れ方・同じ長さ。最後の節が、先の 1 点へ向かって細る
+// （細い刃は面で作ってあるので、同じ縁の線から中心線と幅を取った：根元の幅 0.039・先の手前 0.029、先は元の先の真ん中 (0.3, 0.169)）
+const vbladepoint = bladePart('vbladepoint', '刃（細い・先がとがる）', [0.3, 0.2, 0.08], bladeOf([[0.03, 0.0105, 0.0205], [0.2, 0.1085, 0.0155], [0.3, 0.169, 0]], T, 0.009));
+const vbladethickpoint = bladePart('vbladethickpoint', '刃（太い・先がとがる）', [0.28, 0.2, 0.09], bladeOf([[0.024, 0.006, 0.036], [0.15, 0.085, 0.03], [0.262, 0.172, 0]], 0.009, 0.016));
+const vbladebendpoint = bladePart('vbladebendpoint', '刃（寝てから立つ・先がとがる）', [0.23, 0.22, 0.09], bladeOf([[0.024, 0.01, 0.022], [0.17, 0.044, 0.019], [0.204, 0.205, 0]], 0.005, 0.011));
+const vblade45point = bladePart('vblade45point', '刃（45 度から垂直・先がとがる）', [0.16, 0.26, 0.1], bladeOf([[0.026, 0.008, 0.022], [0.125, 0.107, 0.019], [0.125, 0.25, 0]], 0.005, 0.011));
 
 // 一本角（斜め前）：六角の断面で、根元が太く先へ細る。額の中央から、前へ 40 度倒れて上へ。左右の対ではない
 const unihorn = (() => {
@@ -110,4 +119,4 @@ const vcorehex = corePart('vcorehex', '中央（六角形）', [[0.03, 0.033], [
 const vcorepenta = corePart('vcorepenta', '中央（五角形）', [[0.046, 0.032], [0.054, 0.004], [0, -0.028]]);
 const vcorediamond = corePart('vcorediamond', '中央（ひし形）', [[0, 0.037], [0.058, 0.005], [0, -0.027]]);
 
-export default [vblade, vbladethick, vbladebend, vblade45, unihorn, vcore, vcorehex, vcorepenta, vcorediamond];
+export default [vblade, vbladethick, vbladebend, vblade45, vbladepoint, vbladethickpoint, vbladebendpoint, vblade45point, unihorn, vcore, vcorehex, vcorepenta, vcorediamond];
