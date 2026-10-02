@@ -3,7 +3,7 @@
 // or a unit of 機体エディタ Ver2 (applyUnit: unitparts.js turns it into such parts). Output: the skinned .glb the game loads
 // (docs/models.md: the bones, three LODs, the material classes, the attachment points) and what the checks found.
 // Used by 機体エディタ Ver2 (v2.js: ゲーム用に書き出す / チェックだけする) and, through engine.html, by tools/exportxs.ts and tools/bodyxs.ts.
-// This code came out of 機体エディタ 1 (index.html) as it was — the same shapes, the same numbers (tools/_genengine.py copied it once).
+// This code came out of 機体エディタ 1 (index.html) as it was — the same shapes, the same numbers (copied once; 機体エディタ 1 was removed on 2026-10-02).
 // This file is now the source.
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
