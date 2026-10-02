@@ -4,7 +4,7 @@ XS の形をブラウザ上で組み立てる、単体の3Dモデリングツー
 
 ## 起動
 
-公開版：<https://n416.github.io/xs-editor/>
+公開版：<https://n416.github.io/xs-editor/>（機体エディタ Ver2 は <https://n416.github.io/xs-editor/v2.html>）
 
 このリポジトリは、開発元のリポジトリから自動でコピーされます。ここへ直接加えた変更は次の更新で上書きされます。
 
