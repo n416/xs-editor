@@ -20,13 +20,14 @@ import { rotMatrix } from './xsasm.js';
 import { mirrorOf, randomHead, placementsFor, headDims } from './xsasm-random.js';
 import { PARTS as HEAD_RAW } from './xsasm-parts.js';
 import { HP, HEAD, FREE, isHead, rawHead, asHead, halfOf, registerUser, unregisterUser, headShell as headShellIn, headPlace as headPlaceIn, unitParts, registerUnit } from './unitparts.js';
-import { XS, VEHICLES, UNIT_M, shipSeat, gameToEditor } from './xsengine.js';
+import { XS, VEHICLES, UNIT_M, ROLES, DEFAULTS, shipSeat, gameToEditor } from './xsengine.js';
 import { initAi } from './v2-ai.js';
+import { initShare } from './v2-share.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
-import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest } from './meshparts.js';
+import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
 import { DEFAULT_PAINT, ROLE_LABEL, colorOf, randomPalette, randomVivid, hexToHsl } from './paint.js';
 import { buildHull, hullReach } from './hull.js';
 import { makeSheet } from './xsbody.js';
@@ -1615,6 +1616,36 @@ const AI = initAi({
   },
 });
 $('#bAi').onclick = () => AI.open();
+// ---- みんなの機体（v2-share.js）：投稿するのは機体の JSON（Ver2 の形）。名前に使えない文字（< > " ' ` と制御文字）は抜いて送る ----
+const IMPORT_SAMPLES = ['./samples/wings-import.json'];
+const postText = v => typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>"'`]/g, '').slice(0, 120)
+  : Array.isArray(v) ? v.map(postText) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, postText(x)])) : v;
+const postDoc = () => { const d = postText(structuredClone(unitDoc())); delete d.name; return d; };
+const SHARE = initShare({
+  busy, okToLeave, kinds: ROLES, doc: postDoc, name: () => unitName, thumb: () => unitThumb(),
+  role: () => { const r = $('#gameId').value.replace(/^[ab]_/, ''); return ROLES[r] ? r : ''; },
+  problem: () => {
+    if (shipKind()) return '艦は「みんなの機体」にはまだ投稿できません。';
+    if (!kept().length) return 'パーツが無いので投稿できません。';
+    const text = JSON.stringify(postDoc());
+    if (text.includes('"kind":"mesh"')) return '取り込んだ形（.glb）の入った機体は投稿できません。';
+    if (text.length > 300000) return `機体のデータが大きすぎます（${Math.round(text.length / 1000)} KB。300 KB まで）。作ったパーツを減らしてください。`;
+    return '';
+  },
+  // つながりと関節（「チェックだけする」と同じ調べ方）
+  check: async () => {
+    const id = $('#gameId').value, X = await editorWorker();
+    const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
+    const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));
+    X.load({ parts: own ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
+    await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
+    const r = X.report(id);
+    return { ok: r.ok, text: `${$('#gameId').selectedOptions[0].textContent} として調べました\n${r.conn}\n${r.joint}` };
+  },
+  openUnit: (doc, title) => { openDoc(doc, title); note(`「${title}」を開きました（このブラウザにはまだ保存していません。「保存」で残せます）`); },
+  openScene: (parts, title, role, ai) => { const def = openE1(parts, title, role); if (ai) { def.ai = ai; persistUser(); } },
+});
+$('#bShare').onclick = () => { if (!busy()) SHARE.open(); };
 // 部位を選んであれば、その部位のパーツを作る画面として開く（AI に頼めない部位なら、画面の中で選び直す）
 $('#bAiPart').onclick = () => { const id = $('#newPartSel').value; AI.openPart(id && canAsk(id) ? id : ''); };
 /** 機体エディタ（1）の部品の並びを、機体として開く */
@@ -1670,6 +1701,26 @@ function renderE1(box) {
       cell.querySelector('button').onclick = () => { if (busy() || !okToLeave(`「${s.name}」を開きます`)) return; $('#saveBox').hidden = true; openShip(s.blank ? blankShip(s.role) : structuredClone(s.parts), s.blank ? `新しい${VEHICLES[s.role].name}` : s.name, s.role, s.hit); };
     }
   }).catch(() => { const el = sh.querySelector('#svShips'); if (el) el.innerHTML = '<span class="hint">艦の見本を読めませんでした</span>'; });
+  // 取り込みの見本：外で作った形（.glb）を取り込んで関節で切り分けた機体（形はパックで配る：samples/*.xsmesh）
+  const im = document.createElement('div');
+  im.innerHTML = '<h2>取り込みの見本 <span class="hint">3D 生成 AI などで作った形を取り込んで、関節で切り分けた機体（骨に合わせて曲がるスキン）</span></h2><div class="svcells" id="svImports"><span class="hint">読み込み中…</span></div>';
+  box.appendChild(im);
+  Promise.all(IMPORT_SAMPLES.map(url => fetch(url).then(r => r.json()).then(d => ({ ...d, url })))).then(list => {
+    const el = im.querySelector('#svImports'); if (!el.isConnected) return;
+    el.innerHTML = list.map((s, i) => `<div class="svcell" data-im="${i}"><div class="nm">${esc(s.name)}</div><div class="hint">取り込んだ形 1 個（初めて開くときに形を読み込む：約 2.4 MB）</div><div class="bar"><button class="small acc">機体として開く</button></div></div>`).join('');
+    for (const cell of el.querySelectorAll('[data-im]')) {
+      const s = list[+cell.dataset.im], b = cell.querySelector('button');
+      b.onclick = async () => {
+        if (busy() || !okToLeave(`「${s.name}」を開きます`)) return;
+        b.disabled = true; b.textContent = '形を読み込んでいます…';
+        try {
+          await installPack(new URL(s.mesh, new URL(s.url, location.href)).href, s.meshId);
+          openE1([{ ...DEFAULTS, ...structuredClone(s.part), mesh: s.meshId }], s.name, s.role);
+          $('#saveBox').hidden = true;
+        } catch (e) { b.disabled = false; b.textContent = '機体として開く'; note('開けません：' + (e?.message ?? e), true); }
+      };
+    }
+  }).catch(() => { const el = im.querySelector('#svImports'); if (el) el.innerHTML = '<span class="hint">取り込みの見本を読めませんでした</span>'; });
   for (const cell of sec.querySelectorAll('[data-e1]')) {
     const s = list[+cell.dataset.e1], on = (act, fn) => { const b = cell.querySelector(`[data-act=${act}]`); if (b) b.onclick = fn; };
     on('unit', () => { if (busy() || !okToLeave(`「${s.name}」を開きます`)) return; try { openE1(structuredClone(s.parts), s.name, s.role); $('#saveBox').hidden = true; } catch (e) { note('開けません：' + e.message, true); } });
