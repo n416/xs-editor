@@ -98,7 +98,7 @@ export function fitScale(id, H, rng = null, jit = 0) {
   const ref = byId[def.fitAs] ?? def;   // fitAs：別の部品と同じ倍率にする（目だけの部品を、枠・帯の付いた部品と同じ大きさで置く）
   const by = (axis, target) => { const s = ref.size?.[axis] || 0.2; const k = target / s; return [k * rnd(1 - jit, 1 + jit), k * rnd(1 - jit, 1 + jit), k * rnd(1 - jit, 1 + jit)]; };
   switch (def.cat) {
-    case 'トサカ': case 'アンテナ（額）': case 'アンテナの中央（額）': return by(1, H.h * rnd(0.3, 0.6));
+    case 'トサカ': return by(1, H.h * rnd(0.3, 0.6));
     case '顔': return id === 'facemask' ? [rnd(0.8, 1.2), rnd(0.8, 1.2), rnd(0.8, 1.2)] : by(0, H.w * rnd(0.45, 0.62));
     case 'マスク': return by(0, H.w * rnd(0.36, 0.44));
     case 'あご': return id === 'jawblock' ? [rnd(1.8, 2.4), rnd(1, 1.4), rnd(1.1, 1.5)] : by(0, H.w * rnd(0.3, 0.4));   // あご当ては頭の幅の 3 割ほど
@@ -127,19 +127,14 @@ export function placementsFor(id, shellItem, rng = Math.random) {
   if (!def) return [{ part: id, mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] }];
   if (def.attach) { const it = attachTo(id); return def.pairs ? [it, mirrorOf(it)] : [it]; }   // pairs：左右の対（右を作ってあり、左は鏡像）
   const F = faceOf(shellItem.part), [mx, my, mz] = shellItem.mov;
-  // 額に付く部品（アンテナの刃・一本角・中央の部品）：部品の brow の点を殻の額の点へ。倍率は軸ごとに変えない（刃と中央の部品を重ねて置くと合うように）。
-  // pairs のある部品（刃）は右を作ってあり、左右の 2 つを別々に置く（片方を消せば片側だけ）
-  const browAt = id => {
-    const d = byId[id], k = fitScale(id, H, rng, 0)[1], s = [k, k, k];
-    const it = { part: id, mov: [0, my + F.brow[0] * sh - d.brow[0] * k + rnd(-0.01, 0.01), mz + F.brow[1] * sd - d.brow[1] * k], rot: [rnd(-4, 4), 0, 0], scal: s };
-    return d.pairs ? [it, mirrorOf(it)] : [it];
-  };
   const PLACERS = {
     頭蓋: id => [{ part: id, mov: shellItem.mov.slice(), rot: [0, 0, 0], scal: [sw, sh, sd] }],
-    // トサカ：頭頂に置く。額に付くもの（部品に brow がある）は額へ（前はどのトサカも頭頂に置いていて、V 字アンテナが頭の真ん中から生えていた）
-    トサカ: id => (byId[id].brow ? browAt(id) : [{ part: id, mov: [0, H.top - rnd(0.01, 0.04), rnd(-0.02, 0.06)], rot: [rnd(-10, 25), 0, 0], scal: fit(id) }]),
-    'アンテナ（額）': id => browAt(id),
-    'アンテナの中央（額）': id => browAt(id),
+    // トサカ：頭頂に置く。額に付くもの（部品に brow がある）は、部品の brow の点を殻の額の点へ（前はどのトサカも頭頂に置いていて、V 字アンテナが頭の真ん中から生えていた）
+    トサカ: id => {
+      const d = byId[id], s = fit(id);
+      if (d.brow) return [{ part: id, mov: [mx, my + F.brow[0] * sh - d.brow[0] * s[1] + rnd(-0.01, 0.01), mz + F.brow[1] * sd - d.brow[1] * s[2]], rot: [rnd(-4, 4), 0, 0], scal: s }];
+      return [{ part: id, mov: [0, H.top - rnd(0.01, 0.04), rnd(-0.02, 0.06)], rot: [rnd(-10, 25), 0, 0], scal: s }];
+    },
     顔: id => id === 'facemask'
       ? [{ part: id, mov: [0, rnd(-0.05, 0.05), rnd(-0.03, 0.03)], rot: [0, 0, 0], scal: [rnd(0.8, 1.2), rnd(0.8, 1.2), rnd(0.8, 1.2)] }]
       : (() => { const s = fit(id); return [{ part: id, mov: [0, my + F.eye[0] * sh + rnd(-0.008, 0.008), mz + F.eye[1] * sd - (byId[id].seatZ ?? 0) * s[2] + rnd(0, 0.01)], rot: [0, 0, 0], scal: s }]; })(),   // 目は溝の奥の壁に当てる（部品の seatZ を壁へ）
@@ -185,20 +180,14 @@ export function randomHead(rng = Math.random, parts = PARTS) {
   const shell = pick(shells);
   const shellItem = { part: shell.id, mov: [0, 0, -0.125], rot: [0, 0, 0], scal: [sw, sh, sd] };
   // 首は必ず付く（首の無い頭は作らない）。首当て（襟）は首に足して付けるもので、ときどき
-  const SLOT_ODDS = { 顔: 0.85, マスク: 0.6, あご: 0.7, トサカ: 0.5, 'アンテナ（額）': 0.4, 飾り: 0.85, 首: 1, 首当て: 0.3 };
+  const SLOT_ODDS = { 顔: 0.85, マスク: 0.6, あご: 0.7, トサカ: 0.75, 飾り: 0.85, 首: 1, 首当て: 0.3 };
   const out = [shellItem];
   for (const [cat, odds] of Object.entries(SLOT_ODDS)) {
     const cands = parts.filter(p => p.cat === cat);
     if (!cands.length || rng() > odds) continue;
     const n = cat === '飾り' && rng() < 0.4 ? 2 : 1;   // 飾りは 2 種類付くこともある
     const used = new Set();
-    for (let k = 0; k < n; k++) {
-      const d = pick(cands); if (used.has(d.id)) continue; used.add(d.id);
-      const placed = placementsFor(d.id, shellItem, rng); out.push(...placed);
-      // 額のアンテナには、中央の部品を 1 つ、同じ位置・向き・倍率で付ける（刃の根元を覆う）
-      const cores = cat === 'アンテナ（額）' ? parts.filter(p => p.cat === 'アンテナの中央（額）') : [];
-      if (cores.length && placed[0]) { const b = placed[0]; out.push(seat({ part: pick(cores).id, mov: [0, b.mov[1], b.mov[2]], rot: b.rot.slice(), scal: b.scal.map(Math.abs) }, shellItem, [0, 0, -1])); }
-    }
+    for (let k = 0; k < n; k++) { const d = pick(cands); if (used.has(d.id)) continue; used.add(d.id); out.push(...placementsFor(d.id, shellItem, rng)); }
   }
   return out;
 }
