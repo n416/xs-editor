@@ -92,7 +92,7 @@ export function ensureMeshes(ids) {
   }
 }
 const MESH_PLACEHOLDER = new THREE.BoxGeometry(0.1, 0.1, 0.1).toNonIndexed();
-function meshGeometry(p) {
+export function meshGeometry(p) {
   const m = MESHES.get(p.mesh);
   if (!m) { ensureMeshes([p.mesh]); return MESH_PLACEHOLDER; }
   return p._lod ? m.lod1 : m.geo;

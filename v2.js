@@ -19,6 +19,7 @@ import { rotMatrix } from './xsasm.js';
 import { mirrorOf, randomHead, placementsFor, headDims } from './xsasm-random.js';
 import { PARTS as HEAD_RAW } from './xsasm-parts.js';
 import { HP, HEAD, FREE, isHead, rawHead, asHead, halfOf, registerUser, unregisterUser, headShell as headShellIn, headPlace as headPlaceIn, unitParts, registerUnit } from './unitparts.js';
+import { XS } from './xsengine.js';
 import { initPartEdit } from './v2-partedit.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
@@ -1077,15 +1078,9 @@ $('#bPaintGrid').onclick = () => {
   window.__asm.cands = cands;
 };
 
-// ---- ゲーム用に書き出す：機体エディタ（index.html）を見えない所で開いて、その書き出し（骨・LOD・材質）とチェックを使う ----
-// 機体エディタは ?nosave で開く（このブラウザに保存してある機体エディタの機体には触らない）。手持ちの武器はこの画面に無いので、
-// 陣営ごとの武器の 1 式（samples/weapons-a.json・weapons-b.json：いまの強襲の銃とバズーカ）を右手に持たせる
-let worker = null;
-async function editorWorker() {
-  if (!worker) { worker = document.createElement('iframe'); worker.src = './index.html?nosave'; worker.title = '書き出し用の機体エディタ'; worker.style.cssText = 'position:fixed;left:-3000px;top:0;width:1280px;height:720px;border:0'; document.body.appendChild(worker); }
-  for (let i = 0; i < 600; i++) { const X = worker.contentWindow?.__xs; if (X?.ready()) return X; await new Promise(r => setTimeout(r, 150)); }
-  throw new Error('機体エディタを開けませんでした');
-}
+// ---- ゲーム用に書き出す・チェックだけする：xsengine.js（骨・LOD・材質を付けた .glb を作る、つながりと関節を調べる）を使う ----
+// 手持ちの武器はこの画面に無いので、陣営ごとの武器の 1 式（samples/weapons-a.json・weapons-b.json：いまの強襲の銃とバズーカ）を右手に持たせる
+async function editorWorker() { await XS.ready(); return XS; }
 /** 機体 id（a_raid など）で書き出す → { glb (base64), report, floating（つながっていない部品）, loose（関節で外れる・めり込む）, weapons } */
 async function exportGame(id) {
   const X = await editorWorker();
