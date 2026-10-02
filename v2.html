@@ -70,6 +70,19 @@
   #note { position: absolute; left: 10px; bottom: 10px; color: var(--dim); font-size: 12px; pointer-events: none; }
   #gizmo { position: absolute; right: 10px; top: 10px; display: flex; gap: 4px; }
   #views { position: absolute; left: 10px; top: 10px; display: flex; gap: 4px; }
+  #bEdges.on { border-color: var(--acc); color: var(--acc); }
+  body.pe #bEdges { display: none; }
+  #updBar { position: fixed; left: 50%; top: 8px; transform: translateX(-50%); z-index: 40; display: flex; gap: 8px; align-items: center; background: #2b4a6f; border: 1px solid var(--acc); border-radius: 8px; padding: 6px 10px; max-width: 94vw; }
+  #updBar[hidden] { display: none; }
+  #howBox { position: fixed; inset: 0; background: rgba(10, 12, 15, .82); z-index: 21; display: flex; align-items: center; justify-content: center; }
+  #howBox[hidden] { display: none; }
+  #howBox .box { width: min(640px, 94vw); max-height: 90vh; overflow: auto; background: var(--panel); border: 1px solid #3d6a9c; border-radius: 10px; padding: 14px 16px; }
+  #howBox .top { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  #howBox .top b { flex: 1; font-size: 14px; }
+  #howBox .step { display: grid; grid-template-columns: 22px 1fr; gap: 2px 8px; padding: 7px 0; border-top: 1px solid var(--line); }
+  #howBox .step > b { color: var(--acc); }
+  #howBox .step .hint { grid-column: 2; }
+  #howBox .step button { margin-right: 4px; }
   #paintGrid { position: absolute; inset: 0; background: rgba(15, 17, 20, .96); z-index: 5; overflow: auto; padding: 10px; }
   #paintGrid[hidden] { display: none; }
   body.ship .xsonly, body.ship #tabs, body.ship #catalog, body.ship #newPart { display: none; }
@@ -109,8 +122,9 @@
 </script>
 </head>
 <body>
+<div id="updBar" hidden><span>新しい版のエディタが出ています。作業中の機体は自動で保存されているので、そのまま続きから開けます。</span><button id="updGo" class="acc">今すぐ更新</button><button id="updLater">あとで</button></div>
 <header>
-  <h1>機体エディタ Ver2</h1>
+  <h1 id="appTitle">機体エディタ Ver2</h1>
   <div class="grp">
     <button id="bNew" class="asm" title="置いたパーツをぜんぶ消して、色も塗る前に戻す">新しく</button>
     <button id="bUndo" title="元に戻す（Ctrl+Z）">↶ 戻す</button>
@@ -120,6 +134,7 @@
     <span id="unitName" title="今の機体の名前。● は、保存してから変えたところがある印"></span>
     <button id="bSave" class="acc" title="今の機体を保存する（Ctrl+S）。保存してある機体なら上書き、まだなら名前を付けて保存">保存</button>
     <button id="bOpen" title="保存した機体の一覧（開く・消す）、ファイルに保存、ファイルから開く">開く</button>
+    <button id="bHow" title="機体を作る手順（置く → 整える → 確かめる → 出す）">作り方</button>
     <button id="bShare" title="ほかの人が投稿した機体を見る・開く・イイネする。今の機体を投稿する（ゲームのアカウントでログイン）">みんなの機体</button>
     <button id="bAi" title="チャット AI（ChatGPT・Claude・Gemini など）に機体を作ってもらう：頼み方をコピーして AI に送り、返ってきた答えを貼ると、見て・確かめてから機体にできる">AI で作る</button>
   </div>
@@ -168,6 +183,7 @@
   <div id="views">
     <button class="small" data-view="front">正面</button><button class="small" data-view="side">横</button><button class="small" data-view="threeq">斜め</button>
     <button class="small" data-view="top">上</button><button class="small" data-view="back">後ろ</button><button class="small" data-view="low">下から</button>
+    <button class="small" id="bEdges" title="形の折れ目に線を引いて見せる（見た目だけ。書き出す形には入らない）">輪郭線</button>
   </div>
   <div id="gizmo">
     <button class="small" data-mode="translate">移動 (W)</button>
@@ -269,6 +285,15 @@
 </aside>
 <div id="saveBox" hidden><div class="box"></div></div>
 <input type="file" id="unitFile" accept=".json,.glb,.gltf,application/json,model/gltf-binary" hidden>
-<script type="module" src="./v2.js"></script>
+<div id="howBox" hidden><div class="box">
+  <div class="top"><b>作り方</b><button id="howClose">閉じる（Esc）</button></div>
+  <div class="step"><b>1</b><div>パーツを置く</div><span class="hint">左のタブ（頭・上半身・背中・腕・下半身・脚・武器）から押す。1 つしか付かない部位は入れ替わり、いくつでも付く部位は増える。上の「ランダム」や、右の「見本」から始めてもよい。全身を AI に作ってもらうなら「AI で作る」</span></div>
+  <div class="step"><b>2</b><div>整える</div><span class="hint">右の「寸法の調整」で首・腕・脚の長さや肩の位置、「色」で塗り。置いたパーツは 3D で押して、移動・回転・拡大</span></div>
+  <div class="step"><b>3</b><div>カタログに無い形を作る</div><span class="hint">左下の「新しいパーツを作る」でパーツエディタが開く（箱 1 個から始めて、ブロックを足す・引く、角や面を動かす）。「AI にパーツを作ってもらう」でもよい。できたパーツはカタログに ★ で入る。武器・艦・AI の機体のブロックには「あたり（下書き）」の印を付けられる：あたりで大きさを決め、それに沿って装甲を付け、最後に「あたりを消す」</span></div>
+  <div class="step"><b>4</b><div>動かして確かめる</div><span class="hint">右の「動かして確かめる」で、ゲームの動き・姿勢を付けて、外れる所・めり込む所が無いか見る</span></div>
+  <div class="step"><b>5</b><div><button id="howCheck" class="small">チェックだけする</button></div><span class="hint">つながり（離れている部品）と関節（ゲームの動きで外れる・めり込む）を調べる。結果は右の「ゲーム用に書き出す」に出る。浮いた部品は別の部品でつなぐ</span></div>
+  <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
+</div></div>
+<script type="module" src="./v2.js?v=cbfd67f"></script>
 </body>
 </html>

@@ -553,6 +553,10 @@ const headPlace = () => headPlaceIn(items, adj);
 function placeHead() { const { k, at } = headPlace(); headHolder.scale.setScalar(k); headHolder.position.set(...at); }
 function rebuild() {
   endFlash();
+  rebuildMain();
+  drawEdges();
+}
+function rebuildMain() {
   applyKind();
   seatWeapons();
   for (const g of groups) { g.parent?.remove(g); for (const e of g.userData.extra.values()) e.parent?.remove(e); }
@@ -570,6 +574,23 @@ function rebuild() {
   if (PE.active()) PE.afterRebuild();
   disposeStale();
 }
+
+// ---- 輪郭線：形の折れ目（30° より急な所）に線を引いて見せる。見た目だけ（押して選ぶ・書き出す形には入らない）。パーツエディタの間は引かない ----
+let showEdges = false;
+try { showEdges = localStorage.getItem('xsv2.edges') === '1'; } catch { /* storage blocked */ }
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x0b0d10, transparent: true, opacity: 0.55 }), edgeGeos = new WeakMap();
+function drawEdges() {
+  if (!showEdges || PE.active()) return;
+  for (const g of groups) for (const t of [g, ...g.userData.extra.values()]) {
+    const meshes = []; t.traverse(o => { if (o.isMesh && o.userData.pc && (o.geometry.attributes.position?.count ?? 0) < 60000) meshes.push(o); });
+    for (const m of meshes) {
+      let eg = edgeGeos.get(m.geometry); if (!eg) { eg = new THREE.EdgesGeometry(m.geometry, 30); edgeGeos.set(m.geometry, eg); }
+      const line = new THREE.LineSegments(eg, edgeMat); line.raycast = () => {}; line.userData.edge = true; m.add(line);
+    }
+  }
+}
+$('#bEdges').classList.toggle('on', showEdges);
+$('#bEdges').onclick = () => { showEdges = !showEdges; $('#bEdges').classList.toggle('on', showEdges); try { localStorage.setItem('xsv2.edges', showEdges ? '1' : '0'); } catch { /* storage blocked */ } rebuild(); };
 
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -1646,6 +1667,27 @@ const SHARE = initShare({
   openScene: (parts, title, role, ai) => { const def = openE1(parts, title, role); if (ai) { def.ai = ai; persistUser(); } },
 });
 $('#bShare').onclick = () => { if (!busy()) SHARE.open(); };
+// ---- 作り方（手順）----
+$('#bHow').onclick = () => { $('#howBox').hidden = false; };
+$('#howClose').onclick = () => { $('#howBox').hidden = true; };
+$('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox')) $('#howBox').hidden = true; });
+addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
+$('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
+// ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
+const BUILD = 'cbfd67f';
+let newBuild = null;
+$('#appTitle').title = `版: ${BUILD}`;
+async function checkUpdate() {
+  if (BUILD === 'dev' || newBuild) return;
+  try {
+    const j = await (await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' })).json();
+    if (j?.build && j.build !== BUILD) { newBuild = j.build; $('#updBar').hidden = false; }
+  } catch { /* offline or no version file */ }
+}
+$('#updGo').onclick = () => { save(); location.replace(`${location.pathname}?v=${encodeURIComponent(newBuild)}${location.hash}`); };
+$('#updLater').onclick = () => { $('#updBar').hidden = true; };
+setTimeout(checkUpdate, 3000);
+setInterval(checkUpdate, 30 * 60 * 1000);
 // 部位を選んであれば、その部位のパーツを作る画面として開く（AI に頼めない部位なら、画面の中で選び直す）
 $('#bAiPart').onclick = () => { const id = $('#newPartSel').value; AI.openPart(id && canAsk(id) ? id : ''); };
 /** 機体エディタ（1）の部品の並びを、機体として開く */

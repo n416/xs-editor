@@ -166,6 +166,7 @@ export function initPartEdit(ctx) {
       const mine = ins && i === ins.index;
       for (const t of [g, ...g.userData.extra.values()]) {
         t.visible = mine || st.others !== 'hide';
+        if (mine) t.traverse(o => { if (o.isMesh && o.userData.pc?.blockout) o.visible = st.showBlock; });   // あたり（下書き）を見せる・隠す
         if (!mine && st.others === 'faint') t.traverse(o => { if (o.isMesh) o.material = faintMat; });
       }
     });
@@ -351,10 +352,12 @@ export function initPartEdit(ctx) {
   }
   function renderTools() {
     const pc = block(), hull = hullEdit(pc);
+    const nBlk = st.def.pieces.filter(p => p.blockout).length;
     E.tools.innerHTML = `
       <div class="g"><button id="peFrame" title="パーツが画面いっぱいに入るよう視点を寄せる（F）">パーツに寄る</button></div>
       <div class="g"><span>ほかのパーツ</span>${[['faint', '薄く'], ['hide', '隠す'], ['show', 'そのまま']].map(([k, t]) => `<button data-others="${k}" class="${st.others === k ? 'on' : ''}">${t}</button>`).join('')}</div>
       <div class="g"><button id="peSubs" class="${st.showSubs ? 'on' : ''}" title="引くブロックを、赤く薄い形で見せる">引くブロックを見せる</button></div>
+      ${nBlk ? `<div class="g"><button id="peBlk" class="${st.showBlock ? 'on' : ''}" title="あたり（下書きのブロック。書き出す形には入らない）を見せる">あたりを見せる</button><button id="peBlkDel" title="あたり（下書き）のブロックを、ぜんぶ消す（装甲を付け終わったら）">あたりを消す（${nBlk} 個）</button></div>` : ''}
       ${hull ? `<div class="g"><span>直し方</span>
         <button data-mode="block" class="${st.mode === 'block' ? 'on' : ''}" title="ブロックごと動かす・回す・拡大する（1）">ブロックごと</button>
         <button data-mode="corner" class="${st.mode === 'corner' ? 'on' : ''}" title="黄色の角を押してから、つまみで動かす（2）">角</button>
@@ -363,6 +366,18 @@ export function initPartEdit(ctx) {
     $('#peFrame').onclick = frame;
     for (const el of E.tools.querySelectorAll('[data-others]')) el.onclick = () => { st.others = el.dataset.others; refresh(); };
     $('#peSubs').onclick = () => { st.showSubs = !st.showSubs; refresh(); };
+    if ($('#peBlk')) {
+      $('#peBlk').onclick = () => { st.showBlock = !st.showBlock; refresh(); };
+      $('#peBlkDel').onclick = () => {
+        const keep = st.def.pieces.filter(p => !p.blockout);
+        if (!keep.some(p => !isSub(p))) { ctx.note('あたりを消すと、足すブロックが 1 個も残りません。先に装甲のブロックを付けてください', true); return; }
+        if (!confirm(`あたり（下書き）のブロック ${nBlk} 個を消します。よろしいですか？（↶ 戻すで戻せます）`)) return;
+        const cur = block();
+        st.def.pieces.splice(0, st.def.pieces.length, ...keep);
+        st.sel = Math.max(0, keep.indexOf(cur)); st.corner = st.face = -1;
+        changed(true);
+      };
+    }
     for (const el of E.tools.querySelectorAll('[data-mode]')) el.onclick = () => setEditMode(el.dataset.mode);
     if ($('#peSym')) $('#peSym').onclick = () => { st.sym = !st.sym; refresh(); };
   }
@@ -724,7 +739,7 @@ export function initPartEdit(ctx) {
     for (const pc of def.pieces) { if (pc.pos && pc.pos.some(v => v)) { if (kindOf(pc) === 'hull') pc.planes = movePlanes(pc.planes, pc.pos).map(p => p.map(r5)); else if (pc.tf) pc.tf.p = pc.tf.p.map((v, k) => r5(v + pc.pos[k])); } pc.pos = [0, 0, 0]; }
     const seen = new Set();
     for (const pc of def.pieces) { let n = pc.name; for (let k = 2; seen.has(n); k++) n = `${pc.name} ${k}`; pc.name = n; seen.add(n); }
-    st = { def, replaced, isNew, sel: 0, mode: 'block', corner: -1, face: -1, handles: [], helper: null, ghosts: new Map(), others: 'faint', showSubs: true, sym: true, snap: true, face2d: 'front',
+    st = { def, replaced, isNew, sel: 0, mode: 'block', corner: -1, face: -1, handles: [], helper: null, ghosts: new Map(), others: 'faint', showSubs: true, showBlock: true, sym: true, snap: true, face2d: 'front',
       hist: [], hpos: -1, cam: { pos: camera.position.clone(), target: orbit.target.clone() } };
     st.backup = structuredClone({ name: def.name, pieces: def.pieces });
     st.hist.push({ s: snapshot(), sel: 0 }); st.hpos = 0;
