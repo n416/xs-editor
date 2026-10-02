@@ -105,7 +105,7 @@ const headshellplain = { ...headshell, id: 'headshellplain', name: '頭の殻（
   pieces: headshell.pieces.map(pc => pc.name === '目の帯' ? { ...pc, name: '溝の奥', planes: movePl(pc.planes, [0, 0, -0.014]), color: BLACK, glow: false, metal: 0.45, rough: 0.5 } : pc) };
 
 // カタログに並ぶ部位の順（ここに無い部位は、その後ろに、出てきた順）
-const CAT_ORDER = ['頭蓋', '顔', 'マスク', 'あご', '飾り', 'トサカ', 'アンテナ（額）', 'アンテナの中央（額）', '首', '首当て'];
+const CAT_ORDER = ['頭蓋', '顔', 'マスク', 'あご', '飾り', 'トサカ', 'アンテナ（額）', 'アンテナの中央（額）', '頭の上の装備', '首', '首当て'];
 const catRank = d => { const k = CAT_ORDER.indexOf(d.cat); return k < 0 ? CAT_ORDER.length : k; };
 export const PARTS = [headshell, headshellplain, facemask, jawblock, fin, crest, ...EXTRA].map((d, i) => [d, i]).sort((a, b) => catRank(a[0]) - catRank(b[0]) || a[1] - b[1]).map(([d]) => d);
 export const byId = Object.fromEntries(PARTS.map(p => [p.id, p]));

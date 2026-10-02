@@ -185,7 +185,7 @@ export function randomHead(rng = Math.random, parts = PARTS) {
   const shell = pick(shells);
   const shellItem = { part: shell.id, mov: [0, 0, -0.125], rot: [0, 0, 0], scal: [sw, sh, sd] };
   // 首は必ず付く（首の無い頭は作らない）。首当て（襟）は首に足して付けるもので、ときどき
-  const SLOT_ODDS = { 顔: 0.85, マスク: 0.6, あご: 0.7, トサカ: 0.5, 'アンテナ（額）': 0.4, 飾り: 0.85, 首: 1, 首当て: 0.3 };
+  const SLOT_ODDS = { 顔: 0.85, マスク: 0.6, あご: 0.7, トサカ: 0.5, 'アンテナ（額）': 0.4, 頭の上の装備: 0.12, 飾り: 0.85, 首: 1, 首当て: 0.3 };
   const out = [shellItem];
   for (const [cat, odds] of Object.entries(SLOT_ODDS)) {
     const cands = parts.filter(p => p.cat === cat);
