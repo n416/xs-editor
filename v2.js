@@ -46,7 +46,8 @@ const S = makeSheet();
 // 頭のパーツ：頭の組み立てのカタログを、id に「h·」を付けて同じ目次に入れる（上半身の襟と id が重なるものがある）
 const boneOf = def => (isHead(def.id) ? 'head' : def.free ? 'hips' : boneOf0(def));
 /** 頭の見本：どれも依頼主が自分で組んだ置き方（顔はこちらで推し量って作らない）。
- *  1 番目は機体エディタ Ver2 で組んだ頭（2026-10-02 に貼ってもらった機体の JSON から）。最初に出る頭もこれ。2 番目は DoGA で組んだ頭 */
+ *  1 番目は機体エディタ Ver2 で組んだ頭（2026-10-02 に貼ってもらった機体の JSON から）。最初に出る頭もこれ。2 番目は DoGA で組んだ頭。
+ *  3 番目は連合の強襲の頭（機体エディタ 1 の形式の頭を部品に分けたもの：parts/peakhelm.js。置き方は元の頭のまま。tools/headgen/e1head.mjs が出す） */
 const HEAD_SAMPLES = { 'バイザーとマスクと耳ブロック': [
   { part: 'headshell', mov: [0, 0, 0.0246], rot: [0, 0, 0], scal: [3.1, 2.999, 2.327] }, { part: 'maska', mov: [0, -0.0698, -0.0898], rot: [0, 0, 0], scal: [3.1, 3.2, 2.2] },
   { part: 'earblock', mov: [-0.2404, 0.0493, 0.0735], rot: [6.5, 14.4, 0], scal: [-1.477, 2.2, 2.2] }, { part: 'earblock', mov: [0.2404, 0.0493, 0.0735], rot: [6.5, -14.4, 0], scal: [1.477, 2.2, 2.2] },
@@ -55,11 +56,16 @@ const HEAD_SAMPLES = { 'バイザーとマスクと耳ブロック': [
   'ひれとクレスト': [
   { part: 'headshell', mov: [0, 0, -0.125], rot: [0, 0, 0], scal: [3.1, 3.2, 2.2] }, { part: 'facemask', mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] },
   { part: 'jawblock', mov: [0, -0.175, -0.175], rot: [10, -180, 0], scal: [2.2, 1.2, 1.3] }, { part: 'fin', mov: [0.3, 0.175, 0], rot: [-20, 10, -110], scal: [1, 1, 1] },
-  { part: 'fin', mov: [-0.3, 0.175, 0], rot: [-20, -10, 110], scal: [-1, 1, 1] }, { part: 'crest', mov: [0, 0.3, 0.025], rot: [20, 0, 0], scal: [1, 1, 0.6] }].map(asHead) };
+  { part: 'fin', mov: [-0.3, 0.175, 0], rot: [-20, -10, 110], scal: [-1, 1, 1] }, { part: 'crest', mov: [0, 0.3, 0.025], rot: [20, 0, 0], scal: [1, 1, 0.6] }].map(asHead),
+  '強襲の頭（ひさしとトサカ）': [
+  { part: 'peakhelm', mov: [0, 0, -0.125], rot: [0, 0, 0], scal: [3, 3.1, 2.2] }, { part: 'peakcheek', mov: [0.1035, -0.0722, 0.0079], rot: [0, 0, 0], scal: [3, 3.1, 2.2] },
+  { part: 'peakcheek', mov: [-0.1035, -0.0722, 0.0079], rot: [0, 0, 0], scal: [-3, 3.1, 2.2] }, { part: 'earsensor', mov: [0.2871, 0.0273, -0.1371], rot: [0, 0, 0], scal: [3, 3.1, 2.2] },
+  { part: 'earsensor', mov: [-0.2871, 0.0273, -0.1371], rot: [0, 0, 0], scal: [-3, 3.1, 2.2] }, { part: 'crestblade', mov: [0, 0.5276, -0.147], rot: [0, 0, 0], scal: [3, 3.1, 2.2] },
+  { part: 'browplate', mov: [0, 0.2331, 0.1812], rot: [0, 0, 0], scal: [3, 3.1, 2.2] }, { part: 'neckblocks', mov: [0, -0.4579, -0.0539], rot: [0, 0, 0], scal: [3, 3.1, 2.2] }].map(asHead) };
 const randomHeadV2 = () => randomHead(Math.random, HEAD_RAW).map(asHead);
 /** いくつでも付けられる部位（カタログを押すと増える）。ほかの部位は 1 つだけ（押すと、置いてある同じ部位のパーツと入れ替わる）。
  *  左右の対は、左右で 1 組。オーブ・挿せるタンクは収納口の数まで増える */
-const MULTI = new Set(['ベルト', '腰の筒', '動力パイプ', '胸の飾り', '胴の動力パイプ', '肩の動力パイプ', 'バックパックの装備', '翼の装備', 'エフェクト（光）', '前腕の飾り', '顔', '飾り', 'トサカ', '首当て']);   // （首当ては首に足して付ける。首と同じ部位にしていたら、首当てを選ぶと首が外れた）
+const MULTI = new Set(['ベルト', '腰の筒', '動力パイプ', '胸の飾り', '胴の動力パイプ', '肩の動力パイプ', 'バックパックの装備', '翼の装備', 'エフェクト（光）', '前腕の飾り', '顔', '飾り', 'トサカ', 'アンテナ（額）', 'アンテナの中央（額）', '首当て']);   // （首当ては首に足して付ける。首と同じ部位にしていたら、首当てを選ぶと首が外れた）
 const isMulti = def => MULTI.has(def.cat);
 /** 1 つだけの部位：置いてある同じ部位（同じ部分の、同じ部位名）のパーツを外す */
 function dropSameCat(def) {
@@ -1706,7 +1712,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'bc37765';
+const BUILD = '11a1e22';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
