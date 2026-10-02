@@ -64,7 +64,9 @@ export function headPlace(items, adj = ADJ0) {
  * paint.team：差し色（ビビッドを使っていないとき）をゲームの陣営色にする（白で「陣営色で塗る」）
  */
 export function unitParts(doc) {
-  const items = (doc.items ?? []).filter(it => byId[it.part]), adj = { ...ADJ0, ...(doc.adj ?? {}) }, paint = doc.paint ?? null;
+  // 手持ちの武器（def.tab = 'weapon'）は、部品の並びのいちばん前へ：武器の「引く」部品（銃口の穴など）は自分より前の部品だけを削るので、体を削らない
+  const all = (doc.items ?? []).filter(it => byId[it.part]), held = it => byId[it.part].tab === 'weapon';
+  const items = [...all.filter(held), ...all.filter(it => !held(it))], adj = { ...ADJ0, ...(doc.adj ?? {}) }, paint = doc.paint ?? null;
   const team = !!paint?.team && !(paint.vivid?.colors?.length);
   const paintOf = (pc, def) => (team && roleOf(pc) === 'accent' ? { color: '#f2f2f2', team: true } : { color: colorOf(pc, def.cat, paint) });
   const { k, at } = headPlace(items, adj);
@@ -81,7 +83,8 @@ export function unitParts(doc) {
   // 体の色：bodyParts の部品は、置いたパーツの順・ブロックの順に並ぶ
   let n = 0;
   for (const it of items.filter(x => !isHead(x.part))) { const def = byId[it.part]; if (def.free) { n += freeParts(def, it, freeShapes).length; continue; } for (const pc of def.pieces) if (!isSub(pc)) Object.assign(body.parts[n++], paintOf(pc, def)); }
-  return { parts: [...head, ...body.parts], anchors: body.anchors, head: head.length > 0 || items.some(it => byId[it.part]?.free) };
+  const nW = items.filter(held).reduce((a, it) => a + freeParts(byId[it.part], it, freeShapes).length, 0);
+  return { parts: [...body.parts.slice(0, nW), ...head, ...body.parts.slice(nW)], anchors: body.anchors, head: head.length > 0 || items.some(it => byId[it.part]?.free) };
 }
 /** 機体の JSON を読む前に：入っている自分のパーツを目次に入れる（もう入っている id はそのまま） */
 export function registerUnit(doc) { for (const def of Object.values(doc.userParts ?? {})) if (def?.id && Array.isArray(def.pieces) && !byId[def.id]) registerUser(def); }

@@ -87,6 +87,7 @@ scene.background = new THREE.Color(0x14161a);
 const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
 const orbit = new OrbitControls(camera, canvas);
 const AT = new THREE.Vector3(0, 1.9, 0);
+const WEAPON_CAT = '手持ちの武器';
 let shipNow = '', viewDist = 5.6, kindSig = 'xs', XS_GAME_IDS = null;   // 艦を開いている間：その種類（battleship / assault）と、向きのボタンの距離
 scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2d33, 0.9));
 const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(1.2, 2.6, 1.6); scene.add(key);
@@ -551,6 +552,7 @@ function placeHead() { const { k, at } = headPlace(); headHolder.scale.setScalar
 function rebuild() {
   endFlash();
   applyKind();
+  seatWeapons();
   for (const g of groups) { g.parent?.remove(g); for (const e of g.userData.extra.values()) e.parent?.remove(e); }
   groups = items.map((it, i) => { const g = groupOf(it, i); holderOf(it).add(g); for (const [b, e] of g.userData.extra) holderFor(b, it).add(e); return g; });
   placeArmJoints();
@@ -739,6 +741,11 @@ function placeNew(def) { const n = items.length; addOnly = true; try { place(def
 const dropTmp = () => { const n = items.length; items = items.filter(it => !it.tmp); if (items.length !== n) selected = -1; };
 /** 自由な部品を置く。頭まるごと：今の頭と入れ替えて、首の付け根の上へ（首のある頭は、首が襟の中へ入る）。自由な機体：そのままの位置に足す */
 function placeFree(def) {
+  if (def.tab === 'weapon') {   // 手持ちの武器：今の武器と入れ替えて、右手へ（置き場所は seatWeapons が決める）
+    if (!addOnly) { const n = items.length; items = items.filter(it => byId[it.part]?.tab !== 'weapon'); if (items.length !== n) selected = -1; }
+    addItems([{ part: def.id, mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] }]);
+    return;
+  }
   if (def.tab === 'head') {
     if (!addOnly) { const n = items.length; items = items.filter(it => halfOf(it.part) !== 'head'); if (items.length !== n) selected = -1; }
     addItems([{ part: def.id, mov: [0, round(S.neck.y + 0.02 + adj.up + adj.neck - (def.bottom ?? S.neck.y), 4), round(adj.headZ, 4)], rot: [0, 0, 0], scal: [1, 1, 1] }]);
@@ -829,9 +836,9 @@ function thumbnail(def, cv) {
 }
 const catButtons = new Map();
 // 左のタブ：部位ごとにカタログを出す
-const TABS = [['head', '頭', HEAD], ['upper', '上半身', UPPER], ['back', '背中', BACK], ['arm', '腕', ARM], ['lower', '下半身', LOWER], ['leg', '脚', LEG], ['free', '取り込み', []]];
+const TABS = [['head', '頭', HEAD], ['upper', '上半身', UPPER], ['back', '背中', BACK], ['arm', '腕', ARM], ['lower', '下半身', LOWER], ['leg', '脚', LEG], ['weapon', '武器', []], ['free', '取り込み', []]];
 /** そのタブに並べるパーツ：頭のタブには「頭まるごと」（機体エディタの機体から取り出した頭）、取り込みのタブには自由な機体 */
-const tabList = (half, list) => (half === 'head' ? [...list, ...FREE.filter(d => d.tab === 'head')] : half === 'free' ? FREE.filter(d => !d.tab) : list);
+const tabList = (half, list) => (half === 'head' ? [...list, ...FREE.filter(d => d.tab === 'head')] : half === 'weapon' ? FREE.filter(d => d.tab === 'weapon') : half === 'free' ? FREE.filter(d => !d.tab) : list);
 let tab = 'head';
 function showTab(t) {
   tab = t;
@@ -847,9 +854,15 @@ function renderCatalog() {
   for (const [half, , list0] of TABS) {
     const list = tabList(half, list0);
     const sec = document.createElement('div'); sec.className = 'half'; sec.dataset.half = half; sec.hidden = half !== tab; el.appendChild(sec);
+    if (half === 'weapon') {   // 手持ちの武器：名前の決まりと、新しく作るボタン
+      const top = document.createElement('div'); top.className = 'hint'; top.style.marginTop = '8px';
+      top.innerHTML = '右手に持つ武器。押すと持つ（今の武器と入れ替わる）。腕の長さや手を変えても、手に付いていく。「直す」でパーツエディタ。<br>ブロックの名前で、ゲームでの扱いが決まる：「ライフル」「銃」「マガジン」「マズル」＝銃（格闘・投げる間は隠れる）、「バズーカ」＝バズーカ（選んだときだけ出る）、「マズル」「銃口」＝弾の出る所。<br>機体が武器を持っていなければ、書き出すときに陣営の強襲の 1 式を持たせる。<div class="row" style="margin-top:6px"><button class="small" id="bNewWeapon" style="flex:1">新しい武器を作る</button></div>腕を下ろした姿勢では、銃は下を向く（腕を前へ上げると前を向く）。';
+      sec.appendChild(top);
+      top.querySelector('#bNewWeapon').onclick = newWeapon;
+    }
     if (half === 'free' && !list.length) sec.innerHTML = '<div class="hint" style="margin-top:8px">機体エディタ（1）の形式の機体を開くと、ここに並ぶ。「開く」→「機体エディタ 1 に残っているもの」か、ファイルから</div>';
     for (const cat of [...new Set(list.map(p => p.cat))]) {
-      const h = document.createElement('h2'); h.innerHTML = `${cat}<i>${cat === '頭まるごと' ? '押すと、今の頭と入れ替わる' : cat === '自由な機体' ? '押すと、今の機体に足して置く' : isMulti({ cat }) ? 'いくつでも（押すと増える）' : '1 つ（押すと入れ替わる）'}</i>`; sec.appendChild(h);
+      const h = document.createElement('h2'); h.innerHTML = `${cat}<i>${cat === '頭まるごと' ? '押すと、今の頭と入れ替わる' : cat === WEAPON_CAT ? '押すと、右手に持つ（今の武器と入れ替わる）' : cat === '自由な機体' ? '押すと、今の機体に足して置く' : isMulti({ cat }) ? 'いくつでも（押すと増える）' : '1 つ（押すと入れ替わる）'}</i>`; sec.appendChild(h);
       const grid = document.createElement('div'); grid.className = 'cat'; sec.appendChild(grid);
       for (const def of list.filter(p => p.cat === cat)) {
         const b = document.createElement('button');
@@ -967,6 +980,11 @@ function persistUser() { try { localStorage.setItem(USER_KEY, JSON.stringify(use
 function loadUser() { try { for (const def of Object.values(JSON.parse(localStorage.getItem(USER_KEY) ?? '{}'))) if (def?.id && Array.isArray(def.pieces)) { registerUser(def); userParts[def.id] = def; } } catch { /* storage blocked */ } }
 /** パーツ src の写しを、自分のパーツとして目次に入れる（fresh：新しく作るときのひな形として） */
 function makeUserCopy(src, fresh = false) {
+  if (src.free) {   // 自由な部品（最初から入っている武器など）の写し：自由な部品のまま
+    const def = { ...structuredClone(src), id: freeId(), name: src.name.replace(/（改）$/, '') + '（改）', user: true };
+    registerUser(def);
+    return def;
+  }
   const half = halfOf(src.id), pre = half === 'head' ? HP : '', base = (src.user ? src.base : src.id.slice(pre.length)) ?? src.id.slice(pre.length);
   let id; for (let n = 1; ; n++) { id = `${pre}u·${base}·${n}`; if (!byId[id]) break; }
   const def = { ...structuredClone(src), id, name: fresh ? `新しい${src.cat}` : src.name.replace(/（改）$/, '') + '（改）', user: true, half, base };
@@ -1095,7 +1113,7 @@ async function exportGame(id) {
   X.load({ parts: own ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
   const applied = await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
   const chk = X.check(id), out = await X.exportNow(id, true);
-  return { ...out, floating: chk.floating, loose: chk.loose, weapons: applied.weapons };
+  return { ...out, floating: chk.floating, loose: chk.loose, weapons: applied.weapons, own };
 }
 const GAME_LIMIT = [30000, 5000, 800];
 $('#bGame').onclick = async () => {
@@ -1382,6 +1400,43 @@ function showRigRequest() {
   };
   draw(false);
 }
+// ---- 手持ちの武器：機体エディタの部品でできた「自由な部品」（def.tab = 'weapon'）。def.hand は、その武器を作ったときの右手の中心 ----
+// 置いた武器（items の 1 つ）は、今の右手の中心に合わせて動かす（it.hand：最後に合わせた右手の中心。つまみで動かした分は残る）
+let handSig = '', handAt = null;
+/** 今の機体の右手の中心（書き出しと同じ探し方：bodyParts の anchors.hand_r）。手が無ければ null */
+function handNow() {
+  const body = items.filter(it => byId[it.part] && byId[it.part].tab !== 'weapon' && !isHead(it.part) && !(it.tmp && byId[it.part].tab));
+  const sig = JSON.stringify([body.map(it => [it.part, it.mov, it.rot, it.scal]), adj]);
+  if (sig !== handSig) { handSig = sig; try { handAt = bodyParts(body, adj).anchors.hand_r; } catch { handAt = null; } }
+  return handAt;
+}
+function seatWeapons() {
+  const ws = items.filter(it => byId[it.part]?.tab === 'weapon');
+  if (!ws.length) return;
+  const h = handNow();
+  if (!h) return;
+  for (const it of ws) {
+    const d = byId[it.part];
+    it.mov = it.hand ? it.mov.map((v, k) => v + h[k] - it.hand[k]) : h.map((v, k) => v - (d.hand?.[k] ?? v));   // （丸めない：書き出しが、武器を手へ動かす計算と同じ値になる）
+    it.hand = h.slice();
+  }
+}
+/** 新しい武器を箱から作る：今の右手の所に、握りと本体と銃身と銃口。パーツエディタで開く */
+function newWeapon() {
+  if (busy()) return;
+  const h = handNow() ?? [-0.59, 1.6, 0], r = (w, hh) => [[-w / 2, -hh / 2], [w / 2, -hh / 2], [w / 2, hh / 2], [-w / 2, hh / 2]], at = (x, y, z) => [round(h[0] + x, 4), round(h[1] + y, 4), round(h[2] + z, 4)];
+  const def = { ...freeDef(freeId(), '新しい武器', [
+    // 腕を下ろした姿勢で、銃は下（−y）を向く（腕を前へ上げると前を向く。最初から入っている 1 式と同じ向き）。握りは手から前（+z）へ出て、本体につながる
+    { name: '銃・握り', pts: r(0.04, 0.05), depth: 0.12, bevel: 0.008, pos: at(0, 0, 0.055), color: '#23262c' },
+    { name: '銃・本体', pts: r(0.07, 0.34), depth: 0.09, bevel: 0.012, pos: at(0, -0.12, 0.11), color: '#6b727d' },
+    { name: '銃身', kind: 'lathe', pts: [[0.016, -0.17], [0.016, 0.17]], segments: 12, pos: at(0, -0.44, 0.11), color: '#23262c' },
+    { name: 'マズル', kind: 'lathe', pts: [[0.022, -0.02], [0.022, 0.02]], segments: 12, pos: at(0, -0.62, 0.11), color: '#23262c' },
+  ], { tab: 'weapon', from: 'new' }), cat: WEAPON_CAT, hand: h.map(v => round(v, 4)) };
+  keepUser(def); showTab('weapon');
+  selected = -1; gizmo.detach();
+  PE.startDef(def);
+}
+
 // ---- 艦（戦艦・強襲艦）：機体エディタの部品でできた、骨や関節の無い 1 つの形。「自由な機体」として持ち、用途（def.role）が艦の種類 ----
 /** 今の機体が艦なら、その種類（'battleship' / 'assault'）。そうでなければ '' */
 function shipKind() { const ds = items.filter(it => !it.tmp).map(it => byId[it.part]); return ds.length === 1 && ds[0]?.free && VEHICLES[ds[0].role] ? ds[0].role : ''; }
@@ -1623,6 +1678,13 @@ function renderE1(box) {
 }
 
 // ---- 起動 ----
+// 最初から入っている武器（陣営ごとの強襲の 1 式）。保存した機体が持っていることがあるので、機体を読む前に目次へ入れる
+for (const [f, id, name] of [['a', 'w·a', '連合の強襲の 1 式（ライフルとバズーカ）'], ['b', 'w·b', 'GIO の強襲の 1 式（ライフルとバズーカ）']]) {
+  try {
+    const w = await (await fetch(`./samples/weapons-${f}.json`)).json();
+    registerUser({ ...freeDef(id, name, w.parts, { tab: 'weapon', from: 'sample' }), cat: WEAPON_CAT, user: false, hand: w.hand_r });
+  } catch (e) { console.warn('weapons', f, e); }
+}
 loadUser();
 fillNewPartSel(); newPartReady();
 renderCatalog();

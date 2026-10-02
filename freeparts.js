@@ -87,6 +87,10 @@ export const atRest = it => it.mov.every(v => Math.abs(v) < 1e-9) && it.rot.ever
 export function freeParts(def, it, shapes) {
   const tracked = isTrackedSet(def.pieces);
   if (atRest(it)) return def.pieces.map(partOf);
+  // 動かしただけ（回していない・拡大していない）：元の部品の並びのまま、位置だけ足す（手に持たせた武器。形の作り方・遠くの形の簡略化が元のまま残る）。
+  // ミラーの部品は x = 0 で折り返すので、左右に動かしたときは三角形で渡す
+  if (it.rot.every(v => Math.abs(v) < 1e-9) && it.scal.every(v => Math.abs(v - 1) < 1e-9) && !(Math.abs(it.mov[0]) > 1e-9 && def.pieces.some(pc => pc.mirror)))
+    return def.pieces.map(pc => { const p = partOf(pc); p.pos = p.pos.map((v, k) => v + it.mov[k]); return p; });
   const R = rotMatrix(it.rot), e = new THREE.Euler().setFromRotationMatrix(R, 'XYZ');
   return shapes(def).map(({ pc, shape }) => {
     const { tf, pos, pts, planes, side, top, ...rest } = pc;
