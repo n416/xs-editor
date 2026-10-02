@@ -1,5 +1,5 @@
 {
- "note": "マシンガン（手持ちの武器のモデルの元データ）。tools/weapons/machine_gun.mjs が作る（直すときはそちらを直して作り直す）。腕を下ろした姿勢で下を向く。手の中心が原点。寸法は [独自]",
+ "note": "マシンガン（GIO）（手持ちの武器のモデルの元データ）。tools/weapons/machine_gun.mjs が作る（直すときはそちらを直して作り直す）。腕を下ろした姿勢で下を向く。手の中心が原点。寸法は [独自]",
  "name": "マシンガン（GIO）",
  "shape": "machine_gun",
  "faction": "b",
