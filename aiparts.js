@@ -42,7 +42,7 @@ function closingBrace(t, start) {
 }
 export function parseAiText(text) {
   // the request this screen copies (or the spec itself) pasted back here instead of the AI's answer
-  if (/人型ロボット（XS）の機体データを作ってください|# XS部品エディタ：AI向けの機体データ仕様/.test(text))
+  if (/人型ロボット（XS）の(機体|パーツの)データを作ってください|# XS部品エディタ：AI向けの(機体|パーツ)データ仕様/.test(text))
     throw new AiTextError('貼り付けたのは、AI に渡す「頼み方」です。この文章を ChatGPT などの AI に貼り付けて送り、AI が返してきた答え（JSON）をここに貼ってください。');
   const blocks = [...text.matchAll(/```[a-zA-Z]*\s*\n?([\s\S]*?)(?:```|$)/g)].map(m => m[1]).filter(b => /[{[]/.test(b));
   const bare = text.replace(/```[a-zA-Z]*/g, '');
@@ -119,7 +119,7 @@ export function checkAiParts(list) {
 
 /** The model in the spec's format, for the AI to fix (parts: the engine's document). Values equal to the defaults are
  *  left out and numbers rounded, one part per line. */
-export function modelJson(parts, ai = '') {
+export function modelJson(parts, ai = '', format = 'xs-editor-model') {
   const round = v => (typeof v === 'number' ? Math.round(v * 1e4) / 1e4 : Array.isArray(v) ? v.map(round) : v);
   const lines = parts.filter(p => p.kind !== 'mesh' && p.kind !== 'tri').map(d => {
     const out = { name: d.name };
@@ -130,6 +130,6 @@ export function modelJson(parts, ai = '') {
     }
     return '    ' + JSON.stringify(out);
   });
-  const head = { format: 'xs-editor-model', version: 1, ai: ai || undefined };
+  const head = { format, version: 1, ai: ai || undefined };
   return JSON.stringify(head, null, 2).replace(/\n}$/, `,\n  "parts": [\n${lines.join(',\n')}\n  ]\n}`);
 }

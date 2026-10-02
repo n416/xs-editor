@@ -1303,6 +1303,17 @@ export const XS = {
       })].join('\n');
     return { ok: !floating.length && !bad.length, connOk: !floating.length, jointOk: !bad.length, conn, joint };
   },
+  /** the connection check alone, as text (a part on its own has no bones to check). word: what a piece is called */
+  connect: (word = '部品') => {
+    if (!parts.some(p => p.op === 'add' && !p.blockout)) return { ok: false, text: `${word}がありません。` };
+    const label = it => getPart(it.id)?.name ?? '?';
+    const { total, floating } = checkConnections();
+    return { ok: !floating.length, text: !floating.length ? `✓ すべての${word}（${total} 個）がつながっています。`
+      : [`つながっていない${word}が ${floating.length} グループあります。ほかの${word}に 0.01 くらい重ねてください。`, ...floating.map(f => {
+        const names = [...new Set(f.members.map(label))];
+        return `・${names.slice(0, 3).join('、')}${names.length > 3 ? ` ほか${names.length - 3}` : ''} — ${f.gap === undefined ? '離れています' : `いちばん大きいかたまりまで ${f.gap.toFixed(3)}（近い${word}: ${label(f.near)}）`}`;
+      })].join('\n') };
+  },
   /** moves the floating parts of the loaded model onto its body (the shortest way) → how many parts were moved; doc() gives the result */
   attach: () => { const n = attachFloating(); for (const p of parts) p.pos = p.proxy.position.toArray(); return n; },
   /** the poses and the game's moves a look can show */

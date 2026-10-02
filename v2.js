@@ -21,6 +21,7 @@ import { PARTS as HEAD_RAW } from './xsasm-parts.js';
 import { HP, HEAD, FREE, isHead, rawHead, asHead, halfOf, registerUser, unregisterUser, headShell as headShellIn, headPlace as headPlaceIn, unitParts, registerUnit } from './unitparts.js';
 import { XS } from './xsengine.js';
 import { initAi } from './v2-ai.js';
+import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
@@ -1354,8 +1355,101 @@ function showRigRequest() {
   draw(false);
 }
 // ---- AI で作る（v2-ai.js）：AI の機体は、機体エディタの部品の並びなので「自由な機体」として開く ----
+// パーツ 1 つを AI に作ってもらう：部位（ひな形 = その部位の最初のパーツ）ごとの頼み方は airecipes.js。
+// AI が作るのは装甲と中身だけ。関節の節・回転の中心・蝶番の軸など、動きを決めるブロックはひな形から残す（keptPieces）。
+const ROLE_HEX = { main: '#c3c9d2', sub: '#6b727d', frame: '#23262c', accent: '#b8483e', glow: '#ffd257' };
+const nearRole = hex => {
+  const c = new THREE.Color(/^#[0-9a-f]{6}$/i.test(hex ?? '') ? hex : ROLE_HEX.main);
+  let best = 'main', d = Infinity;
+  for (const [k, h] of Object.entries(ROLE_HEX)) { const o = new THREE.Color(h), e = (c.r - o.r) ** 2 + (c.g - o.g) ** 2 + (c.b - o.b) ** 2; if (e < d) { d = e; best = k; } }
+  return best;
+};
+const AI_GEOM = ['kind', 'op', 'pts', 'depth', 'bevel', 'bevelSegs', 'corner', 'cornerSegs', 'taper', 'tiltY', 'ridge', 'segments', 'side', 'top', 'planes', 'mirror', 'arrayCount', 'arrayStep'];
+/** AI の答えの部品（機体エディタの部品の書き方）→ このパーツのブロック。付く骨などは、ひな形の「AI が作る所」のブロックから引き継ぐ */
+function aiBlocks(list, tpl) {
+  const rc = PART_RECIPES[tpl.id] ?? {}, kept = keptPieces(tpl), made = tpl.pieces.filter(pc => !kept.includes(pc));
+  const ref = made[0] ?? tpl.pieces[0];
+  return list.map(p => {
+    const b = blockOf(p), out = { name: b.name, pos: [0, 0, 0], tf: b.tf };
+    for (const k of AI_GEOM) if (b[k] !== undefined && b[k] !== null) out[k] = b[k];
+    for (const k of ['bone', 'pivot', 'metal', 'rough']) if (ref?.[k] !== undefined) out[k] = structuredClone(ref[k]);
+    if (rc.hinge && ref?.hinge && (b.op ?? 'add') === 'add') out.hinge = structuredClone(ref.hinge);
+    const role = nearRole(p.color); out.color = ROLE_HEX[role];
+    if (role === 'glow') { out.glow = true; out.metal = 0; out.rough = 0.3; }
+    return out;
+  });
+}
+/** ひな形 tpl に、AI のブロックを入れたパーツ（目次には入れない） */
+const aiPartDef = (list, tpl) => ({ ...structuredClone(tpl), id: '·ai·peek', user: true, pieces: [...aiBlocks(list, tpl), ...structuredClone(keptPieces(tpl))] });
+const boxOfPieces = pcs => { const b = new THREE.Box3(); for (const pc of pcs) if (drawn(pc)) b.union(blockBox(pc)); return b; };
+const r3 = v => (Math.round(v * 1000) / 1000).toString();
+const rangeText = b => `x ${r3(b.min.x)}〜${r3(b.max.x)}、y ${r3(b.min.y)}〜${r3(b.max.y)}、z ${r3(b.min.z)}〜${r3(b.max.z)}`;
+function aiPartInfo(id) {
+  const tpl = byId[id], kept = keptPieces(tpl), made = tpl.pieces.filter(pc => !kept.includes(pc));
+  const box = boxOfPieces(made.length ? made : tpl.pieces);
+  let pair = false; try { pair = !isHead(id) && !!placeOf(tpl).pair; } catch { /* placed by its own rule */ }
+  const size = box.getSize(new THREE.Vector3());
+  const text = [
+    `部位: ${tpl.cat}`,
+    `収める範囲（パーツの中の座標。ここから大きくはみ出さない）: ${rangeText(box)}（幅 ${r3(size.x)} × 高さ ${r3(size.y)} × 奥行き ${r3(size.z)}）`,
+    pair ? '左右: このパーツは左右に 1 つずつ付きます。機体の左（+X 側）に付くものを 1 つだけ作ってください（右は自動で反転します）。+X が外側、−X が体の中心の側です。`mirror` は使わないでください。'
+      : '左右: このパーツは体の真ん中に 1 つ付きます。x = 0 が体の中心です。左右対称に作ってください（片側だけ書いて `mirror: true` にしてもかまいません）。',
+    recipeText(tpl.id),
+    kept.length ? `エディタが自動で付けるブロック（あなたは作らないでください。これに重ねてつなぎます）:\n${kept.filter(drawn).map(pc => `- ${pc.name}（${rangeText(blockBox(pc))}）`).join('\n')}` : '',
+    `今のカタログの同じ部位のパーツ「${tpl.name}」の、あなたが作る所に当たるブロック（参考。名前と範囲）:\n${made.filter(drawn).slice(0, 30).map(pc => `- ${pc.name}（${rangeText(blockBox(pc))}）`).join('\n')}`,
+  ].filter(Boolean).join('\n\n');
+  return { cat: tpl.cat, text, box: { lo: box.min.toArray(), hi: box.max.toArray() }, pair };
+}
 const AI = initAi({
   busy,
+  partSlots: () => [['頭', HEAD], ['上半身', UPPER], ['背中', BACK], ['腕', ARM], ['下半身', LOWER], ['脚', LEG]].flatMap(([group, list]) =>
+    [...new Set(list.map(d => d.cat))].map(cat => ({ group, cat, id: list.find(d => d.cat === cat && !d.user).id })).filter(s => canAsk(s.id))),
+  partInfo: aiPartInfo,
+  /** AI のブロックの形（パーツの中の座標）。ひな形から残すブロックも一緒に（暗く） */
+  partView: (list, id) => {
+    const def = aiPartDef(list, byId[id]), n = list.length;
+    const out = def.pieces.map((pc, i) => (drawn(pc) ? { geo: geoOf(def, pc).clone().translate(...(pc.pos ?? [0, 0, 0])), color: i < n ? pc.color : '#3a3f48', metal: pc.metal, rough: pc.rough, glow: i < n && !!pc.glow } : null)).filter(Boolean);
+    disposeStale();
+    return out;
+  },
+  /** AI のブロックを確かめる：つながっているか、収める範囲に入っているか、多すぎないか */
+  partCheck: (list, id) => {
+    const tpl = byId[id], def = aiPartDef(list, tpl), info = aiPartInfo(id), lines = [];
+    let ok = true;
+    const adds = list.filter(p => (p.op ?? 'add') === 'add').length;
+    lines.push(`ブロック ${list.length} 個（足す ${adds}・引く ${list.length - adds}）`);
+    if (!adds) { ok = false; lines.push('✗ 足すブロックがありません。'); }
+    // つながり：AI のブロックと、ひな形から残すブロックを合わせて調べる（パーツの中の座標のまま）
+    XS.load({ parts: def.pieces.map(pc => { const { tf, pos, ...rest } = pc; const q = tf ? { pos: (tf.p ?? [0, 0, 0]).map((v, k) => v + (pos?.[k] ?? 0)), rot: (tf.r ?? [0, 0, 0]).map(v => v * Math.PI / 180), scl: tf.s ?? [1, 1, 1] } : { pos: pos ?? [0, 0, 0] }; return { ...rest, ...q, bone: 'torso', pivot: 'none', mirror: !!pc.mirror }; }), role: '' });
+    const c = XS.connect('ブロック'); if (!c.ok) ok = false; lines.push(c.text);
+    // 範囲：ひな形の同じ所の箱と比べる
+    const box = new THREE.Box3();
+    for (const pc of def.pieces.slice(0, list.length)) if (drawn(pc)) for (const g of instGeosOf(def, pc)) { g.computeBoundingBox(); box.union(g.boundingBox); }
+    disposeStale();
+    if (!box.isEmpty()) {
+      const lo = info.box.lo, hi = info.box.hi, axis = ['x', 'y', 'z'], over = [];
+      for (let k = 0; k < 3; k++) {
+        const tol = Math.max(0.03, (hi[k] - lo[k]) * 0.25), a = box.min.getComponent(k), b = box.max.getComponent(k);
+        if (a < lo[k] - tol) over.push(`${axis[k]} の小さい側へ ${r3(lo[k] - a)}`);
+        if (b > hi[k] + tol) over.push(`${axis[k]} の大きい側へ ${r3(b - hi[k])}`);
+      }
+      const size = box.getSize(new THREE.Vector3()), want = new THREE.Vector3(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
+      if (over.length) { ok = false; lines.push(`✗ 収める範囲からはみ出しています：${over.join('、')}。今の範囲は ${rangeText(box)}、収める範囲は x ${r3(lo[0])}〜${r3(hi[0])}、y ${r3(lo[1])}〜${r3(hi[1])}、z ${r3(lo[2])}〜${r3(hi[2])}。`); }
+      else if (size.x < want.x * 0.4 && size.y < want.y * 0.4 && size.z < want.z * 0.4) { ok = false; lines.push(`✗ 小さすぎます：今の大きさは 幅 ${r3(size.x)} × 高さ ${r3(size.y)} × 奥行き ${r3(size.z)}、収める範囲は 幅 ${r3(want.x)} × 高さ ${r3(want.y)} × 奥行き ${r3(want.z)}。`); }
+      else lines.push(`✓ 収める範囲に入っています（今の範囲：${rangeText(box)}）。`);
+    }
+    return { ok, text: lines.join('\n') };
+  },
+  /** AI のブロックを、自分のパーツ（★）としてカタログに入れる。機体は変えない */
+  takePart: (list, name, id, ai) => {
+    const tpl = byId[id], def = makeUserCopy(tpl, true);
+    def.pieces = [...aiBlocks(list, tpl), ...structuredClone(keptPieces(tpl))];
+    def.name = name || `AI の${tpl.cat}`; def.from = 'ai'; if (ai) def.ai = ai;
+    userParts[def.id] = def; persistUser(); renderCatalog();
+    const t = halfOf(def.id); if (TABS.some(x => x[0] === t)) showTab(t);
+    note(`「${def.name}」をカタログの ${tpl.cat} に ★ で入れました。押すと機体に付きます（「直す」でパーツエディタ）`);
+    return def;
+  },
   take: (list, name, role, ai) => {
     if (!okToLeave('AI が作った機体にします')) return false;
     const def = openE1(structuredClone(list), name || 'AI で作った機体', role);
@@ -1364,6 +1458,8 @@ const AI = initAi({
   },
 });
 $('#bAi').onclick = () => AI.open();
+// 部位を選んであれば、その部位のパーツを作る画面として開く（AI に頼めない部位なら、画面の中で選び直す）
+$('#bAiPart').onclick = () => { const id = $('#newPartSel').value; AI.openPart(id && canAsk(id) ? id : ''); };
 /** 機体エディタ（1）の部品の並びを、機体として開く */
 function openE1(parts, name, role = '') {
   const def = freeDef(freeId(), name || '機体エディタ 1 の機体', parts, { role, from: 'e1' });
