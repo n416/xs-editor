@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { Store, SAVE_PRE, USER_KEY } from './v2-store.js';
 import { LOWER, lowerById, SAMPLES, placementOf, randomLower } from './parts/lower/index.js';
 import { UPPER, upperById, UPPER_SAMPLES, placementOfUpper, randomUpper, SHOULDER_AT } from './parts/upper/index.js';
 import { pipeDef, randomPipeGen } from './parts/upper/pipegen.js';
@@ -974,10 +975,10 @@ $('#bSample').onclick = () => {
 
 // ---- 自分のパーツ（形を直した写し・新しく作ったパーツ）。このブラウザに残し、カタログの同じ部位に ★ 付きで並ぶ ----
 // def = カタログのパーツと同じ形に { user: true, half, base } を足したもの。id は u· で始まる（頭は h·u·）
-const USER_KEY = 'xsv2.userparts';
+// 置き場は IndexedDB（v2-store.js の 'userparts'。前は localStorage の xsv2.userparts：艦 1 隻で 0.66 MB あり、数隻で入らなくなった）
 const userParts = {};
-function persistUser() { try { localStorage.setItem(USER_KEY, JSON.stringify(userParts)); } catch { note('自分のパーツを保存できませんでした（ブラウザの保存の容量）', true); } }
-function loadUser() { try { for (const def of Object.values(JSON.parse(localStorage.getItem(USER_KEY) ?? '{}'))) if (def?.id && Array.isArray(def.pieces)) { registerUser(def); userParts[def.id] = def; } } catch { /* storage blocked */ } }
+function persistUser() { Store.set(USER_KEY, JSON.stringify(userParts)).then(ok => { if (!ok) note('自分のパーツを保存できませんでした（ブラウザの保存の容量）', true); }); }
+function loadUser() { try { for (const def of Object.values(JSON.parse(Store.get(USER_KEY) ?? '{}'))) if (def?.id && Array.isArray(def.pieces)) { registerUser(def); userParts[def.id] = def; } } catch { /* storage blocked */ } }
 /** パーツ src の写しを、自分のパーツとして目次に入れる（fresh：新しく作るときのひな形として） */
 function makeUserCopy(src, fresh = false) {
   if (src.free) {   // 自由な部品（最初から入っている武器など）の写し：自由な部品のまま
@@ -1202,15 +1203,14 @@ $('#bGlb').onclick = async () => {
 $('#paintTeam').onchange = e => { paint.team = e.target.checked; save(); };
 
 // ---- 機体の保存と読み込み ----
-// ・保存：名前を付けて、このブラウザに何体でも（localStorage の xsv2.saves：{ id: { name, at, thumb, doc } }。doc は機体の JSON：置いたパーツ・寸法の調整・塗り・使っている自分のパーツ）
+// ・保存：名前を付けて、このブラウザに何体でも（IndexedDB。v2-store.js の 'save:<id>' に 1 体ずつ { name, at, thumb, doc }。前は localStorage の xsv2.saves に全部まとめて入れていて、5 MB ほどで入らなくなった。doc は機体の JSON：置いたパーツ・寸法の調整・塗り・使っている自分のパーツ）
 // ・開く：保存した機体の一覧（絵つき）から。ファイル（.json）に保存・ファイルから開く・画面に落として開く
 // ・今の機体は別に自動で残る（SAVE_KEY。閉じても続きから）。そこに名前・保存先・保存したときの形（savedHash）も入れて、保存してから変えたかどうか（●）を出す
-const SAVES_KEY = 'xsv2.saves';
 const strHash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + '.' + s.length; };
 const docHash = () => strHash(JSON.stringify({ items: kept(), adj, paint }));
 const dirty = () => docHash() !== savedHash;
-const readSaves = () => { try { return JSON.parse(localStorage.getItem(SAVES_KEY) ?? '{}') ?? {}; } catch { return {}; } };
-const writeSaves = s => { try { localStorage.setItem(SAVES_KEY, JSON.stringify(s)); return true; } catch { return false; } };
+/** 保存した機体ぜんぶ { id: { name, at, thumb, doc } }（読むたびに新しい写し。壊れた 1 体は飛ばす） */
+const readSaves = () => { const s = {}; for (const k of Store.keys(SAVE_PRE)) { try { s[k.slice(SAVE_PRE.length)] = JSON.parse(Store.get(k)); } catch { /* 読めない 1 体 */ } } return s; };
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 function showUnitName() {
   const el = $('#unitName'), d = dirty();
@@ -1233,14 +1233,13 @@ function unitThumb() {
   return cv.toDataURL('image/jpeg', 0.82);
 }
 /** 今の機体を保存する。id を渡すとそこへ上書き、無ければ新しく */
-function saveUnit(name, id = '') {
+async function saveUnit(name, id = '') {
   if (busy()) return false;
-  const s = readSaves(), prevName = unitName;
+  const prevName = unitName, hash = docHash();   // （保存するのは今の形。書き終わるのを待つ間に変えた分は「保存していない変更」のまま）
   id ||= 's' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
   unitName = name.trim() || '名前なし';
-  s[id] = { name: unitName, at: new Date().toISOString(), thumb: unitThumb(), doc: unitDoc() };
-  if (!writeSaves(s)) { unitName = prevName; note('保存できませんでした：このブラウザの保存の容量がいっぱいです。「開く」→「ファイルに保存」で、ファイルに残してください', true); return false; }
-  saveId = id; savedHash = docHash(); persist(); showUnitName();
+  if (!await Store.set(SAVE_PRE + id, JSON.stringify({ name: unitName, at: new Date().toISOString(), thumb: unitThumb(), doc: unitDoc() }))) { unitName = prevName; note('保存できませんでした：このブラウザの保存の容量がいっぱいです。「開く」→「ファイルに保存」で、ファイルに残してください', true); return false; }
+  saveId = id; savedHash = hash; persist(); showUnitName();
   note(`「${unitName}」を保存しました`);
   return true;
 }
@@ -1291,16 +1290,17 @@ function renderSaves() {
       <button id="svOpenFile" title="ファイル（.json）から機体を開く。画面にファイルを落としても開く">ファイルから開く</button>
       <button id="svGlb" title="Blender や 3D 生成 AI で作った .glb を読み込んで、機体にする（骨に合わせて曲がるスキン。部位ごとに切り分ける）">GLB を読み込む</button>
       <button id="svRig" title="パソコンの AI（Claude Code など）に Blender で骨を付けてもらう頼み方を出す">AI に骨を付けてもらう</button></div>
-    <div class="hint" style="margin-top:4px">保存はこのブラウザの中に残ります（ブラウザのデータを消すと無くなる）。大事な機体は「ファイルに保存」でも残してください</div>
+    <div class="hint" style="margin-top:4px" id="svRoom">保存はこのブラウザの中に残ります（ブラウザのデータを消すと無くなる）。大事な機体は「ファイルに保存」でも残してください</div>
     <h2>保存した機体 <span class="hint">${ids.length} 体</span></h2>
     ${ids.length ? `<div class="svcells">${ids.map(id => `<div class="svcell ${id === saveId ? 'cur' : ''}" data-id="${id}"><img src="${s[id].thumb ?? ''}" alt="" title="開く"><div class="nm" title="${esc(s[id].name)}">${esc(s[id].name)}</div><div class="hint">${day(s[id].at)}${id === saveId ? '・今の機体' : ''}</div>
       <div class="bar"><button class="small acc" data-act="open">開く</button><button class="small" data-act="file" title="この機体を .json のファイルにする">ファイルへ</button><button class="small" data-act="del">消す</button></div></div>`).join('')}</div>` : '<div class="hint">まだありません。上の「名前を付けて保存」で、今の機体がここに並びます</div>'}`;
   renderE1(box);
+  Store.room().then(r => { const el = $('#svRoom'); if (r?.quota && el) el.textContent += `　今このサイトで使っている量：${(r.used / 1048576).toFixed(1)} MB（このブラウザでは ${r.quota > 1073741824 ? `${(r.quota / 1073741824).toFixed(0)} GB` : `${Math.round(r.quota / 1048576)} MB`} くらいまで入る）`; });
   const nameNow = () => $('#svName').value.trim();
   const needName = () => { if (nameNow()) return true; note('機体の名前を入れてください', true); $('#svName').focus(); return false; };
   $('#svClose').onclick = () => { $('#saveBox').hidden = true; };
-  $('#svNew').onclick = () => { if (needName() && saveUnit(nameNow())) renderSaves(); };
-  if ($('#svOver')) $('#svOver').onclick = () => { if (needName() && saveUnit(nameNow(), saveId)) renderSaves(); };
+  $('#svNew').onclick = async () => { if (needName() && await saveUnit(nameNow())) renderSaves(); };
+  if ($('#svOver')) $('#svOver').onclick = async () => { if (needName() && await saveUnit(nameNow(), saveId)) renderSaves(); };
   $('#svFile').onclick = () => { if (nameNow()) { unitName = nameNow(); persist(); showUnitName(); } saveFile(); };
   $('#svOpenFile').onclick = () => $('#unitFile').click();
   $('#svGlb').onclick = () => $('#unitFile').click();
@@ -1316,17 +1316,18 @@ function renderSaves() {
     cell.querySelector('img').onclick = open;
     cell.querySelector('[data-act=open]').onclick = open;
     cell.querySelector('[data-act=file]').onclick = () => saveFile({ ...s[id].doc, name: s[id].name }, `${safeName(s[id].name)}.xsunit.json`);
-    cell.querySelector('[data-act=del]').onclick = () => {
+    cell.querySelector('[data-act=del]').onclick = async () => {
       if (!confirm(`保存した機体「${s[id].name}」を消します。元に戻せません。${id === saveId ? '\n（今開いている機体そのものは画面に残りますが、保存はなくなります）' : ''}`)) return;
-      const t = readSaves(); delete t[id]; writeSaves(t);
+      if (!await Store.del(SAVE_PRE + id)) { note('消せませんでした', true); return; }
       if (id === saveId) { saveId = ''; savedHash = ''; persist(); showUnitName(); }
       renderSaves();
     };
   }
 }
-const openSaves = () => { if (busy()) return; renderSaves(); $('#saveBox').hidden = false; };
+// （開くたびに置き場を読み直す：ほかのタブで保存した機体も並ぶ）
+const openSaves = async () => { if (busy()) return; await Store.reload(); renderSaves(); $('#saveBox').hidden = false; };
 $('#bOpen').onclick = openSaves;
-$('#bSave').onclick = () => { if (busy()) return; const s = readSaves(); if (saveId && s[saveId]) saveUnit(unitName || s[saveId].name, saveId); else { openSaves(); $('#svName').focus(); note('名前を付けて保存してください'); } };
+$('#bSave').onclick = async () => { if (busy()) return; const cur = saveId && Store.get(SAVE_PRE + saveId); if (cur) await saveUnit(unitName || JSON.parse(cur).name, saveId); else { await openSaves(); $('#svName').focus(); note('名前を付けて保存してください'); } };
 $('#saveBox').addEventListener('pointerdown', e => { if (e.target === $('#saveBox')) $('#saveBox').hidden = true; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#saveBox').hidden) $('#saveBox').hidden = true; });
 $('#unitFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) openFile(f); };
@@ -1685,15 +1686,20 @@ for (const [f, id, name] of [['a', 'w·a', '連合の強襲の 1 式（ライフ
     registerUser({ ...freeDef(id, name, w.parts, { tab: 'weapon', from: 'sample' }), cat: WEAPON_CAT, user: false, hand: w.hand_r });
   } catch (e) { console.warn('weapons', f, e); }
 }
+// 置き場（IndexedDB）を開く。前の置き場（localStorage）に残っていた機体・パーツは、ここで移る
+const stored = await Store.open();
 loadUser();
 fillNewPartSel(); newPartReady();
 renderCatalog();
 showTab(tab);
 if (!load()) items = tidy(structuredClone(Object.values(SAMPLES)[0]));
-if (!items.some(it => halfOf(it.part) === 'head')) items.push(...tidy(structuredClone(Object.values(HEAD_SAMPLES)[0])));   // 頭が無ければ見本の頭を足す
-if (!items.some(it => halfOf(it.part) === 'upper')) items.push(...tidy(adjusted(structuredClone(Object.values(UPPER_SAMPLES)[0]))));   // 上半身が無ければ標準の上半身を足す
-if (!items.some(it => halfOf(it.part) === 'arm')) items.push(...tidy(adjusted(structuredClone(Object.values(ARM_SAMPLES)[0]))));   // 腕・脚も同じ
-if (!items.some(it => halfOf(it.part) === 'leg')) items.push(...tidy(structuredClone(Object.values(LEG_SAMPLES)[0])));
+// （全身が 1 つの形の機体＝艦・機体エディタ 1 の機体・AI の機体には足さない。足すと、開き直すたびに艦の中へ XS の体が入り、艦でなくなっていた）
+if (!items.some(it => byId[it.part]?.free && !byId[it.part].tab)) {
+  if (!items.some(it => halfOf(it.part) === 'head')) items.push(...tidy(structuredClone(Object.values(HEAD_SAMPLES)[0])));   // 頭が無ければ見本の頭を足す
+  if (!items.some(it => halfOf(it.part) === 'upper')) items.push(...tidy(adjusted(structuredClone(Object.values(UPPER_SAMPLES)[0]))));   // 上半身が無ければ標準の上半身を足す
+  if (!items.some(it => halfOf(it.part) === 'arm')) items.push(...tidy(adjusted(structuredClone(Object.values(ARM_SAMPLES)[0]))));   // 腕・脚も同じ
+  if (!items.some(it => halfOf(it.part) === 'leg')) items.push(...tidy(structuredClone(Object.values(LEG_SAMPLES)[0])));
+}
 showAdj();
 showPaint();
 setView('threeq');
@@ -1702,4 +1708,4 @@ save();
 showUnitName();
 requestAnimationFrame(tick);
 // 確かめるための出口（画面の外から、置いた部品と視点を見る）
-window.__asm = { ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, userParts, byId };
+window.__asm = { ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, userParts, byId };

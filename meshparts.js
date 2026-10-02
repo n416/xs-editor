@@ -36,6 +36,19 @@ async function dbGet(store, key) {
   const db = await meshDb();
   return new Promise((ok, ng) => { const r = db.transaction(store).objectStore(store).get(key); r.onsuccess = () => ok(r.result); r.onerror = () => ng(r.error); });
 }
+/** 形のパック（samples/*.xsmesh：取り込んだ形を、エディタがしまっている形のまま書き出したもの）を、このブラウザの置き場に入れる（1 回だけ）。
+ *  中身は 'XSMP'・版・ヘッダの長さ・JSON のヘッダ・配列とテクスチャ */
+export async function installPack(url, meshId) {
+  if (await dbGet('mesh', meshId)) return;
+  const buf = await (await fetch(url)).arrayBuffer(), dv = new DataView(buf);
+  if (dv.getUint32(0, true) !== 0x504d5358) throw new Error('形のファイルが読めません');
+  const hl = dv.getUint32(8, true), h = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 12, hl))), base = 12 + hl;
+  const T = { Float32Array, Uint32Array, Uint16Array }, rec = {};
+  for (const [k, a] of Object.entries(h.arrays)) rec[k] = new T[a.type](buf.slice(base + a.offset, base + a.offset + a.length * T[a.type].BYTES_PER_ELEMENT));
+  const texId = meshId + '-tex';
+  await dbPut('tex', texId, new Blob([new Uint8Array(buf, base + h.tex.offset, h.tex.bytes)], { type: h.tex.type }));
+  await dbPut('mesh', meshId, { ...rec, texId });
+}
 const meshGeo = (m, index) => {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(m.pos, 3));
