@@ -19,7 +19,7 @@ import { rotMatrix } from './xsasm.js';
 import { mirrorOf, randomHead, placementsFor, headDims } from './xsasm-random.js';
 import { PARTS as HEAD_RAW } from './xsasm-parts.js';
 import { HP, HEAD, FREE, isHead, rawHead, asHead, halfOf, registerUser, unregisterUser, headShell as headShellIn, headPlace as headPlaceIn, unitParts, registerUnit } from './unitparts.js';
-import { XS } from './xsengine.js';
+import { XS, VEHICLES, UNIT_M, shipSeat, gameToEditor } from './xsengine.js';
 import { initAi } from './v2-ai.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
@@ -87,10 +87,12 @@ scene.background = new THREE.Color(0x14161a);
 const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
 const orbit = new OrbitControls(camera, canvas);
 const AT = new THREE.Vector3(0, 1.9, 0);
+let shipNow = '', viewDist = 5.6, kindSig = 'xs', XS_GAME_IDS = null;   // 艦を開いている間：その種類（battleship / assault）と、向きのボタンの距離
 scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2d33, 0.9));
 const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(1.2, 2.6, 1.6); scene.add(key);
 const fill = new THREE.DirectionalLight(0x8fb3ff, 0.5); fill.position.set(-1.5, 1.2, -1); scene.add(fill);
-scene.add(new THREE.GridHelper(2, 20, 0x2c3038, 0x22252b));
+const grid = new THREE.GridHelper(2, 20, 0x2c3038, 0x22252b); scene.add(grid);
+const guideGroup = new THREE.Group(); scene.add(guideGroup);   // 艦のガイド（ゲームで決まっている大きさと場所。書き出さない）
 const root = new THREE.Group(); scene.add(root);
 const gizmo = new TransformControls(camera, canvas);
 gizmo.setSize(0.8);
@@ -384,6 +386,7 @@ function placeLegJoints() {
   }
   root.position.y = adj.thigh + adj.shin;
   // 視点の中心も、体の真ん中に付いていく
+  if (shipNow) return;   // （艦は、船体の中心を見る）
   const y = 1.9 + (adj.thigh + adj.shin) / 2;
   if (Math.abs(AT.y - y) > 1e-6) { camera.position.y += y - AT.y; AT.y = y; orbit.target.copy(AT); orbit.update(); }
 }
@@ -537,7 +540,7 @@ function moveFrame(now) {
 // ---- 向き ----
 const VIEWS = { front: [0, 0, 1], side: [1, 0, 0], threeq: [0.75, 0.35, 1], top: [0, 1, 0.001], back: [-0.5, 0.25, -1], low: [0.6, -0.55, 1] };
 let focus = null;   // パーツエディタを開いている間：{ c: 見る中心, dist: 距離 }（向きのボタンが、機体ではなくパーツを映す）
-function setView(k) { const d = new THREE.Vector3(...VIEWS[k]).normalize(), c = focus?.c ?? AT; camera.position.copy(c).addScaledVector(d, focus?.dist ?? 5.6); orbit.target.copy(c); orbit.update(); }
+function setView(k) { const d = new THREE.Vector3(...VIEWS[k]).normalize(), c = focus?.c ?? AT; camera.position.copy(c).addScaledVector(d, focus?.dist ?? viewDist); orbit.target.copy(c); orbit.update(); }
 document.querySelectorAll('[data-view]').forEach(b => { b.onclick = () => setView(b.dataset.view); });
 
 /** 頭の殻（部位「頭蓋」）の置いたパーツ。無ければ null */
@@ -547,6 +550,7 @@ const headPlace = () => headPlaceIn(items, adj);
 function placeHead() { const { k, at } = headPlace(); headHolder.scale.setScalar(k); headHolder.position.set(...at); }
 function rebuild() {
   endFlash();
+  applyKind();
   for (const g of groups) { g.parent?.remove(g); for (const e of g.userData.extra.values()) e.parent?.remove(e); }
   groups = items.map((it, i) => { const g = groupOf(it, i); holderOf(it).add(g); for (const [b, e] of g.userData.extra) holderFor(b, it).add(e); return g; });
   placeArmJoints();
@@ -1097,6 +1101,23 @@ const GAME_LIMIT = [30000, 5000, 800];
 $('#bGame').onclick = async () => {
   if (busy()) return;
   const id = $('#gameId').value, box = $('#gameOut'), esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  if (shipKind()) {   // 艦：骨なしの 1 つの形。大きさがゲームの当たり判定と合っているかも出す
+    box.textContent = '書き出しています…（部品の多い艦は 10〜30 秒）';
+    await new Promise(r => setTimeout(r, 30));
+    try {
+      const r = await exportShip(), p = r.report;
+      const bin = atob(r.glb), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type: 'model/gltf-binary' })); a.download = `${id}.glb`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      const near = (got, want) => (Math.abs(got - want) <= want * 0.15 ? '✓' : '✗');
+      box.innerHTML = `<b>${id}.glb を書き出しました</b>（${(u8.length / 1048576).toFixed(1)} MB）<br>`
+        + `長さ ${Math.round(p.len)} m ${near(p.len, p.wantLen)}（ゲームの当たり判定 ${p.wantLen} m）・幅 ${Math.round(p.width)} m ${near(p.width, p.wantWidth)}（${p.wantWidth} m）・高さ ${Math.round(p.height)} m<br>`
+        + `三角形 ${p.tris.toLocaleString()}、描画 ${p.calls} 回（${esc(p.materials.join(', '))}）<br>`
+        + (p.bridge ? '艦長の視点：艦橋の上 ✓<br>' : '<span style="color:var(--warn)">「艦橋」という名前のブロックが無いので、艦長の視点は船体の上になります</span><br>')
+        + `<div style="white-space:pre-line${r.conn.ok ? '' : ';color:var(--warn)'}">${esc(r.conn.text)}</div>`
+        + `<span class="hint">public/models/${id}.glb に置くと、ゲームがこの形を使う（無ければ今までの形）</span>`;
+    } catch (e) { box.textContent = '書き出せませんでした：' + (e?.message ?? e); }
+    return;
+  }
   box.textContent = '書き出しています…（つながりと関節のチェックを含めて 10〜20 秒）';
   try {
     const r = await exportGame(id);
@@ -1117,6 +1138,13 @@ $('#bCheck').onclick = async () => {
   box.textContent = '調べています…（10〜20 秒）';
   try {
     const X = await editorWorker();
+    if (shipKind()) {   // 艦：つながりだけ（関節は無い）
+      X.load({ parts: [], ai: '', role: shipKind() });
+      await X.applyUnit(structuredClone(unitDoc()));
+      const c = X.connect('部品');
+      box.innerHTML = `<b>艦として調べました</b><div style="white-space:pre-line${c.ok ? '' : ';color:var(--warn)'}">${esc2(c.text)}</div>`;
+      return;
+    }
     const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
     const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));
     X.load({ parts: own ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
@@ -1354,6 +1382,79 @@ function showRigRequest() {
   };
   draw(false);
 }
+// ---- 艦（戦艦・強襲艦）：機体エディタの部品でできた、骨や関節の無い 1 つの形。「自由な機体」として持ち、用途（def.role）が艦の種類 ----
+/** 今の機体が艦なら、その種類（'battleship' / 'assault'）。そうでなければ '' */
+function shipKind() { const ds = items.filter(it => !it.tmp).map(it => byId[it.part]); return ds.length === 1 && ds[0]?.free && VEHICLES[ds[0].role] ? ds[0].role : ''; }
+/** 見え方を、作っているものに合わせる：XS（今まで通り）か、艦（その大きさが入る距離と、ガイド） */
+function applyKind() {
+  XS_GAME_IDS ??= $('#gameId').innerHTML;
+  const k = shipKind(), def = k ? byId[items.find(it => !it.tmp).part] : null, sig = k ? `${k}·${def.id}·${JSON.stringify(def.hit ?? null).length}` : 'xs';
+  if (sig === kindSig) return;
+  const was = shipNow; kindSig = sig; shipNow = k;
+  for (const o of [...guideGroup.children]) { o.geometry?.dispose(); o.material?.dispose(); guideGroup.remove(o); }
+  document.body.classList.toggle('ship', !!k);
+  const v = VEHICLES[k];
+  if (!v) {
+    camera.near = 0.01; camera.far = 100; viewDist = 5.6; AT.set(0, 1.9, 0);
+    grid.scale.setScalar(1); grid.position.y = 0;
+    $('#gameId').innerHTML = XS_GAME_IDS;
+    $('#gameOut').textContent = '選んだ機体として、つながりと関節（その機体に起こる動き）を調べてから .glb を作る';
+  } else {
+    const L = v.len / UNIT_M, W = v.width / UNIT_M, H = v.deckY / UNIT_M;
+    camera.near = 0.1; camera.far = 1500; viewDist = L * 2.1; AT.set(0, 0, 0);
+    grid.scale.setScalar(60); grid.position.y = -H - 2;
+    // 当たり判定の船体と甲板：ゲームの見本から開いた艦は、その箱の組み合わせ（shared/shipshape.ts）。ほかは、大きさの箱 1 つ
+    const edge = new THREE.LineBasicMaterial({ color: 0x5fd8ff, transparent: true, opacity: 0.7 });
+    const deckMat = new THREE.MeshBasicMaterial({ color: 0x7dff9a, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false });
+    for (const hb of def.hit ?? [{ min: [-W / 2, -H, -L / 2], max: [W / 2, H, L / 2], deck: true }]) {
+      const size = hb.max.map((x, i) => x - hb.min[i]), mid = hb.max.map((x, i) => (x + hb.min[i]) / 2);
+      const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...size)), edge);
+      box.position.set(...mid); guideGroup.add(box);
+      if (hb.deck) { const deck = new THREE.Mesh(new THREE.PlaneGeometry(size[0], size[2]), deckMat); deck.rotation.x = -Math.PI / 2; deck.position.set(mid[0], hb.max[1], mid[2]); guideGroup.add(deck); }
+    }
+    const bow = new THREE.Mesh(new THREE.ConeGeometry(W * 0.12, W * 0.3, 12), new THREE.MeshBasicMaterial({ color: 0xffd24a }));
+    bow.rotation.x = Math.PI / 2; bow.position.set(0, H, L / 2 + W * 0.25); guideGroup.add(bow);
+    for (let i = 0; i < 4; i++) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(3 / UNIT_M, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff8a3b, transparent: true, opacity: 0.8, depthTest: false }));
+      s.position.copy(gameToEditor(shipSeat(v, i))); s.renderOrder = 5; guideGroup.add(s);
+    }
+    for (const o of guideGroup.children) o.raycast = () => {};   // （ガイドは選べない）
+    guideGroup.visible = $('#shipGuide').checked;
+    $('#shipTitle').textContent = `${v.name}（長さ ${v.len} m・幅 ${v.width} m。${def.hit ? '当たり判定は、ゲームの見本の形' : '当たり判定は、この大きさの箱'}）`;
+    $('#gameId').innerHTML = `<option value="ship_a_${k}">連合・${v.name}</option><option value="ship_b_${k}">GIO・${v.name}</option>`;
+    $('#gameOut').textContent = `艦として書き出す（骨なし・メートル）。つながりを調べてから .glb を作る`;
+  }
+  camera.updateProjectionMatrix();
+  if (!!was !== !!k || k) { orbit.target.copy(AT); setView('threeq'); }
+}
+$('#shipGuide').onchange = e => { guideGroup.visible = e.target.checked; };
+for (const t of ['寸法の調整', '動かして確かめる', '見本', '色']) [...document.querySelectorAll('aside.right details > summary')].find(s => s.firstChild.textContent.trim() === t)?.parentElement.classList.add('xsonly');
+for (const t of ['ランダム', '色']) [...document.querySelectorAll('header .grp > b')].find(b => b.textContent === t)?.parentElement.classList.add('xsonly');   // （艦の色は、ブロックごとの色。パーツエディタで変える）
+$('#paintTeam').closest('label').classList.add('xsonly');
+/** 艦として開く（parts：機体エディタの部品の並び。hit：ゲームの当たり判定の箱。無ければ大きさの箱 1 つ） */
+function openShip(parts, name, kind, hit = null) {
+  const def = openE1(parts, name, kind);
+  if (Array.isArray(hit) && hit.length) { def.hit = hit; persistUser(); }
+  rebuild();
+  return def;
+}
+/** 艦の見本の部品の既定値（ship-samples.json は、これと違う所だけを持つ） */
+const shipPart = o => ({ kind: 'extrude', bevel: 0.02, corner: 0, metal: 0.3, rough: 0.6, rot: [0, 0, 0], scl: [1, 1, 1], ...o });
+/** 箱から作る艦：船体の箱（ガイドの大きさ）と、艦橋 */
+const blankShip = kind => {
+  const v = VEHICLES[kind], L = v.len / UNIT_M, W = v.width / UNIT_M, H = v.deckY / UNIT_M, r = (w, h) => [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]];
+  return [shipPart({ name: '船体', color: '#c3c9d2', pts: r(W, 2 * H), depth: L, bevel: 0.3, taper: 0.7 }),
+    shipPart({ name: '艦橋', color: '#6b727d', pts: r(W * 0.3, H * 0.8), depth: L * 0.12, bevel: 0.1, pos: [0, H * 1.35, -L * 0.15], taper: 0.8 })];
+};
+/** 艦としてゲーム用に書き出す → { glb (base64), report, conn { ok, text } } */
+async function exportShip() {
+  const kind = shipKind(), X = await editorWorker();
+  X.load({ parts: [], ai: '', role: kind });
+  await X.applyUnit(structuredClone(unitDoc()));
+  const conn = X.connect('部品'), out = await X.exportShip(kind);
+  return { ...out, conn };
+}
+
 // ---- AI で作る（v2-ai.js）：AI の機体は、機体エディタの部品の並びなので「自由な機体」として開く ----
 // パーツ 1 つを AI に作ってもらう：部位（ひな形 = その部位の最初のパーツ）ごとの頼み方は airecipes.js。
 // AI が作るのは装甲と中身だけ。関節の節・回転の中心・蝶番の軸など、動きを決めるブロックはひな形から残す（keptPieces）。
@@ -1500,6 +1601,19 @@ function renderE1(box) {
       cell.querySelector('[data-act=head]').onclick = () => { if (busy()) return; if (takeHead(structuredClone(s.parts), s.name)) { $('#saveBox').hidden = true; showTab('head'); } };
     }
   }).catch(() => { const el = sm.querySelector('#svSamples'); if (el) el.innerHTML = '<span class="hint">見本を読めませんでした</span>'; });
+  // 艦：ゲームの今の艦（見本）から始めるか、箱から作る
+  const sh = document.createElement('div');
+  sh.innerHTML = '<h2>艦（戦艦・強襲艦） <span class="hint">ゲームの艦の形を作る。骨や関節の無い 1 つの形で、艦として書き出す</span></h2><div class="svcells" id="svShips"><span class="hint">読み込み中…</span></div>';
+  box.appendChild(sh);
+  Promise.all([fetch('./ship-samples.json').then(r => r.json()).then(d => d.samples.map(s => ({ ...s, parts: s.parts.map(shipPart) }))), fetch('./samples/ship-assault.json').then(r => r.json()).then(d => d.samples)]).then(([a, b]) => {
+    const el = sh.querySelector('#svShips'); if (!el.isConnected) return;
+    const list = [...a, ...b, ...Object.entries(VEHICLES).map(([k, v]) => ({ name: `${v.name}を箱から作る`, role: k, blank: true }))];
+    el.innerHTML = list.map((s, i) => `<div class="svcell" data-sh="${i}"><div class="nm">${esc(s.name)}</div><div class="hint">${s.blank ? `長さ ${VEHICLES[s.role].len} m・幅 ${VEHICLES[s.role].width} m の箱と艦橋` : `${VEHICLES[s.role].name}・部品 ${s.parts.length} 個`}</div><div class="bar"><button class="small acc">${s.blank ? '箱から作る' : '艦として開く'}</button></div></div>`).join('');
+    for (const cell of el.querySelectorAll('[data-sh]')) {
+      const s = list[+cell.dataset.sh];
+      cell.querySelector('button').onclick = () => { if (busy() || !okToLeave(`「${s.name}」を開きます`)) return; $('#saveBox').hidden = true; openShip(s.blank ? blankShip(s.role) : structuredClone(s.parts), s.blank ? `新しい${VEHICLES[s.role].name}` : s.name, s.role, s.hit); };
+    }
+  }).catch(() => { const el = sh.querySelector('#svShips'); if (el) el.innerHTML = '<span class="hint">艦の見本を読めませんでした</span>'; });
   for (const cell of sec.querySelectorAll('[data-e1]')) {
     const s = list[+cell.dataset.e1], on = (act, fn) => { const b = cell.querySelector(`[data-act=${act}]`); if (b) b.onclick = fn; };
     on('unit', () => { if (busy() || !okToLeave(`「${s.name}」を開きます`)) return; try { openE1(structuredClone(s.parts), s.name, s.role); $('#saveBox').hidden = true; } catch (e) { note('開けません：' + e.message, true); } });
@@ -1526,4 +1640,4 @@ save();
 showUnitName();
 requestAnimationFrame(tick);
 // 確かめるための出口（画面の外から、置いた部品と視点を見る）
-window.__asm = { saves: { readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, userParts, byId };
+window.__asm = { ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, userParts, byId };

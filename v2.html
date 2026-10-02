@@ -72,6 +72,10 @@
   #views { position: absolute; left: 10px; top: 10px; display: flex; gap: 4px; }
   #paintGrid { position: absolute; inset: 0; background: rgba(15, 17, 20, .96); z-index: 5; overflow: auto; padding: 10px; }
   #paintGrid[hidden] { display: none; }
+  body.ship .xsonly, body.ship #tabs, body.ship #catalog, body.ship #newPart { display: none; }
+  #shipInfo { display: none; padding: 8px; line-height: 1.7; }
+  body.ship #shipInfo { display: block; }
+  #shipInfo b { color: var(--text); }
   #saveBox { position: fixed; inset: 0; background: rgba(10, 12, 15, .82); z-index: 20; display: flex; align-items: center; justify-content: center; }
   #saveBox[hidden] { display: none; }
   #saveBox .box { width: min(980px, 94vw); max-height: 90vh; overflow: auto; background: var(--panel); border: 1px solid #3d6a9c; border-radius: 10px; padding: 14px 16px; }
@@ -141,6 +145,17 @@
   <div id="tabs" class="asm"></div>
   <div id="catalog" class="asm"></div>
   <div id="peLeft" class="peonly"></div>
+  <div id="shipInfo" class="asm hint">
+    <b id="shipTitle">艦</b><br>
+    艦は、骨や関節の無い 1 つの形です。右の「置いたパーツ」で艦を選び、「パーツエディタで開く」で形を直します（ブロックを足す・動かす・削る）。<br><br>
+    <b>ガイド</b>（ゲームで決まっている大きさと場所。書き出しには入りません）<br>
+    <span style="color:#5fd8ff">水色の枠</span>：当たり判定の船体<br>
+    <span style="color:#7dff9a">緑の面</span>：甲板（XS が立つ高さ）<br>
+    <span style="color:#ff8a3b">橙の玉</span>：砲座 4 つ<br>
+    <span style="color:#ffd24a">黄色</span>：艦首（前）<br><br>
+    「艦橋」という名前のブロックの上が、艦長の視点になります。<br>
+    <label class="chk" style="margin-top:6px"><input type="checkbox" id="shipGuide" checked>ガイドを出す</label>
+  </div>
   <div id="newPart" class="asm">
     <div class="hint" style="margin-bottom:3px">カタログに無い形を作る（機体は変えない。できたパーツはカタログに ★ で入る）</div>
     <div class="row"><select id="newPartSel" title="作るパーツの部位"></select><button id="bNewPart" class="small" title="選んだ部位の新しいパーツを、パーツエディタで箱 1 個から作る（付く骨と置き場所は、その部位のパーツと同じ）">新しいパーツを作る</button></div>

@@ -1191,6 +1191,76 @@ function buildGameModel() {
   return { root, report };
 }
 
+// ---------- 乗り物（艦）: built from the same parts, without bones or joints ----------
+// Their size and the places the game fixes (the deck the XS stand on, the four gun seats) come from the game — shared/data.ts
+// TACTICS, server/battle/ships.ts seatAt. 1 unit = 6 m, as for the XS.
+export const VEHICLES = {
+  battleship: { name: '戦艦', len: 340, width: 84, deckY: 20 },
+  assault: { name: '強襲艦', len: 120, width: 30, deckY: 10 },
+};
+export const UNIT_M = 6;
+export const isVehicle = r => !!VEHICLES[r];
+/** A gun seat of a ship, in the game's frame [across (right +), up, along (forward +)] (server seatAt). */
+export const shipSeat = (v, i) => i < 2 ? [(i ? 1 : -1) * (v.width / 2 + 3), -2, 0.12 * v.len] : [(i === 2 ? -1 : 1) * v.width * 0.22, -(v.deckY + 5), (i === 2 ? 0.28 : -0.22) * v.len];
+/** Game frame (m) to editor space: the vehicle faces +Z here, -Z in the game; its right is -X here (export flips x, z). */
+export const gameToEditor = ([a, up, l]) => new THREE.Vector3(-a / UNIT_M, up / UNIT_M, l / UNIT_M);
+/**
+ * A vehicle for the game: one static model (no bones), in metres, facing -Z, its origin the hull's centre as the game
+ * places it; one mesh per material class (as the XS: body / metal / team_color / glow_N). A part named 艦橋 marks
+ * the captain's view (a 'bridge' node on its front top). Goes to public/models/ship_<a|b>_<kind>.glb.
+ */
+function buildVehicle(kind) {
+  const v = VEHICLES[kind];
+  const pieces = lodPieces(0);
+  const root = new THREE.Group(); root.name = 'ship';
+  const groups = new Map();
+  for (const pc of pieces) {
+    const cls = materialClass(pc.part), key = cls === 'glow' ? 'glow:' + pc.part.color : cls;
+    (groups.get(key) || groups.set(key, []).get(key)).push(pc);
+  }
+  let tris = 0, gi = 0;
+  const mats = [], box = new THREE.Box3();
+  for (const [key, list] of groups) {
+    const cls = key.split(':')[0];
+    const P = [], N = [], C = [];
+    let metal = 0, rough = 0, n = 0;
+    for (const pc of list) {
+      const pos = pc.geo.attributes.position, nor = pc.geo.attributes.normal, col = new THREE.Color(pc.part.color);
+      for (let i = 0; i < pos.count; i++) {
+        const x = -pos.getX(i) * UNIT_M, y = pos.getY(i) * UNIT_M, z = -pos.getZ(i) * UNIT_M;
+        P.push(x, y, z); box.expandByPoint(new THREE.Vector3(x, y, z));
+        if (nor) N.push(-nor.getX(i), nor.getY(i), -nor.getZ(i));
+        C.push(col.r, col.g, col.b);
+      }
+      metal += pc.part.metal * pos.count; rough += pc.part.rough * pos.count; n += pos.count;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    if (N.length === P.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); else g.computeVertexNormals();
+    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    const glowColor = cls === 'glow' ? new THREE.Color(list[0].part.color) : null;
+    const mat = new THREE.MeshStandardMaterial({
+      name: cls === 'team' ? 'team_color' : cls === 'glow' ? `glow_${gi++}` : cls, vertexColors: true,
+      metalness: n ? metal / n : 0.3, roughness: n ? rough / n : 0.5, emissive: glowColor || 0x000000, emissiveIntensity: glowColor ? 1 : 0,
+    });
+    const mesh = new THREE.Mesh(mergeVertices(g, 1e-5), mat);
+    mesh.name = `ship_${mat.name}`;
+    root.add(mesh);
+    tris += P.length / 9; mats.push(mat.name);
+  }
+  // the captain's view: over the front of the part named 艦橋
+  const br = parts.find(p => p.op === 'add' && !p.blockout && /艦橋|ブリッジ/.test(p.name));
+  if (br) {
+    const bb = new THREE.Box3();
+    for (const g of worldGeometries(br)) { g.computeBoundingBox(); bb.union(g.boundingBox); }
+    const node = new THREE.Object3D(); node.name = 'bridge';
+    node.position.set(-(bb.min.x + bb.max.x) / 2 * UNIT_M, bb.max.y * UNIT_M + 2, -bb.max.z * UNIT_M - 2);
+    root.add(node);
+  }
+  const size = box.getSize(new THREE.Vector3());
+  return { root, report: { kind, name: v.name, len: size.z, width: size.x, height: size.y, wantLen: v.len, wantWidth: v.width, tris: Math.round(tris), calls: groups.size, materials: mats, bridge: !!br } };
+}
+
 // ---------- a body or a whole unit from 機体エディタ Ver2 / the body tools replaces the loaded model's body ----------
 // What stays: the head (and neck), the hand weapons (gun / bazooka), blockouts. The head is set on the new neck and the
 // weapons follow the right hand. The new parts are hulls with their bone and the point it turns at (joint).
@@ -1340,6 +1410,15 @@ export const XS = {
       const b = new Uint8Array(data); let bin = '';
       for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
       resolve({ glb: btoa(bin), report, loose });
+    }, reject, { binary: true });
+  }),
+  /** the loaded model as a ship (kind: battleship / assault) → { glb (base64), report: { len, width, height (m), wantLen, wantWidth, tris, calls, materials, bridge } } */
+  exportShip: kind => new Promise((resolve, reject) => {
+    const { root, report } = buildVehicle(kind);
+    new GLTFExporter().parse(root, data => {
+      const b = new Uint8Array(data); let bin = '';
+      for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+      resolve({ glb: btoa(bin), report });
     }, reject, { binary: true });
   }),
   /** a document { parts, ai, role } → the game's model (tools/exportxs.ts) */
