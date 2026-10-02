@@ -519,7 +519,7 @@ function closeOnBackdrop(el, close) {
 }
 // Version footprint: the publish workflow writes the commit here and into version.json next to the page.
 // The page compares the two and offers a reload (Safari keeps serving the old page otherwise).
-const BUILD = '6877908';
+const BUILD = '5dd7f94';
 const deg = THREE.MathUtils.degToRad;
 
 // ---------- three.js setup ----------
@@ -2696,6 +2696,8 @@ window.__xs = {
     }, reject, { binary: true });
   }),
   ready: () => Object.keys(MOVES).length > 0,
+  /** the built-in samples (tools/dumpsamples.ts writes the XS ones to samples/xs-samples.json for 機体エディタ Ver2) */
+  samples: async () => { await shipSamplesReady; await meshSamplesReady; return BUILTIN.map(s => ({ name: s.name, role: s.role, parts: s.parts.map(p => (p.proxy ? serialize(p) : p)), hit: s.hit })); },
   /** load a document; the document as it is now */
   load: doc => loadScene(structuredClone(doc.parts), doc.ai, doc.role ?? ''),
   doc: () => ({ ai: sceneAi, role: sceneRole, parts: parts.map(serialize) }),
