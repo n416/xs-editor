@@ -12,7 +12,8 @@ import { LEG, legById } from './parts/leg/index.js';
 import { PARTS as HEAD_RAW, byId as headRawById } from './xsasm-parts.js';
 import { rotMatrix } from './xsasm.js';
 import { shapesOf, isSub, freeShapes } from './partgeo.js';
-import { freeParts } from './freeparts.js';
+import { freeParts, freeDef } from './freeparts.js';
+import { FREE_SETS } from './parts/free/artillery.js';
 import * as THREE from 'three';
 import { headDims, faceOf } from './xsasm-random.js';
 import { colorOf, roleOf } from './paint.js';
@@ -49,6 +50,9 @@ export function unregisterUser(id) {
   if (def.half === 'head') { const raw = id.slice(HP.length), r = headRawById[raw]; delete headRawById[raw]; for (const [list, o] of [[HEAD, def], [HEAD_RAW, r]]) { const k = list.indexOf(o); if (k >= 0) list.splice(k, 1); } }
   else { const [list, map] = LISTS[def.half] ?? LISTS.lower; delete map[id]; const k = list.indexOf(def); if (k >= 0) list.splice(k, 1); }
 }
+
+// 最初から入っている自由なパーツ（砲撃の大砲とキャタピラの車体：parts/free/artillery.js）
+for (const s of FREE_SETS) registerUser({ ...freeDef(s.id, s.name, s.parts, { tab: s.tab, from: 'sample' }), cat: s.cat, user: false });
 
 /** 頭の殻（部位「頭蓋」）の置いたパーツ。無ければ null */
 export const headShell = items => items.find(it => isHead(it.part) && byId[it.part]?.cat === '頭蓋') ?? null;
