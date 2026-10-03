@@ -24,5 +24,7 @@ import heavyhelm from './heavyhelm.js';
 import roundhelm from './roundhelm.js';
 import sniperhelm from './sniperhelm.js';
 import scopehelm from './scopehelm.js';
+import supporthelm from './supporthelm.js';
+import brimhelm from './brimhelm.js';
 // （首は首当ての前：カタログに「首」「首当て」の順で並ぶ）
-export const EXTRA = [vfin, headband, maska, mask, china, finplate, horn, antenna, visorhelm, earblock, chinguard, neck, collar, monoeye, twineyes, backfin, thruster, cheekguard, headpipe, peakhelm, spine, heavyhelm, roundhelm, sniperhelm, scopehelm].flat();
+export const EXTRA = [vfin, headband, maska, mask, china, finplate, horn, antenna, visorhelm, earblock, chinguard, neck, collar, monoeye, twineyes, backfin, thruster, cheekguard, headpipe, peakhelm, spine, heavyhelm, roundhelm, sniperhelm, scopehelm, supporthelm, brimhelm].flat();
