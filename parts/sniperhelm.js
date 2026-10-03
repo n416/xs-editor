@@ -1,5 +1,6 @@
 // 細身の頭：幅が狭く前後に長い卵形（狙撃用）。額は前へ伸びるくちばし形のひさしで、その下に狭いバイザーの溝（奥に暗い壁、正面だけ光る帯）。
 // 顔は前下へとがるくさび形のあご。横は後ろ上がりの細長い頬の板。頭頂から後ろへ、低く長いひれ（後ろほど高い）。
+// 額にセンサーの覆い（横長の窓）、左右に側頭の箱、後ろに後頭の装甲（つるりとした卵だけだと坊主に見えた）。
 // 広い面はどれも傾けてある。頭の中心が原点付近、前が +z。headshell より幅が狭く（±0.08）、前後に長い
 import { P, YH, YL, ZH, ZL, ellipsoid, planesFromPoints, BLACK, DARK, GLOW, piece, pair } from '../xsasm-lib.js';
 
@@ -26,6 +27,20 @@ const fin = planesFromPoints([[-0.009, TOP - 0.016, 0.06], [0.009, TOP - 0.016, 
   [0, TOP + 0.008, -0.21], [0, TOP - 0.012, -0.2], [-0.004, TOP - 0.004, -0.17], [0.004, TOP - 0.004, -0.17],
   [-0.011, TOP - 0.05, -0.02], [0.011, TOP - 0.05, -0.02]]);
 
+// 額のセンサーの覆い：ひさしの上に載る低い台形の塊（前の面は下を向いて倒れ、後ろはドームへ下りる）。前の面に横長の窓
+const browBox = planesFromPoints([[-0.042, VT + 0.024, 0.118], [0.042, VT + 0.024, 0.118], [-0.034, VT + 0.058, 0.108], [0.034, VT + 0.058, 0.108],
+  [-0.046, VT + 0.02, 0.03], [0.046, VT + 0.02, 0.03], [-0.03, VT + 0.07, 0.02], [0.03, VT + 0.07, 0.02]]);
+const browGlass = planesFromPoints([[-0.03, VT + 0.031, 0.1215], [0.03, VT + 0.031, 0.1215], [-0.026, VT + 0.05, 0.116], [0.026, VT + 0.05, 0.116],
+  [-0.03, VT + 0.031, 0.1], [0.03, VT + 0.031, 0.1], [-0.026, VT + 0.05, 0.1], [0.026, VT + 0.05, 0.1]]);
+// 側頭の箱：耳の位置の、前が細い塊（外の面は上が内へ倒れる）。後ろの端に細い縦の溝
+const earBox = planesFromPoints([[0.07, 0.005, 0.045], [0.07, 0.06, 0.035], [0.094, 0.0, 0.02], [0.088, 0.066, 0.015],
+  [0.07, -0.004, -0.085], [0.07, 0.075, -0.09], [0.098, -0.006, -0.08], [0.09, 0.078, -0.085]]);
+const earSlot = planesFromPoints([[0.092, 0.01, -0.03], [0.089, 0.058, -0.032], [0.1, 0.01, -0.03], [0.096, 0.058, -0.032],
+  [0.092, 0.01, -0.05], [0.089, 0.058, -0.052], [0.1005, 0.01, -0.05], [0.0965, 0.058, -0.052]]);
+// 後頭の装甲：後ろの下半分にかぶさる板（上の縁は前へ倒れる）
+const napePlate = planesFromPoints([[-0.05, 0.07, -0.142], [0.05, 0.07, -0.142], [-0.06, -0.04, -0.15], [0.06, -0.04, -0.15],
+  [-0.066, 0.06, -0.1], [0.066, 0.06, -0.1], [-0.07, -0.04, -0.1], [0.07, -0.04, -0.1], [0, 0.02, -0.168]]);
+
 const sniperhelm = {
   id: 'sniperhelm', name: '細身の頭（くちばしのひさしと後ろのひれ）', cat: '頭蓋', size: [0.17, 0.22, 0.34],
   face: { eye: [0.027, 0.118], mouth: [-0.03, 0.118, 12], under: [-0.05, 0], brow: [0.06, 0.13], lift: 0.012 },
@@ -33,6 +48,11 @@ const sniperhelm = {
     piece('頭蓋', [...ellipsoid(R, C, 10, [6, 30, 54, 76], 0, ME), YL(VT)]),
     piece('ひさし', peak, { color: DARK }),
     piece('頭頂のひれ', fin, { color: DARK }),
+    piece('額のセンサーの覆い', browBox, { color: DARK }),
+    piece('額のセンサーの窓', browGlass, { color: GLOW, glow: true, metal: 0, rough: 0.3 }),
+    ...pair('側頭の箱', earBox, { color: DARK }),
+    ...pair('側頭の溝', earSlot, { color: BLACK }),
+    piece('後頭の装甲', napePlate, { color: DARK }),
     piece('溝の奥', [...ellipsoid(inset(0.02), C, 10, [0], 0, GROOVE), YH(VT + 0.002), YL(VB - 0.002), ZL(-0.02)], { color: BLACK }),
     piece('目の帯', [...ellipsoid(inset(0.012), C, 10, [0], 0, [-30, 0, 30]), YH(0.033), YL(0.022), ZL(0.06)], { color: GLOW, glow: true, metal: 0, rough: 0.3 }),
     piece('あご', jaw),
@@ -40,5 +60,5 @@ const sniperhelm = {
     ...pair('頬の板', cheek),
   ],
 };
-const sniperhelmplain = { ...sniperhelm, id: 'sniperhelmplain', name: '細身の頭（くちばしのひさしと後ろのひれ・目なし）', pieces: sniperhelm.pieces.filter(pc => pc.name !== '目の帯') };
+const sniperhelmplain = { ...sniperhelm, id: 'sniperhelmplain', name: '細身の頭（くちばしのひさしと後ろのひれ・目なし）', pieces: sniperhelm.pieces.filter(pc => pc.name !== '目の帯' && pc.name !== '額のセンサーの窓') };
 export default [sniperhelm, sniperhelmplain];
