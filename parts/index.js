@@ -20,5 +20,6 @@ import cheekguard from './cheekguard.js';
 import headpipe from './headpipe.js';
 import peakhelm from './peakhelm.js';
 import spine from './spine.js';
+import heavyhelm from './heavyhelm.js';
 // （首は首当ての前：カタログに「首」「首当て」の順で並ぶ）
-export const EXTRA = [vfin, headband, maska, mask, china, finplate, horn, antenna, visorhelm, earblock, chinguard, neck, collar, monoeye, twineyes, backfin, thruster, cheekguard, headpipe, peakhelm, spine].flat();
+export const EXTRA = [vfin, headband, maska, mask, china, finplate, horn, antenna, visorhelm, earblock, chinguard, neck, collar, monoeye, twineyes, backfin, thruster, cheekguard, headpipe, peakhelm, spine, heavyhelm].flat();
