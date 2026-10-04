@@ -11,7 +11,8 @@ import collar from './collar.js';
 import chestdeco from './chestdeco.js';
 import powerpipe from './powerpipe.js';
 import vw from './vw.js';
-export const UPPER = [chest, back, abdomen, flank, shoulder, shoulderarmor, collar, chestdeco, powerpipe, vw].flat();
+import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
+export const UPPER = [chest, back, abdomen, flank, shoulder, shoulderarmor, collar, chestdeco, powerpipe, vw, f1].flat();
 export const upperById = Object.fromEntries(UPPER.map(p => [p.id, p]));
 
 export const CHEST_AT = [0, 2.1, 0], SHOULDER_AT = [0.45, 2.5, 0];
@@ -45,6 +46,8 @@ export const UPPER_SAMPLES = {
   '通気口とハッチ': sample([...torso(), 'collar', 'chestvent', 'chesthatch'], ['shoulderjoint', 'shoulderarmorbox']),
   // 可変翼型：機体エディタ 1 の形式の機体から分けた部品（parts/upper/vw.js）。腹だけは標準の輪
   '可変翼型（コクピットとセンサーの肩）': sample([...torso('chestvw', 'backvw', 'abdomen', 'flankvw'), 'collarvw'], ['shoulderjoint', 'shoulderarmorvw']),
+  // F1 型：取り込んだ機体の、その部分の組み方そのまま（parts/*/f1.js の sample。tools/partimport.mjs が書く）
+  'F1 型': f1sample,
 };
 /** ランダムに組む：部位ごとに 1 つ（胴の 4 つは必ず、襟はたいてい付け、胸の飾りは 0〜2 個。肩アーマーはときどきとても大きく） */
 export function randomUpper(rnd = Math.random) {

@@ -19,6 +19,7 @@ import { doubleJoint, ELBOW_AXES, KNEE_AXES, BEND, ankleAngle, ANKLE_RANGE } fro
 import { rotMatrix } from './xsasm.js';
 import { mirrorOf, randomHead, placementsFor, headDims } from './xsasm-random.js';
 import { PARTS as HEAD_RAW } from './xsasm-parts.js';
+import { f1HeadSample } from './parts/index.js';
 import { HP, HEAD, FREE, isHead, rawHead, asHead, halfOf, registerUser, unregisterUser, headShell as headShellIn, headPlace as headPlaceIn, unitParts, registerUnit } from './unitparts.js';
 import { XS, VEHICLES, UNIT_M, ROLES, DEFAULTS, shipSeat, gameToEditor } from './xsengine.js';
 import { initAi } from './v2-ai.js';
@@ -61,7 +62,9 @@ const HEAD_SAMPLES = { 'バイザーとマスクと耳ブロック': [
   { part: 'peakhelm', mov: [0, 0, -0.125], rot: [0, 0, 0], scal: [3, 3.1, 2.2] }, { part: 'peakcheek', mov: [0.1035, -0.0722, 0.0079], rot: [0, 0, 0], scal: [3, 3.1, 2.2] },
   { part: 'peakcheek', mov: [-0.1035, -0.0722, 0.0079], rot: [0, 0, 0], scal: [-3, 3.1, 2.2] }, { part: 'earsensor', mov: [0.2871, 0.0273, -0.1371], rot: [0, 0, 0], scal: [3, 3.1, 2.2] },
   { part: 'earsensor', mov: [-0.2871, 0.0273, -0.1371], rot: [0, 0, 0], scal: [-3, 3.1, 2.2] }, { part: 'crestblade', mov: [0, 0.5276, -0.147], rot: [0, 0, 0], scal: [3, 3.1, 2.2] },
-  { part: 'browplate', mov: [0, 0.2331, 0.1812], rot: [0, 0, 0], scal: [3, 3.1, 2.2] }, { part: 'neckblocks', mov: [0, -0.4579, -0.0539], rot: [0, 0, 0], scal: [3, 3.1, 2.2] }].map(asHead) };
+  { part: 'browplate', mov: [0, 0.2331, 0.1812], rot: [0, 0, 0], scal: [3, 3.1, 2.2] }, { part: 'neckblocks', mov: [0, -0.4579, -0.0539], rot: [0, 0, 0], scal: [3, 3.1, 2.2] }].map(asHead),
+  // F1 型：取り込んだ機体の頭の組み方そのまま（parts/f1.js の sample。tools/partimport.mjs が書く）
+  'F1 型': f1HeadSample.map(asHead) };
 const randomHeadV2 = () => randomHead(Math.random, HEAD_RAW).map(asHead);
 /** いくつでも付けられる部位（カタログを押すと増える）。ほかの部位は 1 つだけ（押すと、置いてある同じ部位のパーツと入れ替わる）。
  *  左右の対は、左右で 1 組。オーブ・挿せるタンクは収納口の数まで増える */
@@ -990,7 +993,7 @@ $('#bNew').onclick = () => { if (busy() || !okToLeave('新しく始めます')) 
 $('#bRandom').onclick = () => { if (busy()) return; items = tidy([...randomHeadV2(), ...randomLower(), ...adjusted(randomUpper()), ...adjusted(randomBack()), ...adjusted(randomArm()), ...randomLeg()]); selected = -1; rebuild(); save(); fitKneeGuards(); };
 $('#bKneeFit').onclick = fitKneeGuards;
 /** その部分だけ入れ替える */
-const replaceHalf = (half, list) => { if (busy()) return; items = [...items.filter(it => halfOf(it.part) !== half), ...tidy(list)]; selected = -1; rebuild(); save(); if (half === 'leg' || half === 'lower') fitKneeGuards(); };
+const replaceHalf = (half, list, fit = true) => { if (busy()) return; items = [...items.filter(it => halfOf(it.part) !== half), ...tidy(list)]; selected = -1; rebuild(); save(); if (fit && (half === 'leg' || half === 'lower')) fitKneeGuards(); };
 $('#bRandomHead').onclick = () => replaceHalf('head', randomHeadV2());
 $('#bRandomUp').onclick = () => replaceHalf('upper', adjusted(randomUpper()));
 $('#bRandomBack').onclick = () => replaceHalf('back', adjusted(randomBack()));
@@ -1002,7 +1005,8 @@ $('#bRandomLeg').onclick = () => replaceHalf('leg', randomLeg());
 $('#bSample').onclick = () => {
   const [h, k] = [$('#sampleSel').value.slice(0, 1), $('#sampleSel').value.slice(2)];
   const [half, , set] = SAMPLE_SETS[h], list = structuredClone(set[k]);
-  replaceHalf(half, withUpper(list[0]?.part) ? adjusted(list) : list);
+  // ひざ当ての角度（tilt）を持っている見本は、置かれていた角度のままにする（前スカートに合わせて倒し直さない）
+  replaceHalf(half, withUpper(list[0]?.part) ? adjusted(list) : list, !list.some(it => it.tilt != null));
 };
 
 // ---- 自分のパーツ（形を直した写し・新しく作ったパーツ）。このブラウザに残し、カタログの同じ部位に ★ 付きで並ぶ ----
@@ -1712,7 +1716,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '2dfc56a';
+const BUILD = '5893235';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
@@ -1818,7 +1822,7 @@ for (const [f, id, name] of [['a', 'w·a', '連合の強襲の 1 式（ライフ
   } catch (e) { console.warn('weapons', f, e); }
 }
 // 自分のモデルとして書き出す武器（ゲームが手に持たせる 1 つの形。samples/w_<陣営>_<形の名前>.json）。def.shape が、ゲームでの形の名前
-for (const file of ['w_a_machine_gun', 'w_b_machine_gun', 'w_a_beam_rifle', 'w_b_beam_rifle', 'w_a_beam_shotgun', 'w_b_beam_shotgun', 'w_a_charge_rifle', 'w_b_charge_rifle', 'w_a_bazooka', 'w_b_bazooka', 'w_a_sniper_rifle', 'w_b_sniper_rifle', 'w_a_charge_sniper', 'w_b_charge_sniper', 'w_a_beam_sniper', 'w_b_beam_sniper', 'w_a_repair_torch', 'w_b_repair_torch', 'w_a_knife', 'w_b_knife', 'w_a_saber', 'w_b_saber', 'w_a_aqua_beam', 'w_b_aqua_beam', 'w_a_harpoon', 'w_b_harpoon', 'w_a_aqua_charge', 'w_b_aqua_charge', 'w_a_aqua_missile', 'w_b_aqua_missile', 'w_b_heat_axe']) {
+for (const file of ['w_a_machine_gun', 'w_b_machine_gun', 'w_a_beam_rifle', 'w_a_beam_rifle_f1', 'w_b_beam_rifle', 'w_a_beam_shotgun', 'w_b_beam_shotgun', 'w_a_charge_rifle', 'w_b_charge_rifle', 'w_a_bazooka', 'w_b_bazooka', 'w_a_sniper_rifle', 'w_b_sniper_rifle', 'w_a_charge_sniper', 'w_b_charge_sniper', 'w_a_beam_sniper', 'w_b_beam_sniper', 'w_a_repair_torch', 'w_b_repair_torch', 'w_a_knife', 'w_b_knife', 'w_a_saber', 'w_b_saber', 'w_a_aqua_beam', 'w_b_aqua_beam', 'w_a_harpoon', 'w_b_harpoon', 'w_a_aqua_charge', 'w_b_aqua_charge', 'w_a_aqua_missile', 'w_b_aqua_missile', 'w_b_heat_axe']) {
   try {
     const w = await (await fetch(`./samples/${file}.json`)).json();
     registerUser({ ...freeDef(`w·${file.slice(2)}`, w.name, w.parts, { tab: 'weapon', from: 'sample' }), cat: WEAPON_CAT, user: false, hand: w.hand_r, shape: w.shape, faction: w.faction });

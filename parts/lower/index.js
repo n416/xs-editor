@@ -9,7 +9,8 @@ import skirtrear from './skirtrear.js';
 import skirtback from './skirtback.js';
 import maekake from './maekake.js';
 import waistdeco from './waistdeco.js';
-export const LOWER = [waist, belly, hipjoint, hipbase, skirtfront, skirtside, skirtrear, skirtback, maekake, waistdeco].flat();
+import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
+export const LOWER = [waist, belly, hipjoint, hipbase, skirtfront, skirtside, skirtrear, skirtback, maekake, waistdeco, f1].flat();
 export const lowerById = Object.fromEntries(LOWER.map(p => [p.id, p]));
 
 /** 部品を置く決まった場所（骨格図の標準の寸法）。pair は左右の対（+x 側に置き、反対側は x の拡大 −1 で置く） */
@@ -35,6 +36,8 @@ export const SAMPLES = {
   'ベルトと動力パイプ': sample(['waist', 'belly', 'skirtrear', 'maekake', 'beltpouch', 'pipe'], ['hipjoint', 'hipbase', 'skirtfront', 'skirtside', 'skirtback']),
   '筒と太いベルト': sample(['waistangular', 'bellybellows', 'skirtrear', 'maekakesquare', 'beltthick', 'tubeside'], ['hipjoint', 'hipbasebox', 'skirtfrontwide', 'skirtsideshort', 'skirtbackwide']),
   '左右が合わさるスカート': sample(['waistwide', 'belly', 'skirtrearcenter', 'maekakecenter'], ['hipjoint', 'hipbase', 'skirtfrontjoined', 'skirtsidewrap', 'skirtbackjoined']),
+  // F1 型：取り込んだ機体の、その部分の組み方そのまま（f1.js の sample。tools/partimport.mjs が書く）
+  'F1 型': f1sample,
 };
 
 /** ランダムに組む：部位ごとに 1 つ選ぶ。前スカートの系統（短い・長い・短冊など）を先に決め、後ろスカートも多くは同じ系統に、

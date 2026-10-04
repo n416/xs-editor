@@ -9,7 +9,8 @@ import wings from './wings.js';
 import wingear, { RACK_DROP } from './wingear.js';
 import fx, { FX_CAT, FX_COLORS } from './fx.js';
 import { rotOfFrame } from './kit.js';
-export const BACK = [packs, gear, wings, wingear, fx].flat();
+import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
+export const BACK = [packs, gear, wings, wingear, fx, f1].flat();
 export const backById = Object.fromEntries(BACK.map(p => [p.id, p]));
 export { FX_CAT, FX_COLORS };
 
@@ -128,6 +129,8 @@ export const BACK_SAMPLES = {
   'ORB 収納ラック（上下 2 段）とオーブ（小）': wingSet('wingracktwo', ['wgorbs']),
   'ORB 収納ラック（一列・扇）と光の刃（青）': wingSet('wingrackfan', ['fxblade_blue']),
   '透ける板の羽': wingSet('winginsect'),
+  // F1 型：取り込んだ機体の、その部分の組み方そのまま（f1.js の sample。tools/partimport.mjs が書く）
+  'F1 型': f1sample,
 };
 /**
  * ランダムに組む：半分はバックパック（横・上・後ろに装備。横はたいてい左右同じ、ときどき左右で違う・片側だけ）、半分は翼（装備とエフェクト）。
