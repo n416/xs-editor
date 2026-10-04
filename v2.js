@@ -1684,7 +1684,7 @@ const SHARE = initShare({
     if (!kept().length) return 'パーツが無いので投稿できません。';
     const text = JSON.stringify(postDoc());
     if (text.includes('"kind":"mesh"')) return '取り込んだ形（.glb）の入った機体は投稿できません。';
-    if (text.length > 300000) return `機体のデータが大きすぎます（${Math.round(text.length / 1000)} KB。300 KB まで）。作ったパーツを減らしてください。`;
+    if (text.length > 4000000) return `機体のデータが大きすぎます（${Math.round(text.length / 1000)} KB。4000 KB まで）。自分で作ったパーツの形のデータが入るので、作ったパーツを減らしてください。`;
     return '';
   },
   // つながりと関節（「チェックだけする」と同じ調べ方）
@@ -1712,7 +1712,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '4f17508';
+const BUILD = '2dfc56a';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
