@@ -39,7 +39,7 @@ const CSS = `
 const HTML = `<div class="box">
   <div class="top"><b>みんなの機体</b><button id="shClose">閉じる（Esc）</button></div>
   <div class="bar2" id="shAuth"></div>
-  <div class="bar2"><input type="text" id="shTitle" placeholder="機体名（40 文字まで）" maxlength="40"><input type="text" id="shAi" placeholder="使った AI（なければ空欄）" maxlength="40"><button id="shUpload" class="acc" title="今の機体を、だれでも見られる所に出す（つながりと関節を調べて、問題が無いときだけ）">今の機体を投稿</button></div>
+  <div class="bar2"><input type="text" id="shTitle" placeholder="機体名（40 文字まで）" maxlength="40"><input type="text" id="shAi" placeholder="使った AI（なければ空欄）" maxlength="40"><button id="shUpload" class="acc" title="今の機体を、だれでも見られる所に出す（つながりと関節を調べて、問題があれば知らせる。問題があっても投稿はできる）">今の機体を投稿</button></div>
   <div class="hint" id="shCheck" hidden></div>
   <div class="bar2 tabs2"><button data-tab="rank" class="on">月間ランキング</button><select id="shMonth"></select><button data-tab="new">新着</button><button data-tab="likes">イイネ順</button><button data-tab="mine">自分の機体</button></div>
   <div class="grid" id="shGrid"></div>
@@ -159,7 +159,8 @@ export function initShare(ctx) {
     let c;
     try { c = await ctx.check(); } catch (e) { out.textContent = '調べられませんでした：' + (e?.message ?? e); out.style.color = 'var(--warn)'; return null; }
     out.textContent = c.text; out.style.color = c.ok ? '' : 'var(--warn)';
-    if (!c.ok) { sNote(`つながりチェックと関節チェックの両方が OK になってから${what}してください。`, true); return null; }
+    // チェックで問題が出ても止めない（依頼主：チェックだめでも登録出来た方が良い）。出た問題は上の欄に残し、投稿の知らせに一言足す
+    share.checkNote = c.ok ? '' : 'つながり・関節のチェックで問題が出ています（上の一覧）。そのまま出しました。';
     return { unit: ctx.doc(), ai: $('#shAi').value.trim().slice(0, 40), role: ctx.role(), thumb: ctx.thumb() };
   }
 
@@ -188,7 +189,7 @@ export function initShare(ctx) {
       button('上書き', async () => {
         const body = await ready('上書き');
         if (!body || !confirm(`「${m.title}」を今の機体で上書きしますか？`)) return;
-        try { await central(`/api/models/${m.id}`, 'PUT', body); await loadShare(); sNote(`「${m.title}」を上書きしました。`); }
+        try { await central(`/api/models/${m.id}`, 'PUT', body); await loadShare(); sNote(`「${m.title}」を上書きしました。${share.checkNote ?? ''}`, !!share.checkNote); }
         catch (e) { sNote(OLD_SERVER.test(e.message) ? 'サーバーが、機体エディタ Ver2 の機体の投稿にまだ対応していません（サーバーの更新待ち）。' : e.message, true); }
       });
       button('削除', async () => {
@@ -228,7 +229,7 @@ export function initShare(ctx) {
       await central('/api/models', 'POST', { title, ...body });
       $('#shTitle').value = '';
       await setTab('mine');
-      sNote(`「${title}」を投稿しました。`);
+      sNote(`「${title}」を投稿しました。${share.checkNote ?? ''}`, !!share.checkNote);
     } catch (e) { sNote(OLD_SERVER.test(e.message) ? 'サーバーが、機体エディタ Ver2 の機体の投稿にまだ対応していません（サーバーの更新待ち）。' : e.message, true); }
   };
   $('#shClose').onclick = close;
