@@ -10,28 +10,31 @@ import { crown, steps } from './shape.js';
  * bottom 下の縁（前の端）の y、zf・zb 前後の端、panels 一段高いパネル [[上の y, 下の y], ...]、rim 裾の厚い縁の高さ、
  * flare 下ほど外へ開く割合、stack 2 段にするとき下の段の上の端の y（0 で 1 枚）、pod ミサイルポッドを付ける
  */
-export function sideSkirt({ id, name, bottom = -0.26, zf = 0.15, zb = -0.14, panels = [[0.12, -0.06]], rim = 0, flare = 0.1, stack = 0, pod = false }) {
+// 5 cm 内へ寄せてある（依頼主：「腰が太すぎるんですよ」。上半身を下げて腕を短くすると、前腕が横スカートの真横に来て触れた：外の端が中心から 44 cm、前腕の内の端も 44〜46 cm）。
+// 上の端は脚の台のすぐ外（内の面 x 0.125）。太ももは股関節の 21 cm 下から外へ太くなる（x 0.19 まで）ので、下ほど外へ開く割合は 0.2 以上にして、その外を通す
+export function sideSkirt({ id, name, bottom = -0.26, zf = 0.15, zb = -0.14, panels = [[0.12, -0.06]], rim = 0, flare: flare0 = 0.2, stack = 0, pod = false }) {
+  const flare = Math.max(flare0, 0.2);
   const zc = (zf + zb) / 2, hz = (zf - zb) / 2;
-  const out = lift => (y, z) => 0.245 - 1.6 * (0.15 / hz) ** 2 * (z - zc) ** 2 - 0.08 * (y + 0.05) ** 2 - flare * y + lift;
+  const out = lift => (y, z) => 0.195 - 1.6 * (0.15 / hz) ** 2 * (z - zc) ** 2 - 0.08 * (y + 0.05) ** 2 - flare * y + lift;
   const inner = (x, dx = 0) => P([-1, -flare, 0], [x + dx, 0.15, 0]);   // 内の面：下ほど外へ
   const hem = y => P([0, -1, 0.35], [0, y, zb]);                   // 裾：前が少し短い
-  const ends = [P([0.2, 0, 1], [0.2, 0, zf]), P([0.2, 0, -1], [0.2, 0, zb])];
+  const ends = [P([0.2, 0, 1], [0.15, 0, zf]), P([0.2, 0, -1], [0.15, 0, zb])];
   const len = 0.15 - bottom, Z = steps(zb, zf, 4);
   const yb = stack ? stack - 0.05 : bottom;                         // 上の段の下の縁（2 段なら下の段の上の端より少し下まで）
   const pieces = [
     piece('横スカート', [...crown('x', 1, out(0), steps(yb - 0.06, 0.15, Math.max(5, Math.round((0.15 - yb) / 0.08))), Z),
-      inner(0.175), YH(0.15), hem(yb), P([0.5, -1, 0], [out(0)(yb, zc) - 0.017, yb + 0.01, 0]), ...ends]),   // 外の下の角を落とす
+      inner(0.125), YH(0.15), hem(yb), P([0.5, -1, 0], [out(0)(yb, zc) - 0.017, yb + 0.01, 0]), ...ends]),   // 外の下の角を落とす
     ...panels.map(([y0, y1], i) => piece(`横スカートのパネル${panels.length > 1 ? ' ' + (i + 1) : ''}`, [
       ...crown('x', 1, out(0.012), steps(y1 - 0.03, y0, 3), steps(zc - hz * 0.65, zc + hz * 0.65, 3)),
-      inner(0.2), YH(y0), hem(y1), ZL(zc - hz * 0.65), ZH(zc + hz * 0.65)])),
-    piece('横スカートの付け根', [XL(0.125), XH(0.2), YL(0.12), YH(0.19), ZL(-0.06), ZH(0.06), P([1, -1, 0], [0.2, 0.12, 0])], { color: DARK }),
+      inner(0.15), YH(y0), hem(y1), ZL(zc - hz * 0.65), ZH(zc + hz * 0.65)])),
+    piece('横スカートの付け根', [XL(0.095), XH(0.15), YL(0.12), YH(0.19), ZL(-0.06), ZH(0.06), P([1, -1, 0], [0.15, 0.12, 0])], { color: DARK }),
   ];
   // 2 段：下の段は上の段の裏から出る（上の端は上の段の裾と同じ斜めで、その 6 cm 上まで上の段の裏に入る）。外の面は上の段より 1.2 cm 内
   const topAt = y => P([0, 1, -0.35], [0, y, zb]);                 // 裾と平行な上の端
   if (stack) pieces.push(piece('横スカート（下の段）', [...crown('x', 1, out(-0.012), steps(bottom - 0.06, yb + 0.1, 4), Z),
-    inner(0.185), topAt(yb + 0.06), hem(bottom), ...ends]));
+    inner(0.135), topAt(yb + 0.06), hem(bottom), ...ends]));
   if (rim) pieces.push(piece('横スカートの裾', [...crown('x', 1, out(stack ? 0.002 : 0.014), steps(bottom - 0.06, bottom + rim + 0.06, 2), Z),
-    inner(stack ? 0.185 : 0.2), hem(bottom), P([0, 1, -0.35], [0, bottom + rim, zb]), ...ends], { color: DARK }));
+    inner(stack ? 0.135 : 0.15), hem(bottom), P([0, 1, -0.35], [0, bottom + rim, zb]), ...ends], { color: DARK }));
   // ミサイルポッド：外の面に付いた箱（角を落とす）と、外を向いた 2 × 3 の発射口（暗い 8 角の穴に見える短い筒）
   if (pod) {
     const y0 = -0.13, y1 = 0.07, x0 = out(0)(-0.03, zc) - 0.02, x1 = x0 + 0.075, z0 = zc - hz * 0.7, z1 = zc + hz * 0.7;

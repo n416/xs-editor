@@ -330,13 +330,16 @@ function ghost(group, planes, origin = null) {
 const KNEE_Y = S.hip.y - 0.44, KNEE_Z = -0.03;
 const legs = {};
 let ghostChest;
+const ghostHips = [];   // 仮の腰（下半身の「腰」を置いたら隠す）と、仮の腰の関節（下半身の「腰の関節」を置いたら隠す）。2 個ずつ
 const ghostHead = [];   // 仮の首と頭（頭のパーツを置いたら隠す）
 const ghostLimb = { arm_l: [], arm_r: [], leg_l: [], leg_r: [] };   // 腕・脚の部品を置いたら、その側の仮の腕・脚を隠す
 {
   scene.updateMatrixWorld(true);
   const zero = new THREE.Vector3();
-  const cy = S.chest.yBot;
+  const cy = S.waist.yTop;   // 仮の胸は、腹の下の端（腰の帯の上の端）まで
   ghostChest = ghost(torsoJ.inner, [...box(-S.chest.hw, S.chest.hw, cy, S.neck.y - 0.06, -S.chest.hd, S.chest.hd), P([0, -0.9, 1], [0, cy, S.chest.hdLow]), P([0, -0.9, -1], [0, cy, -S.chest.hdLow])], zero);
+  ghostHips.push(...ghost(root, [...box(-S.waist.hw, S.waist.hw, S.hip.y - 0.08, S.waist.yTop, -S.waist.hd, S.waist.hd), P([0, -1, 1], [0, S.hip.y - 0.08, S.waist.hd - 0.06]), P([0, -1, -1], [0, S.hip.y - 0.08, -S.waist.hd + 0.06])], zero).meshes,   // 腰
+    ...ghost(root, [...box(-S.belly.r, S.belly.r, S.waist.yTop - 0.02, S.chest.yBot + 0.02, -S.belly.r, S.belly.r)], zero).meshes);   // 腰の関節
   ghostHead.push(...ghost(torsoJ.inner, [...box(-0.06, 0.06, S.neck.y - 0.08, S.neck.y + 0.06, -0.06, 0.06)], zero).meshes,           // 首
     ...ghost(torsoJ.inner, [...box(-0.14, 0.14, S.neck.y + 0.02, S.neck.y + 0.3, -0.14, 0.14)], zero).meshes);           // 頭
   for (const [side, s] of [['l', 1], ['r', -1]]) {
@@ -367,12 +370,13 @@ const ghostLimb = { arm_l: [], arm_r: [], leg_l: [], leg_r: [] };   // 腕・脚
   }
 }
 $('#ghost').onchange = e => { for (const m of ghostAll) m.visible = e.target.checked; updateGhostChest(); };
-/** 仮の胸は、上半身の胸（骨 torso の部品）を置いたら隠す。仮の腕・脚は、その側に腕・脚の部品を置いたら隠す */
+/** 仮の胸は、上半身の胸（骨 torso の部品）を置いたら隠す。仮の腰・腰の関節は、下半身の「腰」「腰の関節」を置いたら隠す。仮の腕・脚は、その側に腕・脚の部品を置いたら隠す */
 function updateGhostChest() {
   const whole = items.some(it => byId[it.part]?.free && !byId[it.part].tab);   // 自由な機体（全身）を置いたら、仮の形はぜんぶ隠す
   if (whole) { for (const m of ghostAll) m.visible = false; return; }
   { const any = items.some(it => halfOf(it.part) === 'head'); for (const m of ghostHead) m.visible = $('#ghost').checked && !any; }
   const has = items.some(it => halfOf(it.part) === 'upper' && ['胸', '背中', '腹', '脇腹'].includes(byId[it.part].cat)); for (const m of ghostChest.meshes) m.visible = $('#ghost').checked && !has;
+  { const has = cat => items.some(it => halfOf(it.part) === 'lower' && byId[it.part].cat === cat); ghostHips.forEach((m, i) => { m.visible = $('#ghost').checked && !has(i < 2 ? '腰' : '腰の関節'); }); }
   for (const [k, list] of Object.entries(ghostLimb)) { const [h, s] = k.split('_'), any = items.some(it => halfOf(it.part) === h && sideOf(it) === s); for (const m of list) m.visible = $('#ghost').checked && !any; }
 }
 
@@ -714,7 +718,10 @@ $('#bMirror').onclick = () => { if (selected < 0) return; const src = items[sele
 
 // ---- 寸法の調整：上半身の部品をまとめて上下、肩関節と肩アーマーをまとめて左右・上下に動かす。つまみの値は組み立てと一緒に保存し、
 // 動かした量（前の値との差）だけ置いた部品の位置を変える（元に戻すでも戻る）
-let adj = { ...ADJ0 };
+// 新しい機体の寸法の調整：上半身を 24 cm 下げて腰の帯に載せ（胴を短く）、肩を 2 cm 内へ（胴を細くした分。4 cm では、投げる動きで肩アーマーが胸の芯に 6 cm 入った）（依頼主が写真を見せて「胴体長すぎ」「デブ」）。
+// 保存してある機体・読み込む機体は、その機体の値のまま（値が無ければ 0）
+const NEW_ADJ = { ...ADJ0, up: -0.24, sh: -0.02, upperArm: -0.15, foreArm: -0.13 };   // 腕は写真の長さ（肩の関節から拳の先まで全高の 31%）
+let adj = { ...NEW_ADJ };
 const SHOULDER_CAT = new Set(['肩関節', '肩アーマー']);
 /** 肩の左右・高さの調整で一緒に動く部品：肩関節・肩アーマーと腕 */
 const followsShoulder = def => SHOULDER_CAT.has(def.cat) || ARM_CAT.has(def.cat);
@@ -955,7 +962,7 @@ function restore(pos) {
 const undo = () => restore(histPos - 1), redo = () => restore(histPos + 1);
 $('#bUndo').onclick = () => (PE.active() ? PE.undo() : undo());
 $('#bRedo').onclick = () => (PE.active() ? PE.redo() : redo());
-function load() { try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null'); if (d && Array.isArray(d.items)) { items = register(d.items).filter(it => byId[it.part] && !it.tmp); if (d.adj) adj = { ...adj, ...d.adj }; if (d.paint?.pal) paint = { ...DEFAULT_PAINT(), ...d.paint }; unitName = d.name ?? ''; saveId = d.saveId ?? ''; savedHash = d.savedHash ?? ''; return true; } } catch { /* storage blocked */ } return false; }
+function load() { try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null'); if (d && Array.isArray(d.items)) { items = register(d.items).filter(it => byId[it.part] && !it.tmp); adj = { ...ADJ0, ...(d.adj ?? {}) }; if (d.paint?.pal) paint = { ...DEFAULT_PAINT(), ...d.paint }; unitName = d.name ?? ''; saveId = d.saveId ?? ''; savedHash = d.savedHash ?? ''; return true; } } catch { /* storage blocked */ } return false; }
 /** 上半身・腕の見本・ランダムの部品を、今の寸法の調整の位置へずらす */
 const adjusted = list => list.map(it => {
   const sh = followsShoulder(byId[it.part]), m = (it.mov ?? [0, 0, 0]).slice();
@@ -995,7 +1002,7 @@ function note(s, warn) { const el = $('#note'); el.textContent = s; el.style.col
 const SAMPLE_SETS = { h: ['head', '頭', HEAD_SAMPLES], u: ['upper', '上半身', UPPER_SAMPLES], b: ['back', '背中', BACK_SAMPLES], a: ['arm', '腕', ARM_SAMPLES], l: ['lower', '下半身', SAMPLES], g: ['leg', '脚', LEG_SAMPLES] };
 $('#sampleSel').innerHTML = Object.entries(SAMPLE_SETS).map(([h, [, title, set]]) => `<optgroup label="${title}">${Object.keys(set).map(k => `<option value="${h}:${k}">${k}</option>`).join('')}</optgroup>`).join('');
 $('#bPipe').onclick = placeRandomPipe;
-$('#bNew').onclick = () => { if (busy() || !okToLeave('新しく始めます')) return; unitName = ''; saveId = ''; savedHash = ''; items = []; paint = DEFAULT_PAINT(); showPaint(); adj = { ...ADJ0 }; showAdj(); selected = -1; rebuild(); save(); };
+$('#bNew').onclick = () => { if (busy() || !okToLeave('新しく始めます')) return; unitName = ''; saveId = ''; savedHash = ''; items = []; paint = DEFAULT_PAINT(); showPaint(); adj = { ...NEW_ADJ }; showAdj(); selected = -1; rebuild(); save(); };
 $('#bRandom').onclick = () => { if (busy()) return; items = tidy([...randomHeadV2(), ...randomLower(), ...adjusted(randomUpper()), ...adjusted(randomBack()), ...adjusted(randomArm()), ...randomLeg()]); selected = -1; rebuild(); save(); fitKneeGuards(); };
 $('#bKneeFit').onclick = fitKneeGuards;
 /** その部分だけ入れ替える */
@@ -1722,7 +1729,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'f530d84';
+const BUILD = '8d319f0';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

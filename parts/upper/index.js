@@ -1,6 +1,7 @@
 // 上半身（胴の骨 torso）の部品の目次。1 部品 1 ファイル。胴は胸・背中・腹・脇腹の 4 つに分け、部位ごとに差し替える。
 // 肩アーマーは腕の骨（arm）に付き、腕と一緒に回る。バックパックと翼は背中の部品（parts/back）。
 // 置き場所は骨格図の標準の寸法（xsbody.js の makeSheet()）：胸の下端の中心 (0, 2.1, 0)、肩関節の中心 (±0.45, 2.5, 0)
+import { slimX } from '../../xsasm-lib.js';
 import chest from './chest.js';
 import back from './back.js';
 import abdomen from './abdomen.js';
@@ -12,7 +13,12 @@ import chestdeco from './chestdeco.js';
 import powerpipe from './powerpipe.js';
 import vw from './vw.js';
 import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
-export const UPPER = [chest, back, abdomen, flank, shoulder, shoulderarmor, collar, chestdeco, powerpipe, vw, f1].flat();
+// 胴（胸・背中・腹・脇腹）と、その面に付く飾り・胴の動力パイプは、横幅を SLIM 倍にする（依頼主が写真と見比べて「これじゃデブでしょ。腰もそうなんだけど、パーツの横幅を直して」。
+// 0.9 は [独自]：写真の上で測った胸の幅は全高の 23%、こちらは 25% だった）。取り込んだ機体の部品（vw・f1）は元の形のまま
+export const SLIM = 0.9;
+const TORSO_CAT = new Set(['胸', '背中', '腹', '脇腹', '胸の飾り', '胴の動力パイプ']);
+const slim = defs => [defs].flat().flatMap(d => (TORSO_CAT.has(d.cat) ? slimX(d, SLIM) : [d]));
+export const UPPER = [slim(chest), slim(back), slim(abdomen), slim(flank), shoulder, shoulderarmor, collar, slim(chestdeco), slim(powerpipe), vw, f1].flat();
 export const upperById = Object.fromEntries(UPPER.map(p => [p.id, p]));
 
 export const CHEST_AT = [0, 2.1, 0], SHOULDER_AT = [0.45, 2.5, 0];

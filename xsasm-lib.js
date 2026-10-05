@@ -34,6 +34,11 @@ export function planesFromPoints(pts, eps = 1e-6) {
   }
   return out;
 }
+/** 面の並びを、軸ごとに s 倍する */
+export const scalePl = (planes, s) => planes.map(p => { const n = [p[0] / s[0], p[1] / s[1], p[2] / s[2]], l = Math.hypot(n[0], n[1], n[2]); return [n[0] / l, n[1] / l, n[2] / l, p[3] / l, ...(p.length > 4 ? [p[4]] : [])]; });
+/** 部品を横（x）に k 倍する（部品の中心線 x 0 のまわり。左右の対ではない、中央に置く部品用） */
+export const slimX = (defs, k) => [defs].flat().map(d => ({ ...d, size: [d.size[0] * k, d.size[1], d.size[2]],
+  pieces: d.pieces.map(pc => ({ ...pc, planes: scalePl(pc.planes, [k, 1, 1]), ...(pc.pos ? { pos: [pc.pos[0] * k, pc.pos[1], pc.pos[2]] } : {}), ...(pc.center ? { center: [pc.center[0] * k, pc.center[1], pc.center[2]] } : {}) })) }));
 /** 面の並びを平行移動 */
 export const movePl = (planes, t) => planes.map(p => [p[0], p[1], p[2], p[3] + p[0] * t[0] + p[1] * t[1] + p[2] * t[2], ...(p.length > 4 ? [p[4]] : [])]);
 /** 面の並びを横軸（x）まわりに deg 度回す。軸は点 (*, cy, cz) を通る横線。正の角で +y 側が後ろ（−z）へ倒れる */

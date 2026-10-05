@@ -430,6 +430,10 @@ const GAME_BONES = [['hips', null], ['torso', 'hips'], ['head', 'torso'], ['arm_
   ['wing_l', 'torso'], ['wing_r', 'torso'],           // wings the game opens with the thrust (only exported when used)
   ['skirt_front_l', 'hips'], ['skirt_front_r', 'hips'], ['skirt_back_l', 'hips'], ['skirt_back_r', 'hips']];   // skirts the legs push open (docs/models.md「スカート」)
 const SKIRT_BONES = ['skirt_front_l', 'skirt_front_r', 'skirt_back_l', 'skirt_back_r'];
+// Cutting-in between the torso (bone torso) and the hips (bone hips, the skirts) is not counted: the torso sits on the
+// waist band and goes into it whenever it leans (the user: hitting the band is fine; avoiding it would take a spine).
+// Arms and legs against the hips are counted as before.
+const atWaist = (a, b) => (a === 'torso' && (b === 'hips' || b.startsWith('skirt_'))) || (b === 'torso' && (a === 'hips' || a.startsWith('skirt_')));
 const OPTIONAL_BONES = new Set(['foot_l', 'foot_r', 'elbow_l', 'elbow_r', 'knee_l', 'knee_r', 'cannon', 'wing_l', 'wing_r', ...SKIRT_BONES]);
 // Double joints (doublejoint.js, docs/models.md「2 重関節」): a link (elbow_* / knee_*) between the upper and the lower
 // part. The link turns about its own bone (the upper axis), the lower part (forearm_* / shin_*) about its bone (the
@@ -937,7 +941,7 @@ function jointCheck(id = roleId()) {
     const boxes = pieces.map(pc => pc.geo.boundingBox.clone().applyMatrix4(moved(pc)));
     for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
       const pa = pieces[a], pb = pieces[b];
-      if (same(pa, pb) || hidden(pa) || hidden(pb) || twoHands(pa, pb) || pa.part.noHit || pb.part.noHit || restPair.has(a + ',' + b) || !boxes[a].intersectsBox(boxes[b])) continue;
+      if (same(pa, pb) || hidden(pa) || hidden(pb) || twoHands(pa, pb) || atWaist(pa.bone, pb.bone) || pa.part.noHit || pb.part.noHit || restPair.has(a + ',' + b) || !boxes[a].intersectsBox(boxes[b])) continue;
       const gb = into(pa, moved(pa), pb, moved(pb));
       if (!pa.bvh.intersectsGeometry(gb, I)) continue;
       // grazing contact at a joint's rim is fine; only real cutting-in counts

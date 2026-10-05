@@ -1,4 +1,5 @@
 // 下半身（腰の骨）の部品の目次。1 部品 1 ファイル。前・後ろのスカートは蝶番（hinge）で腰に付き、脚に押されて開く
+import { slimX } from '../../xsasm-lib.js';
 import waist from './waist.js';
 import belly from './belly.js';
 import hipjoint from './hipjoint.js';
@@ -10,18 +11,22 @@ import skirtback from './skirtback.js';
 import maekake from './maekake.js';
 import waistdeco from './waistdeco.js';
 import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
-export const LOWER = [waist, belly, hipjoint, hipbase, skirtfront, skirtside, skirtrear, skirtback, maekake, waistdeco, f1].flat();
+// 腰の帯・後ろ腰と、帯に巻く物（ベルト・腰の筒・動力パイプ）は、横幅を上半身と同じ SLIM 倍にする（依頼主：「腰もそうなんだけど、パーツの横幅を直して」）。
+// 幅広の帯とそのベルトは、左右が合わさるスカートの輪と同じ幅で作ってあるので変えない。脚の台・スカートは股関節の位置で決まるので変えない
+const SLIM_CAT = new Set(['腰', '後ろ腰', 'ベルト', '腰の筒', '動力パイプ']), KEEP = new Set(['waistwide', 'beltwide']);
+const slim = defs => [defs].flat().flatMap(d => (SLIM_CAT.has(d.cat) && !KEEP.has(d.id) ? slimX(d, 0.9) : [d]));
+export const LOWER = [slim(waist), belly, hipjoint, hipbase, skirtfront, skirtside, slim(skirtrear), skirtback, maekake, slim(waistdeco), f1].flat();
 export const lowerById = Object.fromEntries(LOWER.map(p => [p.id, p]));
 
 /** 部品を置く決まった場所（骨格図の標準の寸法）。pair は左右の対（+x 側に置き、反対側は x の拡大 −1 で置く） */
 const HIP = [0.175, 1.6, 0];
-const AT_CAT = { 腰: [0, 1.77, 0], 後ろ腰: [0, 1.77, 0], 前掛け: [0, 1.77, 0], 腹: [0, 2.0, 0], ベルト: [0, 1.77, 0], 腰の筒: [0, 1.77, 0], 動力パイプ: [0, 1.77, 0] };
+const AT_CAT = { 腰: [0, 1.77, 0], 後ろ腰: [0, 1.77, 0], 前掛け: [0, 1.77, 0], 腰の関節: [0, 2.0, 0], ベルト: [0, 1.77, 0], 腰の筒: [0, 1.77, 0], 動力パイプ: [0, 1.77, 0] };
 export function placementOf(def) {
   return AT_CAT[def.cat] ? { mov: AT_CAT[def.cat].slice(), pair: false } : { mov: HIP.slice(), pair: true };
 }
 
 /** 見本の組み立て：骨格図の標準の寸法（xsbody.js の makeSheet()）の置き場所に置く。左右の対は +x 側を置き、反対側は x の拡大 −1。
- *  中央の部品 [腰, 腹, 後ろ腰, 前掛け]（null で置かない）と、左右の部品 [股関節, 脚の台, 前, 横, 後ろのスカート] の id */
+ *  中央の部品 [腰, 腰の関節, 後ろ腰, 前掛け]（null で置かない）と、左右の部品 [股関節, 脚の台, 前, 横, 後ろのスカート] の id */
 const sample = (mid = ['waist', 'belly', 'skirtrear', 'maekake'], sides = ['hipjoint', 'hipbase', 'skirtfront', 'skirtside', 'skirtback']) => [
   ...mid.filter(Boolean).map(part => ({ part, mov: placementOf(lowerById[part]).mov })),
   ...[1, -1].flatMap(s => sides.filter(Boolean).map(part => ({ part, mov: [s * HIP[0], HIP[1], HIP[2]], scal: [s, 1, 1] }))),
@@ -57,6 +62,6 @@ export function randomLower(rnd = Math.random) {
   // 腰の飾り：ベルト（半分くらい、幅広の帯には幅広の帯用）・筒。動力パイプはランダムでは付けない（カタログから足す）
   const belt = rnd() < 0.5 ? (waist === 'waistwide' ? 'beltwide' : pick(ids('ベルト').filter(id => id !== 'beltwide'))) : null;
   const deco = [belt, rnd() < 0.3 ? pick(ids('腰の筒')) : null];
-  return sample([waist, pick(ids('腹')), rear, maekake, ...deco], [pick(ids('股関節')), pick(ids('脚の台')), front, side, back]);
+  return sample([waist, pick(ids('腰の関節')), rear, maekake, ...deco], [pick(ids('股関節')), pick(ids('脚の台')), front, side, back]);
 }
 export const SAMPLE = SAMPLES['標準のスカート'];
