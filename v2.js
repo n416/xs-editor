@@ -49,6 +49,9 @@ const boneOf = def => (isHead(def.id) ? 'head' : def.free ? 'hips' : boneOf0(def
 /** 頭の見本：どれも依頼主が自分で組んだ置き方（顔はこちらで推し量って作らない）。
  *  1 番目は機体エディタ Ver2 で組んだ頭（2026-10-02 に貼ってもらった機体の JSON から）。最初に出る頭もこれ。2 番目は DoGA で組んだ頭。
  *  3 番目は連合の強襲の頭（機体エディタ 1 の形式の頭を部品に分けたもの：parts/peakhelm.js。置き方は元の頭のまま。tools/headgen/e1head.mjs が出す） */
+const TALL_HEAVY = [
+  { part: 'heavyhelmplain', mov: [0, 0, -0.125], rot: [0, 0, 0], scal: [3, 4.338, 3] }, { part: 'monoeyelens', mov: [0, 0.0573, 0.1279], rot: [0, 0, 0], scal: [2.919, 2.631, 1.509] },
+  { part: 'china', mov: [-0.0063, -0.2349, 0.0919], rot: [24, 0, 0], scal: [5.766, 4.764, 4.329] }, { part: 'neckarmor', mov: [0, -0.4311, -0.1772], rot: [0, 0, 0], scal: [2.289, 2.994, 2.289] }];
 const HEAD_SAMPLES = { 'バイザーとマスクと耳ブロック': [
   { part: 'headshell', mov: [0, 0, 0.0246], rot: [0, 0, 0], scal: [3.1, 2.999, 2.327] }, { part: 'maska', mov: [0, -0.0698, -0.0898], rot: [0, 0, 0], scal: [3.1, 3.2, 2.2] },
   { part: 'earblock', mov: [-0.2404, 0.0493, 0.0735], rot: [6.5, 14.4, 0], scal: [-1.477, 2.2, 2.2] }, { part: 'earblock', mov: [0.2404, 0.0493, 0.0735], rot: [6.5, -14.4, 0], scal: [1.477, 2.2, 2.2] },
@@ -64,7 +67,10 @@ const HEAD_SAMPLES = { 'バイザーとマスクと耳ブロック': [
   { part: 'earsensor', mov: [-0.2871, 0.0273, -0.1371], rot: [0, 0, 0], scal: [-3, 3.1, 2.2] }, { part: 'crestblade', mov: [0, 0.5276, -0.147], rot: [0, 0, 0], scal: [3, 3.1, 2.2] },
   { part: 'browplate', mov: [0, 0.2331, 0.1812], rot: [0, 0, 0], scal: [3, 3.1, 2.2] }, { part: 'neckblocks', mov: [0, -0.4579, -0.0539], rot: [0, 0, 0], scal: [3, 3.1, 2.2] }].map(asHead),
   // F1 型：取り込んだ機体の頭の組み方そのまま（parts/f1.js の sample。tools/partimport.mjs が書く）
-  'F1 型': f1HeadSample.map(asHead) };
+  'F1 型': f1HeadSample.map(asHead),
+  // 重装の頭を縦に伸ばした頭（2026-10-05 に貼ってもらった頭の部品の並びから。置き方は元のまま：殻の幅を 3 として戻した）。モノアイあり・なし
+  '重装の頭（高いドームとモノアイ）': TALL_HEAVY.map(asHead),
+  '重装の頭（高いドーム・モノアイなし）': TALL_HEAVY.filter(it => it.part !== 'monoeyelens').map(asHead) };
 const randomHeadV2 = () => randomHead(Math.random, HEAD_RAW).map(asHead);
 /** いくつでも付けられる部位（カタログを押すと増える）。ほかの部位は 1 つだけ（押すと、置いてある同じ部位のパーツと入れ替わる）。
  *  左右の対は、左右で 1 組。オーブ・挿せるタンクは収納口の数まで増える */
@@ -1716,7 +1722,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'd8c58b2';
+const BUILD = '96ecee8';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
