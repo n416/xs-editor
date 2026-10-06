@@ -720,11 +720,30 @@ $('#bMirror').onclick = () => { if (selected < 0) return; const src = items[sele
 // 動かした量（前の値との差）だけ置いた部品の位置を変える（元に戻すでも戻る）
 // 新しい機体の寸法の調整：上半身を 24 cm 下げて腰の帯に載せ（胴を短く）、肩を 2 cm 内へ（胴を細くした分。4 cm では、投げる動きで肩アーマーが胸の芯に 6 cm 入った）（依頼主が写真を見せて「胴体長すぎ」「デブ」）。
 // 保存してある機体・読み込む機体は、その機体の値のまま（値が無ければ 0）
-const NEW_ADJ = { ...ADJ0, up: -0.24, sh: -0.02, upperArm: -0.15, foreArm: -0.13 };   // 腕は写真の長さ（肩の関節から拳の先まで全高の 31%）
+const NEW_ADJ = { ...ADJ0, up: -0.24, sh: -0.02, upperArm: -0.15, foreArm: -0.13, std: 2 };   // 腕は写真の長さ（肩の関節から拳の先まで全高の 31%）
 let adj = { ...NEW_ADJ };
 const SHOULDER_CAT = new Set(['肩関節', '肩アーマー']);
 /** 肩の左右・高さの調整で一緒に動く部品：肩関節・肩アーマーと腕 */
 const followsShoulder = def => SHOULDER_CAT.has(def.cat) || ARM_CAT.has(def.cat);
+/** 前の頭身の機体（上半身が腰の帯から浮いていて、腰の関節の柱が見える）を、開いたときに 1 回だけ新しい標準へ直す：上半身・背中・腕の部品を腰の帯に載る高さへ下げ、
+ *  肩を 2 cm 内へ、腕は長さを変えていなければ写真の長さへ（ゲームの機体を直した tools/lineup/rebody.mjs と同じ動かし方）。直した印は寸法の調整の std。
+ *  全身が 1 つの形の機体（艦など）と、上半身があるのに腰の帯（下半身の「腰」）の無い機体（キャタピラの車体など）は変えない。直したら true */
+function toNewBody(list, a) {
+  if (a.std >= 2) return false;
+  a.std = 2;
+  const has = f => list.some(it => byId[it.part] && f(it.part, byId[it.part]));
+  // 上半身の部品がまだ無い機体は、寸法だけ新しい標準に（あとから足す標準の上半身がその高さに載る）
+  if (a.up <= NEW_ADJ.up + 1e-6 || has((id, def) => def.free && !def.tab) || (has(withUpper) && !has((id, def) => halfOf(id) === 'lower' && def.cat === '腰'))) return false;
+  const d = NEW_ADJ.up - a.up;
+  for (const it of list) {
+    if (!byId[it.part] || !withUpper(it.part)) continue;
+    it.mov = (it.mov ?? [0, 0, 0]).slice(); it.mov[1] = round(it.mov[1] + d, 4);
+    if (followsShoulder(byId[it.part])) it.mov[0] = round(it.mov[0] + Math.sign(it.mov[0] || 1) * NEW_ADJ.sh, 4);
+  }
+  a.up = NEW_ADJ.up; a.sh = round(a.sh + NEW_ADJ.sh, 4);
+  if (!a.upperArm && !a.foreArm) { a.upperArm = NEW_ADJ.upperArm; a.foreArm = NEW_ADJ.foreArm; }
+  return true;
+}
 // 関節の間の長さ・頭：置いたパーツの数値は変えず、表示と書き出しのときに掛ける（bodyparts.js の fitItem・jointsOf、headPlace）
 const SEG_ADJ = [['neck', 'adjNeck'], ['headZ', 'adjHeadZ'], ['upperArm', 'adjUArm'], ['foreArm', 'adjFArm'], ['thigh', 'adjThigh'], ['shin', 'adjShin']];
 function showAdj() {
@@ -962,7 +981,7 @@ function restore(pos) {
 const undo = () => restore(histPos - 1), redo = () => restore(histPos + 1);
 $('#bUndo').onclick = () => (PE.active() ? PE.undo() : undo());
 $('#bRedo').onclick = () => (PE.active() ? PE.redo() : redo());
-function load() { try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null'); if (d && Array.isArray(d.items)) { items = register(d.items).filter(it => byId[it.part] && !it.tmp); adj = { ...ADJ0, ...(d.adj ?? {}) }; if (d.paint?.pal) paint = { ...DEFAULT_PAINT(), ...d.paint }; unitName = d.name ?? ''; saveId = d.saveId ?? ''; savedHash = d.savedHash ?? ''; return true; } } catch { /* storage blocked */ } return false; }
+function load() { try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null'); if (d && Array.isArray(d.items)) { items = register(d.items).filter(it => byId[it.part] && !it.tmp); adj = { ...ADJ0, ...(d.adj ?? {}) }; toNewBody(items, adj); if (d.paint?.pal) paint = { ...DEFAULT_PAINT(), ...d.paint }; unitName = d.name ?? ''; saveId = d.saveId ?? ''; savedHash = d.savedHash ?? ''; return true; } } catch { /* storage blocked */ } return false; }
 /** 上半身・腕の見本・ランダムの部品を、今の寸法の調整の位置へずらす */
 const adjusted = list => list.map(it => {
   const sh = followsShoulder(byId[it.part]), m = (it.mov ?? [0, 0, 0]).slice();
@@ -980,9 +999,9 @@ $('#bApply').onclick = () => {
     persistUser(); renderCatalog();
     // 部位だけの JSON（half 付き）：その部位だけを入れ替える。色・寸法の調整は今のまま
     if (d.half) { replaceHalf(d.half, list.filter(it => halfOf(it.part) === d.half)); note(`${HALF_NAME[d.half] ?? d.half}だけ入れ替えました`); return; }
-    if (d.adj) { adj = { ...adj, ...d.adj }; showAdj(); }
+    if (d.adj) adj = { ...adj, std: 0, ...d.adj };
     if (d.paint?.pal) { paint = { ...DEFAULT_PAINT(), ...d.paint }; showPaint(); }
-    items = tidy(list); selected = -1; rebuild(); save(); note('読みました（保存した機体としては、まだ保存していません）');
+    items = tidy(list); const fixed = d.adj && toNewBody(items, adj); showAdj(); selected = -1; rebuild(); save(); note(fixed ? '読みました。前の頭身の機体なので、新しい頭身（上半身を腰の帯に載せる）に直しました' : '読みました（保存した機体としては、まだ保存していません）');
   } catch (e) { note('読めません：' + e.message, true); }
 };
 /** 機体の全部：置いたパーツ・寸法の調整・塗りと、使っている自分のパーツ（ほかのブラウザ・道具でも読めるように） */
@@ -1322,12 +1341,13 @@ function openDoc(d, name = '', id = '') {
   if (!Array.isArray(list)) throw new Error('機体の JSON の形が違います');
   registerUnit(d); for (const def of Object.values(d.userParts ?? {})) if (def?.id && byId[def.id] === def) userParts[def.id] = def;
   persistUser(); renderCatalog(); showTab(tab);
-  adj = { ...ADJ0, ...(d.adj ?? {}) }; showAdj();
+  adj = { ...ADJ0, ...(d.adj ?? {}) };
   paint = d.paint?.pal ? { ...DEFAULT_PAINT(), ...d.paint } : DEFAULT_PAINT(); showPaint();
   items = tidy(list); selected = -1;
+  const fixed = toNewBody(items, adj); showAdj();   // 前の頭身の機体は新しい頭身へ（保存してある方は、保存し直すまで前のまま）
   unitName = name || d.name || ''; saveId = id; savedHash = '';
   rebuild(); save();
-  if (id) { savedHash = docHash(); persist(); showUnitName(); }
+  if (id) { savedHash = fixed ? '' : docHash(); persist(); showUnitName(); }
 }
 const safeName = n => String(n || '機体').replace(/[\\/:*?"<>|]/g, '_');
 function saveFile(doc = unitDoc(), name = `${safeName(unitName)}.xsunit.json`) {
@@ -1729,7 +1749,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '8d4b2c3';
+const BUILD = 'ec28de6';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
