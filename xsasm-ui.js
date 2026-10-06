@@ -218,7 +218,7 @@ function renderCatalog() {
   for (const cat of cats) {
     const h = document.createElement('h2'); h.textContent = cat; el.appendChild(h);
     const grid = document.createElement('div'); grid.className = 'cat'; el.appendChild(grid);
-    for (const def of PARTS.filter(p => p.cat === cat)) {
+    for (const def of PARTS.filter(p => p.cat === cat && !p.retired)) {
       const b = document.createElement('button');
       const cv = document.createElement('canvas'); b.appendChild(cv);
       const s = document.createElement('span'); s.textContent = def.name; b.appendChild(s);

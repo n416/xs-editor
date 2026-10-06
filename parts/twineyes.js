@@ -16,6 +16,8 @@ const TILT = [0, 0.2, 1];                               // 前面は少し上を
 const FRONT = d => P(TILT, [0, -0.025, ZF - d]);       // d = 前面からの引っ込み
 const REAR = d => P(TILT.map(v => -v), [0, -0.025, ZF - d]);
 const BACK = ZL(-0.03);
+const EYE_TIP = 0.068;                                 // 目の外の端（EYE_PTS の耳の側の端の x）。部品の eyeTip：置くとき、殻の溝の端に合わせる
+const EYE_H = 0.020;                                    // 目の高さ（EYE_PTS の上下の差）。部品の eyeH：置くとき、殻の溝の高さに合わせる（xsasm-random.js）
 const SEAT = 0.006;                                     // 溝の奥の壁に当てる z（xsasm-random.js）：窓の奥の暗い壁の少し後ろ。枠・目だけ・枠なしのどれも同じ（重ねて置くと同じ位置に来る）
 const CORNER_R = P([1, 0.2, 1], [0.074, -0.025, ZF]);   // 外の前の縦の角を細く落とす
 // 目 1 つ（右半分の中。正面から見た輪郭）。幅 0.056（x 0.012 〜 0.068）、高さ 0.020
@@ -41,7 +43,7 @@ export function twinEyes(deg) {
   }
   // 中央の鼻筋：折れ目を覆う細い柱。前は小さな稜
   pieces.push(piece('鼻筋', [XL(-0.012), XH(0.012), YL(-0.025), YH(0.025), BACK, P([0.6, 0.2, 1], [0.008, -0.025, ZF + 0.004]), P([-0.6, 0.2, 1], [-0.008, -0.025, ZF + 0.004])]));
-  return { id: 'twineyes' + deg, name: `ツインアイ（八の字 ${deg}°）`, cat: '顔', size: [0.16, 0.05, 0.06 + 0.08 * Math.sin(deg * Math.PI / 180)], seatZ: SEAT, pieces };
+  return { id: 'twineyes' + deg, name: `ツインアイ（八の字 ${deg}°）`, cat: '顔', size: [0.16, 0.05, 0.06 + 0.08 * Math.sin(deg * Math.PI / 180)], seatZ: SEAT, eyeH: EYE_H, eyeTip: EYE_TIP, frontZ: ZF, pieces };
 }
 
 
@@ -57,7 +59,7 @@ export function bareEyes(deg) {
 /** 枠だけ：目を入れない枠（上下の縁・外の柱・底板・奥の暗い壁・鼻筋）を八の字に。目は別の部品（枠なしのツインアイなど）を入れる */
 export function eyeFrame(deg) {
   const full = twinEyes(deg);
-  return { id: 'twineyesframe' + deg, name: `ツインアイの枠（八の字 ${deg}°）`, cat: '顔', size: full.size, seatZ: SEAT, pieces: full.pieces.filter(pc => !pc.name.startsWith('目')) };
+  return { id: 'twineyesframe' + deg, name: `ツインアイの枠（八の字 ${deg}°）`, cat: '顔', size: full.size, seatZ: SEAT, eyeH: EYE_H, eyeTip: EYE_TIP, frontZ: ZF, pieces: full.pieces.filter(pc => !pc.name.startsWith('目')) };
 }
 
 /** 枠を付けない：明るい縁（上下の縁・外の柱）を外し、暗い板と光る目だけを八の字に。板は縁があった所まで広い */
@@ -66,7 +68,7 @@ export function noRimEyes(deg) {
   const eye = EYE_R;
   const pr = rotYAt(plate, deg, 0, ZF), er = rotYAt(eye, deg, 0, ZF);
   const o = { color: GLOW, glow: true, metal: 0, rough: 0.3 };
-  return { id: 'twineyesnorim' + deg, name: `ツインアイ（枠なし ${deg}°）`, cat: '顔', size: [0.16, 0.05, 0.06 + 0.08 * Math.sin(deg * Math.PI / 180)], seatZ: SEAT,
+  return { id: 'twineyesnorim' + deg, name: `ツインアイ（枠なし ${deg}°）`, cat: '顔', size: [0.16, 0.05, 0.06 + 0.08 * Math.sin(deg * Math.PI / 180)], seatZ: SEAT, eyeH: EYE_H, eyeTip: EYE_TIP, frontZ: ZF,
     pieces: [piece('板（右）', pr, { color: BLACK }), piece('板（左）', pr.map(mir), { color: BLACK }), piece('目（右）', er, o), piece('目（左）', er.map(mir), o)] };
 }
 

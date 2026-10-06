@@ -109,6 +109,17 @@ const CAT_ORDER = ['頭蓋', '顔', 'マスク', 'あご', '飾り', 'トサカ'
 const catRank = d => { const k = CAT_ORDER.indexOf(d.cat); return k < 0 ? CAT_ORDER.length : k; };
 export const PARTS = [headshell, headshellplain, facemask, jawblock, fin, crest, ...EXTRA].map((d, i) => [d, i]).sort((a, b) => catRank(a[0]) - catRank(b[0]) || a[1] - b[1]).map(([d]) => d);
 export const byId = Object.fromEntries(PARTS.map(p => [p.id, p]));
+// カタログとランダムに出さない殻（retired）：依頼主が、殻ぜんぶにツインアイを置いた絵に赤線を引いた 6 つの形（2026-10-07。「ほとんどろくでもない形ばかりだ」）と、その目付き。
+// 部品は残す：ゲームの機体 11 機・保存してある機体・頭の見本「重装の頭（高いドーム…）」が使っている。出さないのは、頭のカタログ（Ver2・頭の組み立て）とランダムの頭
+for (const id of ['visorhelm', 'heavyhelm', 'tallheavyhelm', 'roundhelm', 'scopehelm', 'brimhelm']) for (const k of [id, id + 'plain']) if (byId[k]) byId[k].retired = true;
+// 枠の付いたツインアイ（枠あり・枠だけ）も出さない（依頼主：「ツインアイの殻付きは全部つかえない」）。残るのは枠なし（暗い板と目）と目だけ。F1 型の見本の頭は枠ありを使っているので、部品は残す
+for (const deg of [15, 18, 21, 24]) for (const k of ['twineyes' + deg, 'twineyesframe' + deg]) if (byId[k]) byId[k].retired = true;
+// 1 つの殻から切り出した部品（殻の座標で、元の頭と同じ所に付く：parts/peakhelm.js）は、ランダムではその殻にだけ付ける（only）。
+// 前はどの殻にも付いて、「頭の殻」の口の両脇にひさしの頭のほほガードが垂れた（依頼主：「そのふざけた顔は一体なんだよ」）。カタログからは今までどおり、どの殻にも置ける
+for (const id of ['peakvisor', 'peakcheek', 'earsensor', 'crestblade', 'browplate', 'browplatemain', 'browplatesub', 'neckblocks', 'sensorpod']) if (byId[id]) byId[id].only = ['peakhelm', 'peakhelmplain'];
+if (byId.topsensor) byId.topsensor.only = ['sniperhelm', 'sniperhelmplain'];   // GIO の狙撃の頭（細身の頭）の上の箱
+// マスク（口先）も出さない（依頼主：「マスク（口先）もだめ」）
+byId.masksnout.retired = true;
 // 消した殻（「角ばった頭」boxhelm。依頼主：見るのも嫌になってきた。削除で）：保存してある機体がこの id を持っていたら、「頭の殻」として読む（殻の無い頭にしない）。カタログには出ない
 byId.boxhelm = headshell;
 // 分ける前の V 字アンテナ（刃と中央が一体。id vfin）：カタログには出さず、保存してある機体のために残す

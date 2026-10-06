@@ -906,7 +906,7 @@ const catButtons = new Map();
 // 左のタブ：部位ごとにカタログを出す
 const TABS = [['head', '頭', HEAD], ['upper', '上半身', UPPER], ['back', '背中', BACK], ['arm', '腕', ARM], ['lower', '下半身', LOWER], ['leg', '脚', LEG], ['weapon', '武器', []], ['free', '取り込み', []]];
 /** そのタブに並べるパーツ：頭のタブには「頭まるごと」（機体エディタの機体から取り出した頭）、取り込みのタブには自由な機体 */
-const tabList = (half, list) => (half === 'head' ? [...list, ...FREE.filter(d => d.tab === 'head')] : half === 'weapon' ? FREE.filter(d => d.tab === 'weapon') : half === 'free' ? FREE.filter(d => !d.tab) : list);
+const tabList = (half, list) => (half === 'head' ? [...list.filter(d => !d.retired), ...FREE.filter(d => d.tab === 'head')] : half === 'weapon' ? FREE.filter(d => d.tab === 'weapon') : half === 'free' ? FREE.filter(d => !d.tab) : list);
 let tab = 'head';
 function showTab(t) {
   tab = t;
@@ -1749,7 +1749,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'ec28de6';
+const BUILD = '5d3be5c';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

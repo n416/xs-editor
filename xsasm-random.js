@@ -2,6 +2,7 @@
 // 画面（xsasm-ui.js）と Node の道具（tools/headgen/asm.mjs）の両方から使う。rng は 0..1 を返す関数（省略時は Math.random）。
 // 部品の倍率は「部品の size と、頭に対する狙いの大きさ」から決めるので、部品がどの大きさで作ってあっても頭に合う。
 import { PARTS, byId } from './xsasm-parts.js';
+import { f1HeadSample } from './parts/index.js';
 
 // 頭の殻は部品の座標で 幅 ±0.094、高さ −0.074（あご）〜0.146（頂）、奥行き −0.142（後ろ）〜0.152（前）、目の高さ 0.023、まゆ 0.035
 export const mirrorOf = it => ({ ...it, mov: [-it.mov[0], it.mov[1], it.mov[2]], rot: [it.rot[0], -it.rot[1], -it.rot[2]], scal: [-it.scal[0], it.scal[1], it.scal[2]], name: (it.name ?? byId[it.part]?.name ?? it.part) + '（鏡像）' });
@@ -80,6 +81,82 @@ function seat(it, shellItem, d) {
   if (touch === Infinity || touch <= -EMBED) return it;
   return { ...it, mov: it.mov.map((v, i) => v + d[i] * (touch + EMBED)) };
 }
+// ---- 目の溝の広さ ----
+// ツインアイは、殻の幅の決まった割合（45〜62%）で置いていた。溝の広さは殻ごとに違う（殻の幅の 46〜88%）ので、どの殻でも溝の半分ほどしか無く、
+// 両脇に暗い溝が余った（依頼主：「ツインアイの横幅どう考えてもせまくって」）。殻の形から溝の広さを測り、それに合わせる。
+// 幅：目の外の端（tip）を、溝の幅の決まった割合の所に置く。割合は、奥の壁が横へ回り込む殻と、平らな殻で違う。依頼主の 2 つの置き方から決めた：
+//   F1 型の頭（parts/f1.js の見本）：溝は頭の横まで回り込む（半分の幅 0.084、壁は端で中央より 10 cm 奥）。目の外の端は 0.060 ＝ 溝の EYE_SPAN 倍
+//   ひさしの頭（2026-10-07 に画面で合わせた倍率 2.1）：壁は平らで、目の外の端は窓の端の少し内（窓の半分の幅 0.050 の EYE_WIN 倍）
+//   壁が回り込むかどうか：溝の中で、壁が中央より EYE_TURN 以上奥へ下がる所があるか
+//   （最初は「溝の幅の 85%」にしたが、F1 型にしか合わず、ひさしの頭では前より小さくなった：「２倍にしてようやくこれですよ？」）
+// 高さ：目の高さは溝の高さの 89%（F1 型の頭から）
+const EYE_TURN = 0.03, EYE_SPAN = 0.72, EYE_WIN = 0.95, EYE_TALL = 0.89, EYE_IN = 0.003;   // （EYE_IN：殻の座標。[独自]）
+const OPEN = new Map();
+const darkPiece = pc => { if (pc.glow) return true; const n = parseInt(String(pc.color ?? '#888888').slice(1), 16); return ((n >> 16) * 0.3 + ((n >> 8) & 255) * 0.59 + (n & 255) * 0.11) / 255 < 0.2; };
+/** 殻の座標で、正面（+z の遠く）から点 (x, y) を見たとき最初に見えるブロックと、その面の z（無ければ null） */
+function seenAt(def, x, y) {
+  const it = { mov: [0, 0, 0], scal: [1, 1, 1] }, I = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  let best = null, tb = Infinity;
+  for (const pc of solid(def)) { const t = enterAt(it, I, pc, [x, y, 1], [0, 0, -1]); if (t !== null && t < tb) { tb = t; best = pc; } }
+  return best && { pc: best, z: 1 - tb };
+}
+/** 目の溝（正面から見て暗い所：溝の奥の壁・はめ込みの目。壁の横の、ずっと奥が見えているすき間も溝のうち）の広さ。殻の座標で { half: 中心からの幅, tip: 目の外の端を置く所, y0, y1: 幅の 1/4 の所での下の端・上の端,
+ *  depth: 溝の深さ（幅の 1/4 の所で、溝のすぐ上・すぐ下の面のうち奥の方から、奥の壁まで。上下に面が無ければ 0） }。溝の無い殻は null */
+export function eyeOpening(shellId) {
+  if (OPEN.has(shellId)) return OPEN.get(shellId);
+  const def = byId[shellId], y = faceOf(shellId).eye[0], dark = (x, yy) => { const s = seenAt(def, x, yy); return !!s && darkPiece(s.pc); };
+  // 中心から外へ：暗い壁が続く間と、壁より 2 cm 以上奥が見えている間は溝。壁と同じ深さか手前に明るい面が出たら、そこが端
+  const s0 = seenAt(def, 0, y); let half = 0, wallZ = s0 && darkPiece(s0.pc) ? s0.z : null, turn = null;
+  while (wallZ !== null && half < 0.3) {
+    const s = seenAt(def, half + 0.002, y); if (!s) break;
+    if (darkPiece(s.pc)) { wallZ = s.z; if (turn === null && s0.z - s.z > EYE_TURN) turn = half; } else if (s.z > wallZ - 0.02) break;
+    half += 0.002;
+  }
+  let out = null;
+  if (half >= 0.02) { const q = Math.min(half, turn ?? half) / 2; let y0 = y, y1 = y; while (y - y0 < 0.08 && dark(q, y0 - 0.001)) y0 -= 0.001; while (y1 - y < 0.08 && dark(q, y1 + 0.001)) y1 += 0.001; const wall = seenAt(def, q, (y0 + y1) / 2), lips = [seenAt(def, q, y1 + 0.003), seenAt(def, q, y0 - 0.003)];
+    out = { half, tip: (turn === null ? EYE_WIN : EYE_SPAN) * half, y0, y1, depth: wall && lips.every(Boolean) ? Math.max(0, Math.min(...lips.map(l => l.z)) - wall.z) : 0 }; }
+  OPEN.set(shellId, out);
+  return out;
+}
+// ---- 両端を殻に入れる（頬の動力パイプ） ----
+// 頭は前へ行くほど細い。管を頭の横の決まった位置にまっすぐ置くと、前の端が頬の前で宙に浮いた。
+// 殻の横の面を管の両端の所で測り、両端が同じだけ中に入る向き（縦軸まわり）と左右の位置にする。前の端が殻から外れる所では、当たる所まで後ろへずらす
+/** 体の座標で、+x の遠くから点 (y, z) を見たとき、殻の面の x（当たらなければ null） */
+function sideAt(shellItem, y, z) {
+  const R = rotOf(shellItem.rot); let tb = Infinity;
+  for (const pc of solid(byId[shellItem.part])) { const t = enterAt(shellItem, R, pc, [5, y, z], [-1, 0, 0]); if (t !== null && t < tb) tb = t; }
+  return tb === Infinity ? null : 5 - tb;
+}
+function seatEnds(it0, shellItem) {
+  // あごの高さで殻が細いくさび形の頭（頭の殻・F1 型）では、その高さに合わせると管がほとんど殻の中に隠れた。向きが 25° を超えるか、8 割より縮むなら、3 cm ずつ上の高さで置き直す（12 cm まで）
+  let pick = null;
+  for (let up = 0; up <= 0.121; up += 0.03) {
+    const r = seatEndsAt({ ...it0, mov: [it0.mov[0], it0.mov[1] + up, it0.mov[2]] }, shellItem), bad = Math.abs(r.rot[1]) > 25 || Math.abs(r.scal[2]) < 0.8 * Math.abs(it0.scal[2]) || r.unseated;
+    if (!bad) return r;
+    if (!pick || Math.abs(r.rot[1]) < Math.abs(pick.rot[1])) pick = r;
+  }
+  return pick;
+}
+function seatEndsAt(it, shellItem) {
+  const def = byId[it.part], pc0 = { pos: [0, 0, 0] };
+  // 管の高さで殻のある前後の範囲を測り、管がそれより長ければ、収まる長さ（範囲の 92%）まで全体を縮めて、範囲のまん中へ（頭の殻は、あごの高さでは前後が短い：そのままだと両端とも殻から外れて、管が宙に浮いた）
+  { const zs = []; for (let z = it.mov[2] + 0.5; z >= it.mov[2] - 0.5; z -= 0.01) if (sideAt(shellItem, it.mov[1], z) !== null) zs.push(z);
+    if (zs.length > 4) { const len = Math.abs(def.ends[0][2] - def.ends[1][2]), span = zs[0] - zs[zs.length - 1], k = Math.min(Math.abs(it.scal[2]), 0.92 * span / len);
+      it = { ...it, mov: [it.mov[0], it.mov[1], (zs[0] + zs[zs.length - 1]) / 2 - k * (def.ends[0][2] + def.ends[1][2]) / 2], scal: it.scal.map(v => Math.sign(v) * k) }; } }
+  const gap = (z, yaw) => {   // 両端それぞれの「殻の面より外に出ている量」。どちらかが殻に当たらなければ null
+    const t = { ...it, mov: [it.mov[0], it.mov[1], z], rot: [it.rot[0], yaw, it.rot[2]] }, R = rotOf(t.rot);
+    const g = def.ends.map(e => { const w = toWorld(t, R, pc0, e), sx = sideAt(shellItem, w[1], w[2]); return sx === null ? null : w[0] - sx; });
+    return g.includes(null) ? null : g;
+  };
+  // 後ろへ 2 cm ずつずらしながら、両端の入り方の差がいちばん小さい向きを探す。差が 1 cm より小さくなった所で決める（無ければ、差がいちばん小さかった所）
+  let best = null;
+  for (let back = 0; back <= 0.3 && !(best && best.d < 0.01); back += 0.02) {
+    const z = it.mov[2] - back;
+    for (let yaw = -45; yaw <= 45; yaw += 1) { const g = gap(z, yaw); if (g && (!best || Math.abs(g[0] - g[1]) < best.d)) best = { d: Math.abs(g[0] - g[1]), yaw, g, z }; }
+  }
+  if (!best) return { ...it, unseated: true };
+  return { ...it, mov: [it.mov[0] - Math.max(best.g[0], best.g[1]) - def.endIn * Math.abs(it.scal[0]), it.mov[1], best.z], rot: [it.rot[0], best.yaw, it.rot[2]] };   // （外に出ている方の端を基準に：どちらの端も中に入る）
+}
 /** 殻へ寄せる向き：トサカと頭頂の飾りは下、後ろの飾りは前、横の飾りは内。寄せないものは null */
 function seatDir(def, it, shellItem) {
   if (def.brow) return [0, 0, -1];   // 額に付くトサカは後ろへ（額の面へ）
@@ -142,7 +219,17 @@ export function placementsFor(id, shellItem, rng = Math.random) {
     'アンテナの中央（額）': id => browAt(id),
     顔: id => id === 'facemask'
       ? [{ part: id, mov: [0, rnd(-0.05, 0.05), rnd(-0.03, 0.03)], rot: [0, 0, 0], scal: [rnd(0.8, 1.2), rnd(0.8, 1.2), rnd(0.8, 1.2)] }]
-      : (() => { const s = fit(id); return [{ part: id, mov: [0, my + F.eye[0] * sh + rnd(-0.008, 0.008), mz + F.eye[1] * sd - (byId[id].seatZ ?? 0) * s[2] + rnd(0, 0.01)], rot: [0, 0, 0], scal: s }]; })(),   // 目は溝の奥の壁に当てる（部品の seatZ を壁へ）
+      : (() => {
+        // 溝に合わせる目（部品に eyeH：目の高さ。ツインアイ）：幅は溝の幅から、高さは溝の高さから。前後は幅と同じ倍率（八の字の折れ角を変えない）。
+        // 高さが溝で決まるときは溝の上下の真ん中へ、溝が目より十分高い殻（ひさしの頭の大きな窓）では殻の face.eye の高さへ。
+        // 前後：奥の壁に当てると、大きくした分だけ枠の前の面が溝から出て、殻の面の上に枠が浮いて見えた。前の面が溝の縁より EYE_IN 奥に収まる所まで、奥へ入れる（溝に上下の面がある殻だけ）
+        const O = (byId[def.fitAs] ?? def).eyeH ? eyeOpening(shellItem.part) : null;
+        if (O) {
+          const ref = byId[def.fitAs] ?? def, kx = O.tip * sw / ref.eyeTip, kt = EYE_TALL * (O.y1 - O.y0) * sh / ref.eyeH, ky = Math.min(kx, kt);
+          return [{ part: id, mov: [mx, my + (kt < kx ? (O.y0 + O.y1) / 2 : F.eye[0]) * sh, mz + F.eye[1] * sd - (def.seatZ ?? 0) * kx - (O.depth ? Math.max(0, ((ref.frontZ ?? 0) - (def.seatZ ?? 0)) * kx - (O.depth - EYE_IN) * sd) : 0)], rot: [0, 0, 0], scal: [kx, ky, kx] }];
+        }
+        const s = fit(id); return [{ part: id, mov: [0, my + F.eye[0] * sh + rnd(-0.008, 0.008), mz + F.eye[1] * sd - (byId[id].seatZ ?? 0) * s[2] + rnd(0, 0.01)], rot: [0, 0, 0], scal: s }];   // 目は溝の奥の壁に当てる（部品の seatZ を壁へ）
+      })(),
     マスク: id => {
       const d = byId[id];
       if (!d.mouth) return [{ part: id, mov: [0, my + F.mouth[0] * sh + rnd(-0.01, 0.01), mz + F.mouth[1] * sd + rnd(0, 0.01)], rot: [(Math.atan(Math.tan(F.mouth[2] * D) * sd / sh)) / D, 0, 0], scal: fit(id) }];
@@ -168,7 +255,7 @@ export function placementsFor(id, shellItem, rng = Math.random) {
       if (id === 'backfin') return [{ part: id, mov: [0, H.top - rnd(0.08, 0.2), H.back + rnd(0.0, 0.05)], rot: [rnd(-10, 10), 0, 0], scal: fit(id) }];
       if (id === 'thruster') { const it = { part: id, mov: [H.side - rnd(0.05, 0.12), rnd(0.0, 0.15), H.back + rnd(0.0, 0.05)], rot: [0, rnd(-20, 20), 0], scal: fit(id) }; return [it, mirrorOf(it)]; }
       // 動力パイプ：頬は頭の横の下寄りに前後に沿わせ、口から首へは口の前から左右へ（どちらも左右の対）
-      if (id.startsWith('headpipecheek')) { const it = { part: id, mov: [H.side - rnd(0.0, 0.03), H.chin + H.h * rnd(0.2, 0.32), (H.front + H.back) / 2 + rnd(0.0, 0.05)], rot: [rnd(-8, 8), 0, 0], scal: fit(id) }; return [it, mirrorOf(it)]; }
+      if (id.startsWith('headpipecheek')) { const k = fitScale(id, H, rng, 0)[2], it = seatEnds({ part: id, mov: [H.side - rnd(0.0, 0.03), H.chin + H.h * rnd(0.2, 0.32), (H.front + H.back) / 2 + rnd(0.0, 0.05)], rot: [rnd(-8, 8), 0, 0], scal: [k, k, k] }, shellItem); return [it, mirrorOf(it)]; }   // （倍率は軸ごとに変えない：管の輪がつぶれない）
       if (id === 'headpipemouth') { const it = { part: id, mov: [0.02, H.chin + H.h * rnd(0.1, 0.18), H.chinFront - rnd(0.0, 0.04)], rot: [0, 0, 0], scal: fit(id) }; return [it, mirrorOf(it)]; }
       const it = { part: id, mov: [H.side - rnd(0.0, 0.04), H.eye + rnd(-0.08, 0.04), rnd(-0.06, 0.02)], rot: [0, rnd(-10, 10), rnd(-10, 10)], scal: fit(id) };   // 耳ブロック・頬当てなど、横に付くもの
       return [it, mirrorOf(it)];
@@ -177,19 +264,31 @@ export function placementsFor(id, shellItem, rng = Math.random) {
   return (PLACERS[def.cat] ?? PLACERS['飾り'])(id).map(it => { const d = seatDir(def, it, shellItem); return d ? seat(it, shellItem, d) : it; });
 }
 
+// F1 型の殻の口もと：見本の F1 型の頭（依頼主が組んだ頭。parts/f1.js）と同じ組（マスク・あご・ほほガード 2 枚）を、見本と同じ所に付ける（依頼主：「F1型の殻には見本と同じ組を付けて」）。
+// 殻の大きさが見本と違う分は、殻からの位置と倍率を軸ごとに合わせる
+const F1_SHELL = 'headshellplainf1', F1_MOUTH = new Set(['maska', 'chinaf1', 'peakcheek']);
+function f1Mouth(shellItem) {
+  const s0 = f1HeadSample.find(it => it.part === F1_SHELL), k = [0, 1, 2].map(i => Math.abs(shellItem.scal[i]) / Math.abs(s0.scal[i]));
+  return f1HeadSample.filter(it => F1_MOUTH.has(it.part)).map(it => ({ part: it.part, mov: it.mov.map((v, i) => shellItem.mov[i] + (v - s0.mov[i]) * k[i]), rot: (it.rot ?? [0, 0, 0]).slice(), scal: it.scal.map((v, i) => v * k[i]) }));
+}
 export function randomHead(rng = Math.random, parts = PARTS) {
   const rnd = (a, b) => a + rng() * (b - a);
   const pick = arr => arr[Math.floor(rng() * arr.length)];
-  const shells = parts.filter(p => p.cat === '頭蓋');
+  const shells = parts.filter(p => p.cat === '頭蓋' && !p.retired);
   const sw = rnd(2.6, 3.4), sh = rnd(2.8, 3.4), sd = rnd(2.0, 2.4);
   const shell = pick(shells);
   const shellItem = { part: shell.id, mov: [0, 0, -0.125], rot: [0, 0, 0], scal: [sw, sh, sd] };
   // 首は必ず付く（首の無い頭は作らない）。首当て（襟）は首に足して付けるもので、ときどき
   const SLOT_ODDS = { 顔: 0.85, マスク: 0.6, あご: 0.7, トサカ: 0.5, 'アンテナ（額）': 0.4, 頭の上の装備: 0.12, 飾り: 0.85, 首: 1, 首当て: 0.3 };
-  const out = [shellItem];
+  const f1 = shell.id === F1_SHELL, out = [shellItem, ...(f1 ? f1Mouth(shellItem) : [])];
   for (const [cat, odds] of Object.entries(SLOT_ODDS)) {
-    const cands = parts.filter(p => p.cat === cat);
-    if (!cands.length || rng() > odds) continue;
+    if (f1 && (cat === 'マスク' || cat === 'あご')) continue;   // （F1 型の殻：口もとはもう付けた）
+    let cands = parts.filter(p => p.cat === cat && !p.retired && (!p.only || p.only.includes(shell.id)));
+    // 目：目なしの殻には必ず目を 1 つ（前は 15% で付かず、顔当てが選ばれることもあって、目の無い頭ができた）。目の付いた殻には足さない（前は足していて、目が 2 組になった）
+    const eyeless = /plain/.test(shell.id), isEye = p => /^(twineyes|monoeye)/.test(p.id) || p.id === 'peakvisor';
+    if (cat === '顔') { if (!eyeless) continue; cands = cands.filter(isEye); }
+    if (f1 && cat === '飾り') cands = cands.filter(p => !p.id.startsWith('headpipe'));   // （口もとにほほガードがあるので、顔の動力パイプは付けない）
+    if (!cands.length || (rng() > odds && !(cat === '顔' && eyeless))) continue;
     const n = cat === '飾り' && rng() < 0.4 ? 2 : 1;   // 飾りは 2 種類付くこともある
     const used = new Set();
     for (let k = 0; k < n; k++) {
