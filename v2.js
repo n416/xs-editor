@@ -1003,7 +1003,7 @@ const SAMPLE_SETS = { h: ['head', '頭', HEAD_SAMPLES], u: ['upper', '上半身'
 $('#sampleSel').innerHTML = Object.entries(SAMPLE_SETS).map(([h, [, title, set]]) => `<optgroup label="${title}">${Object.keys(set).map(k => `<option value="${h}:${k}">${k}</option>`).join('')}</optgroup>`).join('');
 $('#bPipe').onclick = placeRandomPipe;
 $('#bNew').onclick = () => { if (busy() || !okToLeave('新しく始めます')) return; unitName = ''; saveId = ''; savedHash = ''; items = []; paint = DEFAULT_PAINT(); showPaint(); adj = { ...NEW_ADJ }; showAdj(); selected = -1; rebuild(); save(); };
-$('#bRandom').onclick = () => { if (busy()) return; items = tidy([...randomHeadV2(), ...randomLower(), ...adjusted(randomUpper()), ...adjusted(randomBack()), ...adjusted(randomArm()), ...randomLeg()]); selected = -1; rebuild(); save(); fitKneeGuards(); };
+$('#bRandom').onclick = () => { if (busy()) return; adj = { ...NEW_ADJ }; showAdj(); items = tidy([...randomHeadV2(), ...randomLower(), ...adjusted(randomUpper()), ...adjusted(randomBack()), ...adjusted(randomArm()), ...randomLeg()]); selected = -1; rebuild(); save(); fitKneeGuards(); };
 $('#bKneeFit').onclick = fitKneeGuards;
 /** その部分だけ入れ替える */
 const replaceHalf = (half, list, fit = true) => { if (busy()) return; items = [...items.filter(it => halfOf(it.part) !== half), ...tidy(list)]; selected = -1; rebuild(); save(); if (fit && (half === 'leg' || half === 'lower')) fitKneeGuards(); };
@@ -1729,7 +1729,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'c0730c1';
+const BUILD = '8d4b2c3';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
