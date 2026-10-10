@@ -449,6 +449,8 @@ function materialClass(p) {
   return 'body';
 }
 
+// the ORB rack's parts ride on a bone of their own, orb_rack: the game hides the rack (and the orbs) on an XS that carries no orbs
+const RACK_RE = /ORB 収納ラック/;
 // meshes of one LOD: [{ geo (world, non-indexed), part, bone }]
 function lodPieces(level) {
   const out = [];
@@ -458,7 +460,7 @@ function lodPieces(level) {
       const cx = (g.boundingBox.min.x + g.boundingBox.max.x) / 2, cz = (g.boundingBox.min.z + g.boundingBox.max.z) / 2;
       const geo = g.index ? g.toNonIndexed() : g;   // imported meshes are indexed
       geo.computeBoundingBox();
-      out.push({ geo, part: p, bone: sided(boneGroupOf(p), cx, cz), orb: p.orb ? 'orb_' + p.orb.i : null });
+      out.push({ geo, part: p, bone: sided(boneGroupOf(p), cx, cz), orb: p.orb ? 'orb_' + p.orb.i : RACK_RE.test(p.name ?? '') ? 'orb_rack' : null });
     }
   };
   const solid = parts.filter(p => p.op === 'add' && !p.blockout);
@@ -1073,7 +1075,7 @@ function buildGameModel() {
   const orbNames = [];
   {
     const seen = new Map();
-    for (const pc of lods[0]) if (pc.orb && !seen.has(pc.orb)) seen.set(pc.orb, pc.part);
+    for (const pc of lods[0]) if (pc.part.orb && !seen.has(pc.orb)) seen.set(pc.orb, pc.part);
     const flipQ = new THREE.Quaternion(0, 1, 0, 0);
     for (const [name, p] of [...seen].sort((a, b) => a[1].orb.i - b[1].orb.i)) {
       p.proxy.updateMatrixWorld();
@@ -1087,6 +1089,8 @@ function buildGameModel() {
       }
     }
   }
+  // orb_rack: at the torso bone, nothing turned (the game only scales it to 0)
+  if (lods[0].some(pc => pc.orb === 'orb_rack')) { const b = new THREE.Bone(); b.name = 'orb_rack'; bones.torso.add(b); bones.orb_rack = b; orbNames.push('orb_rack'); }
   root.updateMatrixWorld(true);
   const boneNames = [...gameBones.map(([n]) => n), ...orbNames];
   const boneList = boneNames.map(n => bones[n]);
