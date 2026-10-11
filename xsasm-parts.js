@@ -120,6 +120,8 @@ for (const id of ['peakvisor', 'peakcheek', 'earsensor', 'crestblade', 'browplat
 if (byId.topsensor) byId.topsensor.only = ['sniperhelm', 'sniperhelmplain'];   // GIO の狙撃の頭（細身の頭）の上の箱
 // マスク（口先）も出さない（依頼主：「マスク（口先）もだめ」）
 byId.masksnout.retired = true;
+// 動力パイプ（口から首へ）も出さない（依頼主 2026-10-11：「方向が気持ち悪い。妙に小さくて、1色で」→ カタログから消す。代わりは 動力パイプ（頭を回る））。保存してある機体が持っていれば読める
+if (byId.headpipemouth) byId.headpipemouth.retired = true;
 // 消した殻（「角ばった頭」boxhelm。依頼主：見るのも嫌になってきた。削除で）：保存してある機体がこの id を持っていたら、「頭の殻」として読む（殻の無い頭にしない）。カタログには出ない
 byId.boxhelm = headshell;
 // 分ける前の V 字アンテナ（刃と中央が一体。id vfin）：カタログには出さず、保存してある機体のために残す
