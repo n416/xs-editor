@@ -187,6 +187,7 @@ export function fitScale(id, H, rng = null, jit = 0) {
       if (id === 'thruster') return by(1, H.h * rnd(0.2, 0.3));
       if (id.startsWith('headpipecheek')) return by(2, H.d * rnd(0.6, 0.75));   // 頬の動力パイプ：頭の奥行きの 6〜7 割の長さ
       if (id === 'headpipemouth') return by(2, H.d * rnd(0.35, 0.45));
+      if (id === 'headpiperim') return [H.sw / 3, H.sw / 3, H.sw / 3];   // 頭を回る動力パイプ：頭の座標で作ってある（殻の標準の幅の倍率 3 に対して）
       return by(1, H.h * rnd(0.3, 0.45));
     case '頭蓋': return [H.sw, H.sh, H.sd];
     default: return by(1, H.h * rnd(0.3, 0.45));
@@ -238,7 +239,8 @@ export function placementsFor(id, shellItem, rng = Math.random) {
       const a = lean(F.mouth[2]) - lean(d.mouth[2]), c = Math.cos(a), s = Math.sin(a), y = d.mouth[0] * sh, z = d.mouth[1] * sd;
       return [{ part: id, mov: [mx, my + F.mouth[0] * sh - (y * c - z * s), mz + F.mouth[1] * sd - (y * s + z * c)], rot: [a / D, 0, 0], scal: [sw, sh, sd] }];
     },
-    あご: id => id === 'jawblock'
+    あご: id => byId[id]?.shellFit ? [{ part: id, mov: [mx, my, mz], rot: [0, 0, 0], scal: fit(id) }]   // 殻の座標で作ってある部品（口の箱）：殻と同じ位置・倍率
+      : id === 'jawblock'
       ? [{ part: id, mov: [0, rnd(-0.22, -0.15), rnd(-0.2, -0.1)], rot: [rnd(0, 15), rng() < 0.5 ? 180 : 0, 0], scal: [rnd(1.8, 2.4), rnd(1, 1.4), rnd(1.1, 1.5)] }]
       : [{ part: id, mov: [0, H.chin + rnd(0.02, 0.05), H.chinFront - rnd(0.0, 0.03)], rot: [rnd(-10, 10), 0, 0], scal: fit(id) }],   // あごの前面に付ける
     // 首：下端は「あごの少し上から、首の長さだけ下」。上端は、首の真上の殻の下面より少し中まで（下面は後ろほど高いので、届かなければ縦に伸ばす）。
@@ -256,6 +258,7 @@ export function placementsFor(id, shellItem, rng = Math.random) {
       if (id === 'thruster') { const it = { part: id, mov: [H.side - rnd(0.05, 0.12), rnd(0.0, 0.15), H.back + rnd(0.0, 0.05)], rot: [0, rnd(-20, 20), 0], scal: fit(id) }; return [it, mirrorOf(it)]; }
       // 動力パイプ：頬は頭の横の下寄りに前後に沿わせ、口から首へは口の前から左右へ（どちらも左右の対）
       if (id.startsWith('headpipecheek')) { const k = fitScale(id, H, rng, 0)[2], it = seatEnds({ part: id, mov: [H.side - rnd(0.0, 0.03), H.chin + H.h * rnd(0.2, 0.32), (H.front + H.back) / 2 + rnd(0.0, 0.05)], rot: [rnd(-8, 8), 0, 0], scal: [k, k, k] }, shellItem); return [it, mirrorOf(it)]; }   // （倍率は軸ごとに変えない：管の輪がつぶれない）
+      if (id === 'headpiperim') { const k = H.sw / 3, it = { part: id, mov: [0, my, mz + 0.125 * k], rot: [0, 0, 0], scal: [k, k, k] }; return [it, mirrorOf(it)]; }   // 殻の位置に合わせる（標準の殻は mov z −0.125）
       if (id === 'headpipemouth') { const it = { part: id, mov: [0.02, H.chin + H.h * rnd(0.1, 0.18), H.chinFront - rnd(0.0, 0.04)], rot: [0, 0, 0], scal: fit(id) }; return [it, mirrorOf(it)]; }
       const it = { part: id, mov: [H.side - rnd(0.0, 0.04), H.eye + rnd(-0.08, 0.04), rnd(-0.06, 0.02)], rot: [0, rnd(-10, 10), rnd(-10, 10)], scal: fit(id) };   // 耳ブロック・頬当てなど、横に付くもの
       return [it, mirrorOf(it)];
