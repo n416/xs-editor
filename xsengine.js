@@ -576,6 +576,62 @@ function jointPositions(pieces) {
   return { at, whole };
 }
 
+// Nozzles (editor space), the largest first: every 噴射口 the XS carries, each with the middle of its mouth, the way it
+// blows and its radius. The game puts a flame on each (bones jet_<n>, buildGameModel). A nozzle is known by the name
+// of its own pieces (what follows the last ・; the set's name before it may say 噴射口 too and counts for nothing):
+// 噴射口…の殻 n / の輪 n (the bell), ののど / の奥 (its inner end), の口 (the dark of its mouth), の付け根, の光; a piece
+// named 噴射口 alone is the nozzle itself; の台 is its stand. Nozzles of one name (four in a row) are told apart by
+// their inner ends. Also a lathe named スラスター / ブースター / バーニア, as before.
+function nozzlesOf(pieces) {
+  const groups = new Map();
+  for (const pc of pieces) {
+    if (isHeld(pc.part)) continue;
+    const full = pc.part.name ?? '', own = full.split('・').pop();
+    let role = null, base = own;
+    const m = own.match(/^(.*噴射口.*?)の(殻|輪|のど|奥|口|付け根|光|台)( ?\d+)?$/);
+    if (m) { base = m[1]; role = { 殻: 'shell', 輪: 'shell', のど: 'in', 奥: 'in', 口: 'mouth', 付け根: 'root', 光: 'light', 台: null }[m[2]]; }
+    else if (/噴射口/.test(own) || (pc.part.kind === 'lathe' && /スラスター|ブースター|バーニア/.test(own))) role = 'body';
+    if (!role) continue;
+    const key = pc.bone + '|' + full.slice(0, full.length - own.length) + base;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ pc, role, c: pc.geo.boundingBox.getCenter(new THREE.Vector3()) });
+  }
+  const out = [];
+  for (const list of groups.values()) {
+    const seeds = ['in', 'mouth', 'body'].map(r => list.filter(e => e.role === r)).find(l => l.length);
+    if (!seeds) continue;
+    const mine = new Map(seeds.map(sd => [sd, []]));
+    for (const e of list) if (!seeds.includes(e)) mine.get(seeds.reduce((a, b) => (e.c.distanceTo(a.c) <= e.c.distanceTo(b.c) ? a : b))).push(e);
+    for (const [seed, rest] of mine) {
+      const mean = es => es.reduce((v, e) => v.add(e.c), new THREE.Vector3()).divideScalar(es.length);
+      const shells = rest.filter(e => e.role === 'shell'), bodies = rest.filter(e => e.role === 'body');
+      // the way it blows: from its inner end to the middle of its bell; from the nozzle's body to the dark of its mouth
+      const dir = new THREE.Vector3();
+      if (seed.role === 'in' && shells.length) dir.copy(mean(shells)).sub(seed.c);
+      else if (seed.role === 'mouth' && bodies.length) dir.copy(seed.c).sub(mean(bodies));
+      if (dir.length() < 1e-3) {
+        // no telling from its pieces: along the thinnest side of its inner end or mouth (a plate), else its longest (a
+        // tube); down and back (−z is the XS's back) rather than up and forward
+        const sz = seed.pc.geo.boundingBox.getSize(new THREE.Vector3()), ax = ['x', 'y', 'z'].sort((a, b) => sz[a] - sz[b]);
+        dir.set(0, 0, 0)[seed.role === 'body' ? ax[2] : ax[0]] = 1;
+        if (dir.y + dir.z > 0) dir.negate();
+      }
+      dir.normalize();
+      // its mouth: as far out along that way as its pieces reach; its radius: how far from the line they are out there
+      const pts = [];
+      for (const e of [seed, ...rest]) if (e.role !== 'root' && e.role !== 'light') {
+        const a = e.pc.geo.attributes.position;
+        for (let i = 0; i < a.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(a, i).sub(seed.c); const t = v.dot(dir); pts.push([t, v.addScaledVector(dir, -t).length()]); }
+      }
+      const far = Math.max(...pts.map(p => p[0])), near = Math.min(...pts.map(p => p[0]));
+      const rim = pts.filter(p => p[0] >= far - 0.25 * (far - near) - 1e-6);
+      const r = Math.max(...rim.map(p => p[1]));
+      out.push({ pos: seed.c.clone().addScaledVector(dir, far), dir, r, bone: seed.pc.bone, name: seed.pc.part.name });
+    }
+  }
+  return out.sort((a, b) => b.r - a.r);
+}
+
 // attachment points (editor space) found from part names; each rides on the bone of the part it comes from
 function attachPoints(pieces) {
   const find = (re, bone, pick) => {
@@ -597,12 +653,9 @@ function attachPoints(pieces) {
   const rigged = pieces.find(pc => pc.part.rig?.hand_r)?.part;
   if (!out.hand_r && rigged) { rigged.proxy.updateMatrixWorld(); out.hand_r = { pos: new THREE.Vector3(...rigged.rig.hand_r).applyMatrix4(rigged.proxy.matrixWorld), bone: 'forearm_r' }; }
   out.muzzle = find(/マズル|銃口/, null);
-  // (the body generator's nozzles are hulls named 噴射口)
-  const nozzle = p => (/スラスター|ブースター|バーニア/.test(p.name) && p.kind === 'lathe') || (p.kind === 'hull' && /噴射口/.test(p.name) && !/噴射口の(台|奥)/.test(p.name));
-  const thr = s => pieces.filter(pc => nozzle(pc.part) && pc.bone === 'torso'
-    && (s === 'l' ? pc.geo.boundingBox.max.x > 0.02 : pc.geo.boundingBox.min.x < -0.02))
-    .sort((a, b) => Math.abs(a.geo.boundingBox.getCenter(new THREE.Vector3()).x) - Math.abs(b.geo.boundingBox.getCenter(new THREE.Vector3()).x))[0];
-  for (const s of ['l', 'r']) { const t = thr(s); if (t) out['thruster_' + s] = { pos: t.geo.boundingBox.getCenter(new THREE.Vector3()), bone: 'torso' }; }
+  // the back's two largest nozzles, one a side (docs/models.md; the game's own flames come from jet_<n>, below)
+  const back = nozzlesOf(pieces).filter(n => n.bone === 'torso');
+  for (const s of ['l', 'r']) { const t = back.find(n => (s === 'l' ? n.pos.x > 0.02 : n.pos.x < -0.02)); if (t) out['thruster_' + s] = { pos: t.pos, bone: 'torso' }; }
   return out;
 }
 
@@ -1062,6 +1115,15 @@ function buildGameModel() {
     n.position.copy(toGame(a.pos, floor).sub(toGame(at[a.bone], floor)));
     bones[a.bone].add(n);
   }
+  // nozzles: a bone at each one's mouth, its -Y the way it blows, its radius in its extras (client/src/models.ts puts a
+  // flame on each)
+  nozzlesOf(lods[0]).filter(z => bones[z.bone]).forEach((z, i) => {
+    const n = new THREE.Bone(); n.name = 'jet_' + i;
+    n.position.copy(toGame(z.pos, floor).sub(toGame(at[z.bone], floor)));
+    n.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), new THREE.Vector3(-z.dir.x, z.dir.y, -z.dir.z));
+    n.userData.r = Math.round(z.r * 1e4) / 1e4;
+    bones[z.bone].add(n);
+  });
   // ankles: how far they can turn goes into the model (the foot bones' extras; client/src/models.ts reads it)
   const ankle = bones.foot_l || bones.foot_r ? safeAnkle(lods[0], at, H) : null;
   ankleNow = ankle;
