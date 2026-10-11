@@ -245,7 +245,7 @@ export function placementsFor(id, shellItem, rng = Math.random) {
     // 前後の位置は殻に合わせる（前は殻をどこへ動かしてあっても同じ場所に置いていて、首が殻の下面に届かず、頭が首から離れることがあった）
     首: id => {
       const s = fit(id), h = byId[id]?.size?.[1] || 0.15, z = mz + 0.125 + rnd(-0.08, -0.02);
-      const bottom = H.chin + 0.04 - h * s[1] - (F.lift ?? 0) * sh, roof = my + (F.under[0] + F.under[1] * (z - mz) / sd + 0.008) * sh;   // （上へ置く殻は、その分だけ首を下へ伸ばす：首の付け根は胸の中のまま）
+      const bottom = H.chin + 0.04 - h * s[1] - (F.lift ?? 0) * sh, roof = my + (F.under[0] + F.under[1] * (z - mz) / sd + (byId[id]?.sink ?? 0.008)) * sh;   // （太い首は上端そのものが殻の中へ入る：sink）   // （上へ置く殻は、その分だけ首を下へ伸ばす：首の付け根は胸の中のまま）
       const top = Math.max(H.chin + 0.04, roof);
       return [{ part: id, mov: [0, bottom, z], rot: [0, 0, 0], scal: [s[0], (top - bottom) / h, s[2]] }];
     },
