@@ -13,7 +13,7 @@ const SLANT = 0.35;                                                 // 下の縁
 /** bottom 下の縁（中心）の y、x0・x1 上の端の左右（下では spread だけ広がる）、lean 後ろの面の傾き、slant 下の縁の斜め（内側ほど長い）、
  *  panels・rim・rimColor・layer・strips・spreadIn・center・panelC・segs・faceLift は前スカートと同じ、hingeZ 蝶番の前後の位置 */
 export function backSkirt({ id, name, bottom = -0.25, x0 = -0.07, x1 = 0.12, spread = 0.013, lean = 0.18, crownX = 2, panels = [[0.1, -0.19]], rim = 0, rimColor = DARK,
-  slant = SLANT, layer = 0, strips = 1, hingeZ = -0.24, spreadIn = spread, center, panelC, segs = 1, faceLift = 0, bendFrom = Infinity, bendK = 0 }) {
+  slant = SLANT, layer = 0, strips = 1, hingeZ = -0.24, spreadIn = spread, center, panelC, segs = 1, faceLift = 0, bendFrom = Infinity, bendK = 0, slab = 0, slabFrom = 0.055 }) {
   const C = center ?? (x0 + x1) / 2, PC = panelC ?? C, len = TOP - bottom, k = spread / len, kIn = spreadIn / len, d0 = -hingeZ + 0.0125;   // d0：付け根の後ろの面の深さ（軸より 1.25 cm 後ろ）   // dz：後ろへずらす分
   const HINGE = { y: 0.145, z: hingeZ, dir: -1 };
   const H = { hinge: HINGE, bone: 'skirt' };   // 骨はスカート（ゲームでは skirt_front_* / skirt_back_*）
@@ -46,15 +46,20 @@ export function backSkirt({ id, name, bottom = -0.25, x0 = -0.07, x1 = 0.12, spr
   if (layer) pieces.push(piece('後ろスカートの上の板', [...crown('z', -1, face(0.03), X, steps(layer - 0.02, TOP, 4)), front(0.25), YH(TOP), P([0, 1, -1.5], [0, TOP, -(d0 + 0.025)]),
     ...sides(x0 - 0.006, x1 + 0.006, TOP), YL(layer), P([0, -1, -1.2], [0, layer, -(face(0.03)(C, layer) - 0.01)])], H));
   // 裾の厚い縁：下の縁に沿って後ろへ少し出た帯（上の線も同じ斜め）
-  if (rim && segs > 1) for (let i = 0; i < segs; i++) pieces.push(piece(`後ろスカートの裾 ${i + 1}`, [...crown('z', -1, face(0.014), X, steps(bottom - 0.06 - slant * 0.3, bottom + rim + 0.06, 2)),
+  if (rim && segs > 1) for (let i = 0; i < segs; i++) pieces.push(piece(`後ろスカートの裾 ${i + 1}`, [...crown('z', -1, face(0.014 + slab), X, steps(bottom - 0.06 - slant * 0.3, bottom + rim + 0.06, 2)),
     frontAt(segMid(i), 0.012), ...sides(x0, x1, TOP), ...cut(i, segs, -0.006), hem(bottom), P([-slant, 1, 0], [C, bottom + rim, 0])], { ...H, color: rimColor }));
-  else if (rim) pieces.push(piece('後ろスカートの裾', [...crown('z', -1, face(0.014), X, steps(bottom - 0.06 - slant * 0.1, bottom + rim + 0.06, 2)),
+  else if (rim) pieces.push(piece('後ろスカートの裾', [...crown('z', -1, face(0.014 + slab), X, steps(bottom - 0.06 - slant * 0.1, bottom + rim + 0.06, 2)),
     front(0.25), ...sides(x0, x1, TOP), hem(bottom), P([-slant, 1, 0], [C, bottom + rim, 0])], { ...H, color: rimColor }));
+  // 厚い板（前スカートと同じ：付け根は薄いまま、slabFrom 下から後ろの面が slab だけ出る）
+  if (slab) pieces.push(piece('後ろスカートの厚い板', [...crown('z', -1, face(slab), X, Y), front(0.235), YH(TOP - slabFrom),
+    P([0, 1, -1], [0, TOP - slabFrom - slab * 0.9, -face(slab)(C, TOP - slabFrom)]), ...sides(x0, x1, TOP), hem(bottom)], H));
   return { id, name, cat: '後ろスカート', size: [x1 - x0 + spread + spreadIn, TOP - bottom + 0.06, 0.025 + len * lean], pieces };
 }
 
 export default [
   backSkirt({ id: 'skirtback', name: '後ろスカート' }),
+  // 厚い板（前スカートの厚い板と組む）
+  backSkirt({ id: 'skirtbackslab', name: '後ろスカート（厚い板）', bottom: -0.28, x0: -0.09, x1: 0.17, spread: 0.03, crownX: 0.8, panels: [], slant: 0.2, slab: 0.035, rim: 0.05 }),
   backSkirt({ id: 'skirtbackshort', name: '後ろスカート（短い）', bottom: -0.08, lean: 0.3, panels: [[0.11, -0.03]], slant: 0.15 }),
   backSkirt({ id: 'skirtbackwide', name: '後ろスカート（幅広）', bottom: -0.3, x0: -0.09, x1: 0.17, spread: 0.03, crownX: 1.4, panels: [[0.1, -0.22]], slant: 0.2 }),
   backSkirt({ id: 'skirtbacklayer', name: '後ろスカート（2 枚重ね）', bottom: -0.4, spread: 0.02, lean: 0.16, panels: [[-0.16, -0.32]], layer: -0.11, rim: 0.035 }),
