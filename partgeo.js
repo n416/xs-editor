@@ -8,6 +8,8 @@
 //           w = 横の半分の幅、f / b = 前 / 後ろへの奥行き（b を省くと f）、n = 角ばり（2 = 楕円、大きいほど四角、1 = ひし形）、
 //           x・z = 断面の中心のずれ、hard = その断面で面を折る（省くと前後の断面となめらかにつながる）。
 //           segments（まわりの分割数）・steps（断面の間の分割数）。幅 0 の断面で閉じると先が丸くすぼまる
+//           角のある断面：secs = [{ y, pts: [[x, z], ...] }, ...]。pts は上から見た輪郭の右半分（前の中央 x = 0 から、右の横を回って、後ろの中央 x = 0 まで）。
+//           左半分は鏡像。どの断面も点の数を同じにする：同じ番めの点が上から下まで 1 本の稜線になる。断面の間は平らな面でつなぐ（steps・segments は使わない）
 // どの種類にも：
 //   op      'add'（足す）か 'sub'（引く：同じパーツの中で、自分より上に並ぶブロックを削る）
 //   mirror  パーツの x = 0 で反転した写しも作る
@@ -93,12 +95,23 @@ function loftRings(pc, lod) {
   }
   return out;
 }
+/** 角のある断面の輪（右半分 pts と、その鏡像。まわる向きは丸い断面と同じ：+x → 前 → −x → 後ろ） */
+function polyRing(sec) {
+  const h = sec.pts, x0 = sec.x ?? 0, z0 = sec.z ?? 0, out = [];
+  for (let i = h.length - 1; i >= 0; i--) out.push([x0 + h[i][0], sec.y, z0 + h[i][1]]);                       // 後ろの中央 → 右の横 → 前の中央
+  for (let i = 0; i < h.length; i++) if (Math.abs(h[i][0]) > 1e-9) out.push([x0 - h[i][0], sec.y, z0 + h[i][1]]);   // 前 → 左の横 → 後ろ（中央の点は入れない）
+  return out;
+}
+export const loftPoly = pc => (pc.secs ?? []).length >= 2 && pc.secs.every(s => Array.isArray(s.pts) && s.pts.length === pc.secs[0].pts.length && s.pts.length >= 2);
 function loftGeo(pc, lod) {
-  const rings = loftRings(pc, lod), seg = Math.max(3, Math.round(lod ? Math.min(val(pc, 'segments'), 8) : val(pc, 'segments')));
-  const P = rings.map(r => Array.from({ length: seg }, (_, k) => {
-    const t = (k + 0.5) / seg * Math.PI * 2, c = Math.cos(t), s = Math.sin(t), e = 2 / r.n;
+  const poly = loftPoly(pc);
+  const rings = poly ? pc.secs.slice().sort((a, b) => a.y - b.y) : loftRings(pc, lod), seg0 = Math.max(3, Math.round(lod ? Math.min(val(pc, 'segments'), 8) : val(pc, 'segments')));
+  const P = poly ? rings.map(polyRing) : rings.map(r => Array.from({ length: seg0 }, (_, k) => {
+    const t = (k + 0.5) / seg0 * Math.PI * 2, c = Math.cos(t), s = Math.sin(t), e = 2 / r.n;
     return [r.x + r.w * Math.sign(c) * Math.abs(c) ** e, r.y, r.z + (s >= 0 ? r.f : r.b) * Math.sign(s) * Math.abs(s) ** e];
   }));
+  const seg = P[0]?.length ?? 0;
+  if (poly && P.some(r => r.length !== seg)) return new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3)).setAttribute('normal', new THREE.BufferAttribute(new Float32Array(0), 3));
   const tri = [];
   const put = (a, b, c) => {   // つぶれた三角形（幅 0 の断面）は入れない
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
@@ -109,13 +122,14 @@ function loftGeo(pc, lod) {
     put(a, d, c); put(a, c, b);
   }
   if (P.length) {
-    const lo = rings[0], hi = rings[rings.length - 1], cl = [lo.x, lo.y, lo.z + (lo.f - lo.b) / 2], ch = [hi.x, hi.y, hi.z + (hi.f - hi.b) / 2];
+    const mid = R => { const c = [0, 0, 0]; for (const q of R) for (let k = 0; k < 3; k++) c[k] += q[k] / R.length; return c; };
+    const cl = mid(P[0]), ch = mid(P[P.length - 1]);
     for (let k = 0; k < seg; k++) { put(cl, P[0][k], P[0][(k + 1) % seg]); put(ch, P[P.length - 1][(k + 1) % seg], P[P.length - 1][k]); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tri), 3));
   g.computeVertexNormals();
-  return tri.length ? toCreasedNormals(g, 35 * D) : g;
+  return tri.length ? toCreasedNormals(g, (poly ? 2 : 35) * D) : g;
 }
 
 // ---- ブロック 1 個の形（ブロックの座標） ----
