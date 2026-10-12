@@ -11,6 +11,7 @@ import shoulderarmor from './shoulderarmor.js';
 import collar from './collar.js';
 import chestdeco from './chestdeco.js';
 import powerpipe from './powerpipe.js';
+import smooth from './smooth.js';   // なめらかな胴（断面をつなぐ形。はじめから置く幅で書いてあるので slim を通さない）
 import vw from './vw.js';
 import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
 // 胴（胸・背中・腹・脇腹）と、その面に付く飾り・胴の動力パイプは、横幅を SLIM 倍にする（依頼主が写真と見比べて「これじゃデブでしょ。腰もそうなんだけど、パーツの横幅を直して」。
@@ -18,7 +19,7 @@ import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（�
 export const SLIM = 0.9;
 const TORSO_CAT = new Set(['胸', '背中', '腹', '脇腹', '胸の飾り', '胴の動力パイプ']);
 const slim = defs => [defs].flat().flatMap(d => (TORSO_CAT.has(d.cat) ? slimX(d, SLIM) : [d]));
-export const UPPER = [slim(chest), slim(back), slim(abdomen), slim(flank), shoulder, shoulderarmor, collar, slim(chestdeco), slim(powerpipe), vw, f1].flat();
+export const UPPER = [slim(chest), slim(back), slim(abdomen), slim(flank), shoulder, shoulderarmor, collar, slim(chestdeco), slim(powerpipe), smooth, vw, f1].flat();
 export const upperById = Object.fromEntries(UPPER.map(p => [p.id, p]));
 
 export const CHEST_AT = [0, 2.1, 0], SHOULDER_AT = [0.45, 2.5, 0];
@@ -50,6 +51,7 @@ export const UPPER_SAMPLES = {
   'とても大きな盾': sample([...torso('chestvee', 'backhump', 'abdomenvee', 'flankslats'), 'collarwide'], ['shoulderjoint', 'shoulderarmorshield'], 1.5),
   '角の排気口ととげ': sample([...torso('chestexhaust', 'backhump', 'abdomenbellows', 'flank'), 'collarlow', 'pipechestheadthick'], ['shoulderjoint', 'shoulderarmorspike', 'pipearmthick']),
   '通気口とハッチ': sample([...torso(), 'collar', 'chestvent', 'chesthatch'], ['shoulderjoint', 'shoulderarmorbox']),
+  'なめらかな樽の胴': sample(['chestsmooth', 'abdomenball', 'flankroot', 'collar'], ['shoulderjointdrum', 'shoulderarmorsphere'], 1.8),
   // 可変翼型：機体エディタ 1 の形式の機体から分けた部品（parts/upper/vw.js）。腹だけは標準の輪
   '可変翼型（コクピットとセンサーの肩）': sample([...torso('chestvw', 'backvw', 'abdomen', 'flankvw'), 'collarvw'], ['shoulderjoint', 'shoulderarmorvw']),
   // F1 型：取り込んだ機体の、その部分の組み方そのまま（parts/*/f1.js の sample。tools/partimport.mjs が書く）
