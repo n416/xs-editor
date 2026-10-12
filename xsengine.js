@@ -1019,6 +1019,57 @@ const toGame = (v, floor) => new THREE.Vector3(-v.x, v.y - floor, -v.z);   // tu
 
 // ---- tracked XS: the tread belts
 const TREAD_REPEAT = 0.9;   // game metres per tread plate (client/src/mech.ts); the game scrolls U by speed / this
+// The frame the game's armour texture is thrown on a piece along (client/src/xsskin.ts), as a quaternion in the exported
+// model's axes; null = the model's own axes. The texture goes on from three sides of the model, so on a piece that is
+// built at a slant (a wing's beam, a rack) its lines ran across the piece's own edges (the user, 2026-10-12: 「ORBのラックの
+// テクスチャが垂直水平だから結構変な感じ」). A piece that is clearly long or flat and lies more than 12° off the model's axes
+// takes its own axes (the principal axes of its corners); every other piece keeps the model's, so the lines still run
+// on from one piece to the next there.
+function texFrame(geo) {
+  const pos = geo.attributes.position, n = pos.count;
+  if (n < 9) return null;
+  const c = [0, 0, 0];
+  for (let i = 0; i < n; i++) { c[0] += -pos.getX(i); c[1] += pos.getY(i); c[2] += -pos.getZ(i); }
+  c[0] /= n; c[1] /= n; c[2] /= n;
+  const A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let i = 0; i < n; i++) {
+    const d = [-pos.getX(i) - c[0], pos.getY(i) - c[1], -pos.getZ(i) - c[2]];
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) A[a][b] += d[a] * d[b] / n;
+  }
+  // Jacobi: A = V diag(w) V^T
+  const V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  for (let sweep = 0; sweep < 12; sweep++) for (const [p, q] of [[0, 1], [0, 2], [1, 2]]) {
+    if (Math.abs(A[p][q]) < 1e-12) continue;
+    const th = 0.5 * Math.atan2(2 * A[p][q], A[q][q] - A[p][p]), cs = Math.cos(th), sn = Math.sin(th);
+    for (let k = 0; k < 3; k++) { const akp = A[k][p], akq = A[k][q]; A[k][p] = cs * akp - sn * akq; A[k][q] = sn * akp + cs * akq; }
+    for (let k = 0; k < 3; k++) { const apk = A[p][k], aqk = A[q][k]; A[p][k] = cs * apk - sn * aqk; A[q][k] = sn * apk + cs * aqk; }
+    for (let k = 0; k < 3; k++) { const vkp = V[k][p], vkq = V[k][q]; V[k][p] = cs * vkp - sn * vkq; V[k][q] = sn * vkp + cs * vkq; }
+  }
+  const ev = [0, 1, 2].map(k => ({ w: A[k][k], v: new THREE.Vector3(V[0][k], V[1][k], V[2][k]).normalize() })).sort((a, b) => b.w - a.w);
+  if (!(ev[2].w >= 0) || ev[0].w < 1e-10) return null;
+  const long = ev[0].w > ev[1].w * 1.7, flat = ev[1].w > ev[2].w * 1.7;   // (clearly longer one way / clearly thinner one way)
+  const sure = [...(long ? [ev[0].v] : []), ...(flat ? [ev[2].v] : [])];
+  if (!sure.length) return null;
+  const off = v => Math.max(Math.abs(v.x), Math.abs(v.y), Math.abs(v.z)) < Math.cos(12 * Math.PI / 180);
+  if (!sure.some(off)) return null;
+  // the frame: the sure axes, the rest as near the model's own as they can be
+  const AX = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
+  const f = [sure[0].clone()];
+  if (sure[1]) f.push(sure[1].clone().addScaledVector(f[0], -sure[1].dot(f[0])).normalize());
+  else { const a = AX.map(x => x.clone().addScaledVector(f[0], -x.dot(f[0]))).sort((p, q) => q.length() - p.length())[0]; f.push(a.normalize()); }
+  f.push(new THREE.Vector3().crossVectors(f[0], f[1]));
+  // each to the model's axis it is nearest, turned to point along it
+  const cols = [null, null, null], free = [0, 1, 2];
+  for (const v of f) {
+    const k = free.slice().sort((a, b) => Math.abs(v.getComponent(b)) - Math.abs(v.getComponent(a)))[0];
+    free.splice(free.indexOf(k), 1); cols[k] = v.getComponent(k) < 0 ? v.clone().negate() : v.clone();
+  }
+  const m = new THREE.Matrix4().makeBasis(cols[0], cols[1], cols[2]);
+  if (m.determinant() < 0) { const k = free.length ? free[0] : [0, 1, 2].sort((a, b) => Math.abs(cols[a].getComponent(a)) - Math.abs(cols[b].getComponent(b)))[0]; cols[k].negate(); m.makeBasis(cols[0], cols[1], cols[2]); }
+  const q = new THREE.Quaternion().setFromRotationMatrix(m);
+  return [q.x, q.y, q.z, q.w];
+}
+
 // one tread plate across the texture's width (U = along the belt), shaded from the belt part's colour
 function treadTexture(hex) {
   const c = document.createElement('canvas'); c.width = 64; c.height = 32;
@@ -1211,7 +1262,7 @@ function buildGameModel() {
     }
     for (const [key, list] of groups) {
       const cls = key.split(':')[0];
-      const P = [], N = [], C = [], SI = [], SW = [], UV = [];
+      const P = [], N = [], C = [], SI = [], SW = [], UV = [], Q = [];
       const skinTex = cls === 'skin' ? MESHES.get(list[0].part.mesh)?.tex : null;
       let metal = 0, rough = 0, n = 0;
       const partRanges = [];   // LOD0: which triangles belong to which part, for checks outside the editor (tools/jointcheck.ts)
@@ -1222,7 +1273,9 @@ function buildGameModel() {
         const uv = cls === 'skin' ? pc.geo.attributes.uv : null;
         const si = pc.part.rig ? pc.geo.attributes.skinIndex : null, sw = si ? pc.geo.attributes.skinWeight : null;
         const map = si ? IMPORT_BONES.map(n => boneIndex[n] ?? boneIndex.torso) : null;
+        const tq = (cls === 'body' || cls === 'team' || cls === 'metal') && !si ? texFrame(pc.geo) ?? [0, 0, 0, 1] : [0, 0, 0, 1];
         for (let i = 0; i < pos.count; i++) {
+          Q.push(tq[0], tq[1], tq[2], tq[3]);
           if (uv) UV.push(uv.getX(i), uv.getY(i));
           P.push(-pos.getX(i), pos.getY(i) - floor, -pos.getZ(i));
           if (nor) N.push(-nor.getX(i), nor.getY(i), -nor.getZ(i));
@@ -1239,6 +1292,7 @@ function buildGameModel() {
       if (UV.length) g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
       g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
       g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
+      if (Q.some((v, i) => v !== (i % 4 === 3 ? 1 : 0))) g.setAttribute('skinq', new THREE.Float32BufferAttribute(Q, 4));   // (glTF: _SKINQ, read back as _skinq; only when a piece has a frame of its own)
       const merged = mergeVertices(g, 1e-5);   // share identical corners: same look, far smaller file
       const glowColor = cls === 'glow' ? new THREE.Color(list[0].part.color) : null;
       const mat = new THREE.MeshStandardMaterial({
