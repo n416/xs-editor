@@ -5,6 +5,7 @@
 // 関節まわりの決まり（軸受け・付け根・上のお椀・手首の輪）は、今までの上腕・前腕と同じ物を付ける。寸法は [独自]（今までの腕の半分の幅：上腕 0.078・前腕 0.10）
 import { ring, loft as kloft, cylX, cylY, cup, hull } from '../limb/kit.js';
 import { DARK, MAIN } from '../../xsasm-lib.js';
+import { inner, sidesBox, back as elbowBack, front as elbowFront } from './elbow.js';
 
 const shell = (name, secs, o = {}) => ({ name, kind: 'loft', secs, color: MAIN, pos: [0, 0, 0], ...o });
 const A = { bone: 'arm', pivot: 'none' }, F = { bone: 'fore', pivot: 'none' };
@@ -27,6 +28,10 @@ const P2 = [0, -0.05, 0];
 const J = { color: DARK };
 
 export default [
+  // ひじ：中の 2 重関節と覆いの寸法は今までと同じ道具。覆いを太くした腕の幅（0.09）より外の 0.112 まで厚くし、色は装甲の色。
+  // 横の丸い蓋と暗い帯は付けない（軸の端の蓋は付けない、という前の決まり）
+  { id: 'elbowmass', name: 'ひじ（厚い覆い・蓋なし）', cat: 'ひじ', size: [0.23, 0.16, 0.17],
+    pieces: [...inner(), ...sidesBox(0.112), elbowBack(0.086), elbowFront({ color: MAIN })].map(pc => ({ bone: 'elbow', ...pc, pivot: pc.pivot ?? 'none' })) },
   { id: 'upperarmmass', name: '上腕（厚い塊）', cat: '上腕', size: [0.21, 0.4, 0.21], pieces: [
     shell('上腕の殻', UPPER),
     cylY('上腕の軸受け', 0, 0, 0.056, 0.092, 0.13, 14, J),

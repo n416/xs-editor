@@ -83,6 +83,8 @@ export function wrapSide({ id, name, bottom = -0.34, a0 = -40, a1 = 30, ro = 0.3
 
 export default [
   sideSkirt({ id: 'skirtside', name: '横スカート' }),
+  // 厚い縁（前・後ろスカートの厚い板と組む）：短く、一段高いパネルは無し、裾に厚い縁
+  sideSkirt({ id: 'skirtsideslab', name: '横スカート（厚い縁）', bottom: -0.16, panels: [], rim: 0.06 }),
   sideSkirt({ id: 'skirtsideshort', name: '横スカート（短い）', bottom: -0.08, panels: [[0.12, 0.0]] }),
   sideSkirt({ id: 'skirtsidewing', name: '横スカート（翼形）', bottom: -0.36, zf: 0.12, zb: -0.2, flare: 0.28, panels: [[0.12, -0.12]], rim: 0.04 }),
   sideSkirt({ id: 'skirtsidestack', name: '横スカート（2 段）', bottom: -0.4, stack: -0.12, panels: [[0.12, -0.06]], rim: 0.035 }),
