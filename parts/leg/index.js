@@ -6,11 +6,12 @@ import knee from './knee.js';
 import shin from './shin.js';
 import shindeco from './shindeco.js';
 import foot from './foot.js';
+import mass from './mass.js';   // 厚い塊の脚
 import vw from './vw.js';
 import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
 // すねの動力パイプは、すねの形を作り直したので合わせ直すまで外してある
 const HOLD = new Set(['shinpipe', 'shinpipethick']);
-export const LEG = [thigh, knee, shin, shindeco, foot, vw, f1].flat().filter(p => !HOLD.has(p.id));
+export const LEG = [thigh, knee, shin, shindeco, foot, mass, vw, f1].flat().filter(p => !HOLD.has(p.id));
 export const legById = Object.fromEntries(LEG.map(p => [p.id, p]));
 export const LEG_AT = [0.175, 1.14, 0];
 export const LEG_CAT = new Set(['太もも', 'ひざ当て', 'すね', 'すねの飾り', '足']);
