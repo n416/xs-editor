@@ -157,7 +157,7 @@ const material = (pc, def) => {
   // 自由な部品（機体エディタの形式）は、塗りではなく自分の色・質感。光るかどうかは名前からも決まる
   const free = !!def?.free, glow = free ? !!isGlowPart(pc) : !!pc.glow;
   const c = free ? pc.color ?? '#c3c9d2' : colorOf(pc, def?.cat ?? '', paint), k = `${c}|${glow ? 1 : 0}|${pc.opacity ?? 1}|${free ? `${pc.metal}/${pc.rough}` : ''}`;
-  if (!MATS.has(k)) MATS.set(k, new THREE.MeshStandardMaterial({ color: c, metalness: free ? pc.metal ?? 0.55 : glow ? 0 : 0.45, roughness: free ? pc.rough ?? 0.38 : 0.5, flatShading: true, side: THREE.DoubleSide,
+  if (!MATS.has(k)) MATS.set(k, new THREE.MeshStandardMaterial({ color: c, metalness: free ? pc.metal ?? 0.55 : glow ? 0 : 0.45, roughness: free ? pc.rough ?? 0.38 : 0.5, side: THREE.DoubleSide,
     ...(glow ? { emissive: c, emissiveIntensity: 0.85 } : {}), ...(pc.opacity != null ? { transparent: true, opacity: pc.opacity, depthWrite: false } : {}) }));
   return MATS.get(k);
 };
@@ -1749,7 +1749,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '86a3517';
+const BUILD = '82d536d';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

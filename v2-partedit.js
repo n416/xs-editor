@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { buildHull, hullReach, movePlanes } from './hull.js';
 import { planesFromPoints } from './xsasm-lib.js';
 import { ROLE_LABEL, roleOf } from './paint.js';
-import { KIND_LABEL, BLOCK0, kindOf, isSub, soloGeo, boxOf, pointsOf, roundCorners, latheLoop, tfMatrix } from './partgeo.js';
+import { KIND_LABEL, BLOCK0, kindOf, isSub, soloGeo, boxOf, pointsOf, roundCorners, latheLoop, tfMatrix, loftSecs } from './partgeo.js';
 import { BONE_CHOICES, PIVOT_CHOICES, groupOfPart, pivotOfPart, isGlowPart, isTrackedSet } from './freeparts.js';
 import { profileEditor } from './v2-profile.js';
 
@@ -75,10 +75,21 @@ const SHAPES = {
   丸穴: { kind: 'lathe', op: 'sub', pts: [[0.1, -0.6], [0.1, 0.6]], segments: 20, at: 'front', size: 0.5, turn: [90, 0, 0] },
   パネルライン: { kind: 'extrude', op: 'sub', pts: rect(0.025, 0.8), depth: 0.06, at: 'front', size: 0.7 },
 };
+/** 断面をつないで作る形（流線形・つなぎの面）。大きさ 1 で書き、足すときにパーツに合わせて縮める */
+const LOFTS = {
+  卵形: { secs: [{ y: -0.5, w: 0 }, { y: 0, w: 0.35 }, { y: 0.5, w: 0 }], segments: 24, steps: 6 },
+  カプセル: { secs: [{ y: -0.5, w: 0 }, { y: -0.25, w: 0.25 }, { y: 0.25, w: 0.25 }, { y: 0.5, w: 0 }], segments: 24, steps: 4 },
+  砲弾形: { secs: [{ y: -0.5, w: 0.2, hard: true }, { y: -0.4, w: 0.25 }, { y: 0.1, w: 0.25 }, { y: 0.5, w: 0 }], segments: 24, steps: 5 },
+  しずく形: { secs: [{ y: -0.5, w: 0 }, { y: -0.2, w: 0.3, f: 0.34, b: 0.24 }, { y: 0.15, w: 0.2, f: 0.22, b: 0.16 }, { y: 0.5, w: 0.03, hard: true }], segments: 24, steps: 5 },
+  丸い胴: { secs: [{ y: -0.5, w: 0.3, f: 0.24, b: 0.2, n: 3, hard: true }, { y: -0.2, w: 0.38, f: 0.32, b: 0.24, n: 3 }, { y: 0.2, w: 0.44, f: 0.34, b: 0.26, n: 2.6 }, { y: 0.5, w: 0.3, f: 0.2, b: 0.2, n: 2.4, hard: true }], segments: 28, steps: 4 },
+  丸から四角へ: { secs: [{ y: -0.5, w: 0.3, n: 2, hard: true }, { y: 0, w: 0.32, n: 3 }, { y: 0.5, w: 0.3, n: 8, hard: true }], segments: 28, steps: 4 },
+  すぼまる筒: { secs: [{ y: -0.5, w: 0.35, hard: true }, { y: 0, w: 0.27 }, { y: 0.5, w: 0.2, hard: true }], segments: 24, steps: 4 },
+};
 const GROUPS = [
   ['角と面を動かせる形（凸）', Object.keys(PRIMS), 'prim'],
   ['断面を描いて押し出す形', ['面取り箱', '丸箱', '装甲板', '先細り'], 'shape'],
   ['断面を回して作る形（回転体）', ['関節', 'スラスター', '六角ナット', 'ピストン', '自由な回転体'], 'shape'],
+  ['断面をつないで作る形（流線形・つなぎの面）', Object.keys(LOFTS), 'loft'],
   ['削る形（引く）', ['スリット', '丸穴', 'パネルライン', '箱で削る'], 'shape'],
 ];
 
@@ -108,6 +119,13 @@ button.on { border-color: var(--acc); background: #2b4a6f; }
 #peRight h2 { margin: 10px 0 4px; }
 #peRight .row label { width: 62px; }
 #peRight .row3 input[type=number] { width: 68px; }
+#peRight .pesec { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 4px; margin: 2px 0; padding: 4px 0; border-top: 1px solid var(--line, #2a2f3a); }
+#peRight .pesec label { display: flex; flex-direction: column; min-width: 0; }
+#peRight .pesec label i { font-style: normal; color: var(--dim); font-size: 11px; }
+#peRight .pesec input[type=number] { width: 100%; min-width: 0; }
+#peRight .pesec > span { display: flex; align-items: end; gap: 3px; }
+#peRight .pesec label.chk { flex-direction: row; align-items: center; gap: 2px; font-size: 11px; white-space: nowrap; }
+#peRight .pesec button { padding: 0 6px; }
 #peRight .sl { display: grid; grid-template-columns: 78px 1fr 62px; gap: 6px; align-items: center; margin: 2px 0; }
 #peRight .sl label { color: var(--dim); }
 #peRight .sl input[type=number] { width: 62px; }
@@ -342,10 +360,11 @@ export function initPartEdit(ctx) {
       <div class="pebar"><button id="peUp" title="一覧の上へ">↑</button><button id="peDown" title="一覧の下へ">↓</button><button id="peDup" title="同じブロックをもう 1 つ（Ctrl+D）">複製</button><button id="peMir" title="左右（x）を反転した写しを足す">反転の複製</button><button id="peDel" title="選んだブロックを消す（Delete）">消す</button></div>
       <div class="hint">「−」は引くブロック：自分より上に並ぶブロックを削る</div>
       <h2>ブロックを足す</h2>
-      ${GROUPS.map(([title, names, how]) => `<div class="hint">${title}</div><div class="pegrid">${(how === 'shape' && names[0] === '面取り箱' && st.def.free ? ['あたり箱', ...names] : names).map(k => `<button data-${how === 'prim' ? 'prim' : 'shape'}="${k}" class="${SHAPES[k]?.op === 'sub' || k === '箱で削る' ? 'subp' : ''}">${k}</button>`).join('')}</div>`).join('')}
+      ${GROUPS.map(([title, names, how]) => `<div class="hint">${title}</div><div class="pegrid">${(how === 'shape' && names[0] === '面取り箱' && st.def.free ? ['あたり箱', ...names] : names).map(k => `<button data-${how === 'prim' ? 'prim' : how === 'loft' ? 'loft' : 'shape'}="${k}" class="${SHAPES[k]?.op === 'sub' || k === '箱で削る' ? 'subp' : ''}">${k}</button>`).join('')}</div>`).join('')}
       <div class="hint">足した形は、選んでいるブロックに合わせた大きさで出る。削る形は、選んでいるブロックの前の面に埋めて出る</div>`;
     for (const el of E.left.querySelectorAll('[data-i]')) el.onclick = () => selectBlock(+el.dataset.i);
     for (const el of E.left.querySelectorAll('[data-prim]')) el.onclick = () => addPrim(el.dataset.prim);
+    for (const el of E.left.querySelectorAll('[data-loft]')) el.onclick = () => addLoft(el.dataset.loft);
     for (const el of E.left.querySelectorAll('[data-shape]')) el.onclick = () => (el.dataset.shape === '箱で削る' ? addPrim('箱', true) : addShape(el.dataset.shape));
     $('#peUp').onclick = () => moveBlock(-1); $('#peDown').onclick = () => moveBlock(1);
     $('#peDup').onclick = () => copyBlock(false); $('#peMir').onclick = () => copyBlock(true); $('#peDel').onclick = removeBlock;
@@ -459,6 +478,18 @@ export function initPartEdit(ctx) {
       }
       if (st.mode === 'face' && st.face >= 0) html.push('<div class="pebar"><button id="peFaceCorner" title="この面の真ん中に角を 1 つ足す（引き出すと、とがった形・屋根の形になる）">面の真ん中に角を足す</button><button id="peFaceDel" title="この面をなくす（となりの面が伸びてふさぐ）">この面をなくす</button></div>');
       html.push('<h2>辺の面取り</h2>', slider('面取り幅', 'bevel', 0, +(S * 0.25).toFixed(4), +(S / 400).toPrecision(1)), slider('段数', 'bevelSegs', 1, 6, 1), '<div class="hint">段数 1 は斜めに落とす、2 以上は丸める</div>');
+    } else if (kind === 'loft') {
+      bind('segments', () => val(pc, 'segments'), v => { pc.segments = Math.max(3, Math.min(64, Math.round(v))); });
+      bind('steps', () => val(pc, 'steps'), v => { pc.steps = Math.max(1, Math.min(12, Math.round(v))); });
+      const shown = loftSecs(pc), SK = [['y', '高さ'], ['w', '横'], ['f', '前'], ['b', '後ろ'], ['n', '角ばり'], ['x', '左右'], ['z', '前後']];
+      pc.secs.forEach((sec, i) => SK.forEach(([k]) => bind(`q${i}${k}`, () => sec[k] ?? (k === 'f' ? sec.w : k === 'b' ? sec.f ?? sec.w : k === 'n' ? 2 : 0), v => { sec[k] = k === 'n' ? Math.max(0.5, Math.min(20, v)) : k === 'w' || k === 'f' || k === 'b' ? Math.max(0, v) : v; })));
+      html.push(`<h2>断面（下から上へつなぐ）</h2>
+        <div class="hint">横 = 半分の幅、前・後ろ = 中心からの奥行き。角ばり 2 で楕円、大きいほど四角、1 でひし形。横・前・後ろを 0 にした端は丸く閉じる。「折る」を入れた断面は、そこで面が折れる</div>
+        <div class="pesecs">
+        ${pc.secs.map((sec, i) => `<div class="pesec">${SK.map(([k, t]) => `<label><i>${t}</i>${num(`q${i}${k}`, k === 'n' ? 0.1 : step)}</label>`).join('')}<span><label class="chk" title="この断面で面を折る"><input type="checkbox" data-sechard="${i}" ${sec.hard ? 'checked' : ''}>折る</label><button data-secadd="${i}" title="この断面と次の断面の間に、1 つ足す">＋</button><button data-secdel="${i}" title="この断面を消す" ${pc.secs.length <= 2 ? 'disabled' : ''}>×</button></span></div>`).join('')}</div>`,
+        '<h2>分割</h2>', slider('まわり', 'segments', 3, 64, 1), slider('断面の間', 'steps', 1, 12, 1),
+        `<div class="hint">高さの範囲 ${fmt(shown[0]?.y ?? 0)} 〜 ${fmt(shown[shown.length - 1]?.y ?? 0)}。向きを変えるには上の「回転」で</div>`,
+        '<div class="pebar"><button id="peToHull" title="この形の外側を、角と面を動かせる形（凸）に変える。へこみは埋まり、断面の設定は使えなくなる">角と面を動かせる形に変える</button></div>');
     } else {
       const ex = kind === 'extrude';
       if (ex) {
@@ -531,6 +562,14 @@ export function initPartEdit(ctx) {
     if ($('#peFaceCorner')) $('#peFaceCorner').onclick = addCornerOnFace;
     if ($('#peFaceDel')) $('#peFaceDel').onclick = removeFace;
     if ($('#peToHull')) $('#peToHull').onclick = toHull;
+    for (const el of E.right.querySelectorAll('[data-sechard]')) el.onchange = () => { const sec = pc.secs[+el.dataset.sechard]; if (el.checked) sec.hard = true; else delete sec.hard; changed(false); };
+    for (const el of E.right.querySelectorAll('[data-secadd]')) el.onclick = () => {
+      const order = pc.secs.slice().sort((a, b) => a.y - b.y), a = pc.secs[+el.dataset.secadd], b = order[order.indexOf(a) + 1], full = s => loftSecs({ secs: [s] })[0];
+      const A = full(a), B = b ? full(b) : { ...A, y: A.y + Math.max(0.02, A.y - (order[order.length - 2] ? full(order[order.length - 2]).y : A.y - 0.1)) };
+      pc.secs.splice(+el.dataset.secadd + 1, 0, Object.fromEntries(['y', 'w', 'f', 'b', 'n', 'x', 'z'].map(k => [k, r5((A[k] + B[k]) / 2)])));
+      changed(false);
+    };
+    for (const el of E.right.querySelectorAll('[data-secdel]')) el.onclick = () => { if (pc.secs.length > 2) { pc.secs.splice(+el.dataset.secdel, 1); changed(false); } };
     for (const el of E.right.querySelectorAll('[data-face2d]')) el.onclick = () => { st.face2d = el.dataset.face2d; renderRight(); };
     if ($('#peProfile')) setupProfile(pc, kind);
   }
@@ -629,6 +668,14 @@ export function initPartEdit(ctx) {
     pc.tf = { p: p.map(r5), r: turn ?? [0, 0, 0], s: [1, 1, 1] };
     pushBlock(pc);
   }
+  /** 断面をつなぐ形を足す：大きさをパーツに合わせて縮めて、選んだブロックの上に置く */
+  function addLoft(name) {
+    const src = structuredClone(LOFTS[name]), ref = block() ?? st.def.pieces[0], b = refBox(), lo = b.min.toArray(), hi = b.max.toArray();
+    const k = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 0.02) * 0.5;
+    for (const sec of src.secs) for (const f of ['y', 'w', 'f', 'b', 'x', 'z']) if (sec[f] != null) sec[f] = r5(sec[f] * k);
+    pushBlock({ ...carry(ref), kind: 'loft', ...src, color: ROLE_COLOR.main, name: uniqueName(name), pos: [0, 0, 0],
+      tf: { p: [(lo[0] + hi[0]) / 2, hi[1] + k / 2, (lo[2] + hi[2]) / 2].map(r5), r: [0, 0, 0], s: [1, 1, 1] } });
+  }
   function copyBlock(mirror) {
     const pc = block(); if (!pc) return;
     const c = structuredClone(pc), s = boxOf(pc).getSize(new THREE.Vector3()), off = [r5(Math.max(s.x, s.y) * 0.15), r5(Math.max(s.x, s.y) * 0.15), 0];
@@ -702,7 +749,7 @@ export function initPartEdit(ctx) {
     if (pts.length > 140) { ctx.note(`角が ${pts.length} 個あって多すぎます。分割数・面取りの段数を減らしてから変えてください`, true); return; }
     const pl = planesOf(pts);
     if (!pl) { ctx.note('この形は変えられません', true); return; }
-    for (const k of ['pts', 'depth', 'corner', 'cornerSegs', 'taper', 'tiltY', 'ridge', 'segments', 'side', 'top', 'tf']) delete pc[k];
+    for (const k of ['pts', 'depth', 'corner', 'cornerSegs', 'taper', 'tiltY', 'ridge', 'segments', 'secs', 'steps', 'side', 'top', 'tf']) delete pc[k];
     pc.kind = 'hull'; pc.planes = pl; pc.bevel = 0; pc.bevelSegs = 1;
     changed(false);
   }

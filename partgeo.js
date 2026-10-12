@@ -4,22 +4,26 @@
 //   extrude 押し出し：正面の断面 pts を厚み depth だけ押し出す。taper（奥のすぼまり）・bevel（厚みの方向の面取り）・corner（断面の角の面取り）・
 //           tiltY（厚みの傾き）・ridge（中央の盛り上がり）・side / top（横・上から見た断面。3 つの形の重なりだけが残る）
 //   lathe   回転体：断面 pts（右半分）を縦の軸のまわりに回す。segments（分割数）・corner
+//   loft    断面をつなぐ形：高さごとの断面 secs = [{ y, w, f, b, n, x, z, hard }, ...] を下から上へなめらかにつなぐ（凸でなくてよい）。
+//           w = 横の半分の幅、f / b = 前 / 後ろへの奥行き（b を省くと f）、n = 角ばり（2 = 楕円、大きいほど四角、1 = ひし形）、
+//           x・z = 断面の中心のずれ、hard = その断面で面を折る（省くと前後の断面となめらかにつながる）。
+//           segments（まわりの分割数）・steps（断面の間の分割数）。幅 0 の断面で閉じると先が丸くすぼまる
 // どの種類にも：
 //   op      'add'（足す）か 'sub'（引く：同じパーツの中で、自分より上に並ぶブロックを削る）
 //   mirror  パーツの x = 0 で反転した写しも作る
 //   arrayCount・arrayStep  同じ形を間隔 arrayStep で arrayCount 個並べる
 //   tf      { p: 位置, r: 回転（度。x → y → z の順）, s: 拡大 }（押し出し・回転体の置き方。面で囲った形は面に焼き込むので持たない）
 //   pos     ブロックの置き場所のずれ（カタログのパーツ。形には入れず、置く側が足す）
-// カタログのパーツ（どれも hull だけ・引くなし）の形は、前と同じもの（buildHull の三角形そのまま）。
+// カタログのパーツの hull だけ・引くなしのブロックの形は、前と同じもの（buildHull の三角形そのまま）。
 import * as THREE from 'three';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Brush, Evaluator, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
 import { buildHull, hullReach } from './hull.js';
 
 const D = Math.PI / 180;
-export const KIND_LABEL = { hull: '面で囲った形', extrude: '押し出し', lathe: '回転体' };
+export const KIND_LABEL = { hull: '面で囲った形', extrude: '押し出し', lathe: '回転体', loft: '断面をつなぐ形' };
 /** ブロックの設定の既定値（持っていない項目はこれ） */
-export const BLOCK0 = { op: 'add', mirror: false, arrayCount: 1, arrayStep: [0, 0.05, 0], bevel: 0, bevelSegs: 1, corner: 0, cornerSegs: 1, taper: 1, tiltY: 0, ridge: 0, depth: 0.1, segments: 24, side: null, top: null };
+export const BLOCK0 = { op: 'add', mirror: false, arrayCount: 1, arrayStep: [0, 0.05, 0], bevel: 0, bevelSegs: 1, corner: 0, cornerSegs: 1, taper: 1, tiltY: 0, ridge: 0, depth: 0.1, segments: 24, steps: 4, side: null, top: null };
 const val = (pc, k) => pc[k] ?? BLOCK0[k];
 export const kindOf = pc => pc.kind ?? 'hull';
 export const isSub = pc => pc.op === 'sub';
@@ -56,6 +60,62 @@ export function latheLoop(pc, lod = 0) {
   loop = loop.filter((v, i) => i === 0 || Math.hypot(v[0] - loop[i - 1][0], v[1] - loop[i - 1][1]) > 1e-6);
   if (signedArea(loop) < 0) loop.reverse();
   return loop;
+}
+
+// ---- 断面をつなぐ形 ----
+const SEC0 = { y: 0, w: 0.1, n: 2, x: 0, z: 0 };
+/** 断面を高さの順に、足りない項目を埋めて */
+export const loftSecs = pc => (pc.secs ?? []).map(s => ({ ...SEC0, ...s, f: s.f ?? s.w ?? SEC0.w, b: s.b ?? s.f ?? s.w ?? SEC0.w })).sort((a, b) => a.y - b.y);
+const SEC_KEYS = ['y', 'w', 'f', 'b', 'n', 'x', 'z'];
+const closed = s => !(s.w > 1e-6) && !(s.f > 1e-6) && !(s.b > 1e-6);
+/** 断面と断面の間を steps に分けた輪の並び（hard の断面で区切り、区切りの中は Catmull-Rom でなめらかに） */
+function loftRings(pc, lod) {
+  const secs = loftSecs(pc), steps = lod ? 1 : Math.max(1, Math.round(val(pc, 'steps'))), out = [];
+  if (secs.length < 2) return secs;
+  const cr = (a, b, c, d, t) => 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (3 * b - a - 3 * c + d) * t * t * t);
+  for (let i = 0; i < secs.length - 1; i++) {
+    const s1 = secs[i], s2 = secs[i + 1];
+    // 幅 0 で閉じる端（hard でない）：先を丸くする（四分の一の楕円）。その隣の区間は、丸みの終わりから真っすぐ始める
+    const tipLo = i === 0 && closed(s1) && !s1.hard, tipHi = i === secs.length - 2 && closed(s2) && !s2.hard;
+    const s0 = i > 0 && !s1.hard ? (i === 1 && closed(secs[0]) && !secs[0].hard ? s2 : secs[i - 1]) : s1;
+    const s3 = i + 2 < secs.length && !s2.hard ? (i === secs.length - 3 && closed(secs[i + 2]) && !secs[i + 2].hard ? s1 : secs[i + 2]) : s2;
+    const n = tipLo || tipHi ? Math.max(steps, 3) : steps;
+    for (let k = i ? 1 : 0; k <= n; k++) {
+      const t = k / n, r = {};
+      if (k === 0) Object.assign(r, s1); else if (k === n) Object.assign(r, s2);
+      else if (tipLo || tipHi) {
+        const a = (tipLo ? t : 1 - t) * Math.PI / 2, tip = tipLo ? s1 : s2, wide = tipLo ? s2 : s1, u = Math.sin(a), v = 1 - Math.cos(a);
+        for (const key of SEC_KEYS) r[key] = key === 'w' || key === 'f' || key === 'b' ? wide[key] * u : key === 'n' ? wide.n : tip[key] + (wide[key] - tip[key]) * v;
+      } else for (const key of SEC_KEYS) r[key] = key === 'y' ? s1.y + (s2.y - s1.y) * t : cr(s0[key], s1[key], s2[key], s3[key], t);
+      r.w = Math.max(0, r.w); r.f = Math.max(0, r.f); r.b = Math.max(0, r.b); r.n = Math.max(0.5, r.n);
+      out.push(r);
+    }
+  }
+  return out;
+}
+function loftGeo(pc, lod) {
+  const rings = loftRings(pc, lod), seg = Math.max(3, Math.round(lod ? Math.min(val(pc, 'segments'), 8) : val(pc, 'segments')));
+  const P = rings.map(r => Array.from({ length: seg }, (_, k) => {
+    const t = (k + 0.5) / seg * Math.PI * 2, c = Math.cos(t), s = Math.sin(t), e = 2 / r.n;
+    return [r.x + r.w * Math.sign(c) * Math.abs(c) ** e, r.y, r.z + (s >= 0 ? r.f : r.b) * Math.sign(s) * Math.abs(s) ** e];
+  }));
+  const tri = [];
+  const put = (a, b, c) => {   // つぶれた三角形（幅 0 の断面）は入れない
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    if (Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) > 1e-10) tri.push(...a, ...b, ...c);
+  };
+  for (let j = 0; j < P.length - 1; j++) for (let k = 0; k < seg; k++) {
+    const a = P[j][k], b = P[j][(k + 1) % seg], c = P[j + 1][(k + 1) % seg], d = P[j + 1][k];
+    put(a, d, c); put(a, c, b);
+  }
+  if (P.length) {
+    const lo = rings[0], hi = rings[rings.length - 1], cl = [lo.x, lo.y, lo.z + (lo.f - lo.b) / 2], ch = [hi.x, hi.y, hi.z + (hi.f - hi.b) / 2];
+    for (let k = 0; k < seg; k++) { put(cl, P[0][k], P[0][(k + 1) % seg]); put(ch, P[P.length - 1][(k + 1) % seg], P[P.length - 1][k]); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tri), 3));
+  g.computeVertexNormals();
+  return tri.length ? toCreasedNormals(g, 35 * D) : g;
 }
 
 // ---- ブロック 1 個の形（ブロックの座標） ----
@@ -123,6 +183,8 @@ function baseGeo(pc, lod = 0) {
     g.deleteAttribute('uv');
     if (!lod && (pc.side || pc.top)) g = carve(g, pc);
     g = toCreasedNormals(g, 35 * D);
+  } else if (kind === 'loft') {
+    g = loftGeo(pc, lod);
   } else {
     g = new THREE.LatheGeometry(latheLoop(pc, lod).map(([x, y]) => new THREE.Vector2(x, y)), Math.max(3, Math.round(lod ? Math.min(val(pc, 'segments'), 8) : val(pc, 'segments'))));
     g.deleteAttribute('uv');
@@ -160,7 +222,7 @@ function merge(geos, keep = false) {
 }
 
 // ---- できあがりの形（削った後）。ブロックごとに覚えておき、設定が変わったら作り直す ----
-const shapeKey = pc => JSON.stringify([kindOf(pc), pc.planes, pc.pts, pc.depth, pc.bevel, pc.bevelSegs, pc.corner, pc.cornerSegs, pc.taper, pc.tiltY, pc.ridge, pc.segments, pc.side, pc.top, pc.tf, pc.mirror, pc.arrayCount, pc.arrayStep, pc.pos]);
+const shapeKey = pc => JSON.stringify([kindOf(pc), pc.planes, pc.pts, pc.depth, pc.bevel, pc.bevelSegs, pc.corner, pc.cornerSegs, pc.taper, pc.tiltY, pc.ridge, pc.segments, pc.secs, pc.steps, pc.side, pc.top, pc.tf, pc.mirror, pc.arrayCount, pc.arrayStep, pc.pos]);
 const FINAL = new WeakMap();   // ブロック → { key, geo }
 const STALE = new Set();       // 作り直して要らなくなった形（画面が付け替えた後で捨てる）
 /** 作り直す前の形を捨てる（置いてあるメッシュを新しい形に付け替えた後で呼ぶ） */
@@ -177,12 +239,12 @@ function cutterOf(pc) {
 }
 /**
  * パーツ def のブロック pc の、できあがりの形（1 個ずつ：繰り返し・ミラーの写しごと）。「引く」ブロックは、自分より上に並ぶブロックを削る。
- * カタログのパーツ（自分のパーツでないもの）は、一度作ったらそのまま
+ * カタログのパーツ（自分のパーツでないもの）も削られる。一度作ったらそのまま
  */
 function finalOf(def, pc) {
   const c = FINAL.get(pc);
-  if (c && !def.user) return c;
-  const cutters = def.user ? cuttersOf(def, pc) : [];
+  if (c && !def.user) return c;   // カタログのパーツは、一度作ったらそのまま
+  const cutters = cuttersOf(def, pc);
   const key = def.user ? shapeKey(pc) + cutters.map(shapeKey).join('') : '';
   if (c?.key === key) return c;
   let insts;
@@ -241,7 +303,7 @@ const r5 = v => Math.round(v * 1e5) / 1e5;
  */
 export function shapesOf(def) {
   return def.pieces.filter(drawn).map(pc => {
-    if (isPlain(pc) && !(def.user && cuttersOf(def, pc).length)) return { pc, shape: { planes: pc.planes.map(p => p.slice()) } };
+    if (isPlain(pc) && !cuttersOf(def, pc).length) return { pc, shape: { planes: pc.planes.map(p => p.slice()) } };
     const g = geoOf(def, pc), low = merge(instances(pc, 1));
     const shape = { kind: 'tri', planes: null, tris: Array.from(g.attributes.position.array, r5), nors: Array.from(g.attributes.normal.array, r5), trisLow: Array.from(low.attributes.position.array, r5),
       op: 'add', mirror: false, arrayCount: 1, bevel: 0, corner: 0, side: null, top: null };
