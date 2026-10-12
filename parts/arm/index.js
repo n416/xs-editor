@@ -6,7 +6,8 @@ import elbow from './elbow.js';
 import forearm from './forearm.js';
 import foredeco from './foredeco.js';
 import hand from './hand.js';
-export const ARM = [upperarm, elbow, forearm, foredeco, hand].flat();
+import mass from './mass.js';   // 厚い塊の腕
+export const ARM = [upperarm, elbow, forearm, foredeco, hand, mass].flat();
 export const armById = Object.fromEntries(ARM.map(p => [p.id, p]));
 export const ARM_AT = [0.58, 1.95, 0];
 export const ARM_CAT = new Set(['上腕', 'ひじ', '前腕', '前腕の飾り', '手']);
