@@ -4,7 +4,7 @@
 // 役目：胸 = 骨組みを包む殻（正面は 1 枚、角は回り込む）、中央の稜 = 胸から腹へ続く背骨、腹 = コクピット（前にハッチ）、
 // 通気口 = 胸の正面をくぼませた中に下向きの羽根板、脇腹 = 腕の荷重を受ける肩の受け。
 // 横幅を SLIM 倍にしない（目次で slim を通さない）：はじめから置く幅で書いてある。寸法は [独自]（F1 型の胸：横 0.365・前 0.30・高さ 0.105〜0.52 を目安にした。前は 0.295 まで：0.32 では横薙ぎ・唐竹割りで腕が胸に入った）
-import { MAIN, DARK, BLACK } from '../../xsasm-lib.js';
+import { MAIN, DARK, BLACK, scalePl } from '../../xsasm-lib.js';
 import { hull, pairOf } from './kit.js';
 
 const shell = (name, secs, o = {}) => ({ name, kind: 'loft', secs, color: MAIN, pos: [0, 0, 0], ...o });
@@ -74,7 +74,47 @@ const RIM = [
 ];
 const SIDEWAYS = { tf: { p: [0, 0, 0], r: [0, 90, 0], s: [1, 1, 1] }, bone: 'arm', pivot: 'none' };
 
+// ---- 肩アーマー（ミサイルポッド）：重撃の肩。前の面が広い箱形の塊で、前の面を削った発射筒 6 本（3 × 2）。筒の奥は黒、中に弾頭 ----
+const POD = [
+  { y: -0.14, pts: [[0, 0.3], [0.17, 0.3], [0.215, 0.25], [0.215, -0.02], [0.17, -0.07], [0, -0.07]] },
+  { y: 0, pts: [[0, 0.33], [0.18, 0.33], [0.23, 0.27], [0.23, -0.03], [0.18, -0.08], [0, -0.08]] },
+  { y: 0.16, pts: [[0, 0.31], [0.17, 0.31], [0.215, 0.255], [0.215, -0.03], [0.17, -0.075], [0, -0.075]] },
+  { y: 0.22, pts: [[0, 0.24], [0.13, 0.24], [0.165, 0.2], [0.165, -0.02], [0.13, -0.06], [0, -0.06]] },
+];
+const TUBES = { xs: [0.04, 0.115, 0.19], ys: [-0.065, 0.055], r: 0.03 };
+const tubeCut = (y, k) => ({ name: `発射筒の穴 ${k + 1}`, kind: 'lathe', op: 'sub', pts: [[TUBES.r, -0.05], [TUBES.r, 0.05]], segments: 12, arrayCount: 3, arrayStep: [0.075, 0, 0],
+  tf: { p: [TUBES.xs[0], y, 0.2], r: [90, 0, 0], s: [1, 1, 1] }, color: MAIN, pos: [0, 0, 0], bone: 'arm', pivot: 'none' });
+const AB = { bone: 'arm', pivot: 'none' };
+const podInside = () => [
+  hull('発射筒の奥', [-0.005, 0.235].flatMap(x => [-0.11, 0.1].flatMap(y => [0.14, 0.152].map(z => [x, y, z]))), { color: BLACK, ...AB }),
+  ...TUBES.ys.flatMap((y, j) => TUBES.xs.map((x, i) => hull(`弾頭 ${j * 3 + i + 1}`, [[x - 0.018, y - 0.018, 0.15], [x + 0.018, y - 0.018, 0.15], [x - 0.018, y + 0.018, 0.15], [x + 0.018, y + 0.018, 0.15], [x, y, 0.2]], { color: '#b8483e', ...AB }))),
+];
+
+// ---- 胸の種類：同じ作りのまま、横と前後の比を変える（重い機体は広く厚く、軽い機体は細く）。通気口のくぼみ・中央の稜も一緒に伸び縮みする ----
+const scaleXZ = (pc, kx, kz) => pc.kind === 'loft' ? { ...pc, secs: pc.secs.map(s => ({ ...s, pts: s.pts.map(([x, z]) => [x * kx, z * kz]) })) }
+  : pc.kind === 'extrude' ? { ...pc, pts: pc.pts.map(([x, y]) => [x * kx, y]), depth: pc.depth * kz, tf: { ...pc.tf, p: [pc.tf.p[0] * kx, pc.tf.p[1], pc.tf.p[2] * kz] } }
+  : { ...pc, planes: scalePl(pc.planes, [kx, 1, kz]) };
+const chestOf = (id, name, kx, kz) => ({ id, name, cat: '胸', size: [0.73 * kx, 0.455, 0.58 * kz], pieces: [shell('胸の殻', CHEST), ventCut(), keel(), ...ventIn()].map(pc => scaleXZ(pc, kx, kz)) });
+
+// ---- 肩アーマー（角ばった板）：連合の肩。箱に近い塊で、上の面は関節の真上へ斜めに上がる。裾は外へ少し開く ----
+const SLAB = [
+  { y: -0.16, pts: [[0, 0.27], [0.16, 0.27], [0.2, 0.23], [0.2, -0.03], [0.16, -0.07], [0, -0.07]] },
+  { y: 0.08, pts: [[0, 0.3], [0.17, 0.3], [0.21, 0.25], [0.21, -0.04], [0.17, -0.08], [0, -0.08]] },
+  { y: 0.17, pts: [[0, 0.22], [0.15, 0.22], [0.18, 0.19], [0.18, -0.03], [0.15, -0.07], [0, -0.07]] },
+  { y: 0.2, pts: [[0, 0.1], [0.1, 0.1], [0.12, 0.08], [0.12, -0.02], [0.1, -0.05], [0, -0.05]] },
+];
+const SLABRIM = [
+  { y: -0.19, pts: [[0, 0.278], [0.166, 0.278], [0.207, 0.236], [0.207, -0.025], [0.166, -0.062], [0, -0.062]] },
+  { y: -0.14, pts: [[0, 0.284], [0.169, 0.284], [0.21, 0.241], [0.21, -0.03], [0.169, -0.07], [0, -0.07]] },
+];
+
 export default [
+  chestOf('chestmassheavy', '胸（厚い殻と中央の稜・広く厚い）', 1.07, 1.06),
+  chestOf('chestmassslim', '胸（厚い殻と中央の稜・細い）', 0.93, 0.94),
+  { id: 'shoulderarmorslab', name: '肩アーマー（角ばった板）', cat: '肩アーマー', size: [0.37, 0.39, 0.42],
+    pieces: [shell('肩アーマーの殻', SLAB, SIDEWAYS), shell('肩アーマーの裾', SLABRIM, { ...SIDEWAYS, color: DARK })] },
+  { id: 'shoulderarmorpod', name: '肩アーマー（ミサイルポッド）', cat: '肩アーマー', size: [0.41, 0.36, 0.46],
+    pieces: [shell('ポッドの殻', POD, SIDEWAYS), tubeCut(TUBES.ys[0], 0), tubeCut(TUBES.ys[1], 1), ...podInside()] },
   { id: 'shoulderarmormass', name: '肩アーマー（厚い塊）', cat: '肩アーマー', size: [0.41, 0.4, 0.46],
     pieces: [shell('肩アーマーの殻', PAULDRON, SIDEWAYS), shell('肩アーマーの裾', RIM, { ...SIDEWAYS, color: DARK })] },
   { id: 'chestmass', name: '胸（厚い殻と中央の稜）', cat: '胸', size: [0.73, 0.455, 0.58], pieces: [shell('胸の殻', CHEST), ventCut(), keel(), ...ventIn()] },
