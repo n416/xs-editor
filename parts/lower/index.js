@@ -10,12 +10,13 @@ import skirtrear from './skirtrear.js';
 import skirtback from './skirtback.js';
 import maekake from './maekake.js';
 import waistdeco from './waistdeco.js';
+import mass from './mass.js';   // 厚い塊の腰（はじめから置く幅で書いてあるので slim を通さない）
 import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
 // 腰の帯・後ろ腰と、帯に巻く物（ベルト・腰の筒・動力パイプ）は、横幅を上半身と同じ SLIM 倍にする（依頼主：「腰もそうなんだけど、パーツの横幅を直して」）。
 // 幅広の帯とそのベルトは、左右が合わさるスカートの輪と同じ幅で作ってあるので変えない。脚の台・スカートは股関節の位置で決まるので変えない
 const SLIM_CAT = new Set(['腰', '後ろ腰', 'ベルト', '腰の筒', '動力パイプ']), KEEP = new Set(['waistwide', 'beltwide']);
 const slim = defs => [defs].flat().flatMap(d => (SLIM_CAT.has(d.cat) && !KEEP.has(d.id) ? slimX(d, 0.9) : [d]));
-export const LOWER = [slim(waist), belly, hipjoint, hipbase, skirtfront, skirtside, slim(skirtrear), skirtback, maekake, slim(waistdeco), f1].flat();
+export const LOWER = [slim(waist), belly, hipjoint, hipbase, skirtfront, skirtside, slim(skirtrear), skirtback, maekake, slim(waistdeco), mass, f1].flat();
 export const lowerById = Object.fromEntries(LOWER.map(p => [p.id, p]));
 
 /** 部品を置く決まった場所（骨格図の標準の寸法）。pair は左右の対（+x 側に置き、反対側は x の拡大 −1 で置く） */
