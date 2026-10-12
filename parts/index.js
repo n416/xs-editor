@@ -10,7 +10,7 @@ import horn from './horn.js';
 import antenna from './antenna.js';
 import visorhelm from './visorhelm.js';
 import earblock from './earblock.js';
-import chinguard from './chinguard.js';
+import jawmass from './jawmass.js';
 import neck from './neck.js';
 import monoeye from './monoeye.js';
 import twineyes from './twineyes.js';
@@ -30,4 +30,4 @@ import browhelm from './browhelm.js';
 import f1 from './f1.js';
 export { sample as f1HeadSample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
 // （首は首当ての前：カタログに「首」「首当て」の順で並ぶ）
-export const EXTRA = [vfin, headband, maska, mask, china, finplate, horn, antenna, visorhelm, earblock, chinguard, neck, collar, monoeye, twineyes, backfin, thruster, cheekguard, headpipe, peakhelm, spine, heavyhelm, tallheavyhelm, roundhelm, sniperhelm, scopehelm, brimhelm, browhelm, f1].flat();
+export const EXTRA = [vfin, headband, maska, mask, china, finplate, horn, antenna, visorhelm, earblock, jawmass, neck, collar, monoeye, twineyes, backfin, thruster, cheekguard, headpipe, peakhelm, spine, heavyhelm, tallheavyhelm, roundhelm, sniperhelm, scopehelm, brimhelm, browhelm, f1].flat();

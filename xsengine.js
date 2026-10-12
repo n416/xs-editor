@@ -1516,7 +1516,7 @@ export const XS = {
         if (r.cut.length) bits.push(`めり込む: ${r.cut.slice(0, 3).join('、')}${r.cut.length > 3 ? ` ほか${r.cut.length - 3}` : ''}`);
         return `・${name}${r.frames.length ? `（フレーム ${r.frames.join(',')}）` : ''} — ${bits.join(' ／ ')}`;
       })].join('\n');
-    return { ok: !floating.length && !bad.length, connOk: !floating.length, jointOk: !bad.length, conn, joint };
+    return { ok: !floating.length && !bad.length, connOk: !floating.length, jointOk: !bad.length, conn, joint, depths: rep.__depths ?? {} };   // depths：めり込む組ごとの、いちばん深い所（ゲームの m、全高 18 m）
   },
   /** the connection check alone, as text (a part on its own has no bones to check). word: what a piece is called */
   connect: (word = '部品') => {
