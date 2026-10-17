@@ -7,11 +7,12 @@ import shin from './shin.js';
 import shindeco from './shindeco.js';
 import foot from './foot.js';
 import mass from './mass.js';   // 厚い塊の脚
+import hover from './hover.js';   // ホバーの足（ホバー機の、底に噴射口のある足）
 import vw from './vw.js';
 import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
 // すねの動力パイプは、すねの形を作り直したので合わせ直すまで外してある
 const HOLD = new Set(['shinpipe', 'shinpipethick']);
-export const LEG = [thigh, knee, shin, shindeco, foot, mass, vw, f1].flat().filter(p => !HOLD.has(p.id));
+export const LEG = [thigh, knee, shin, shindeco, foot, mass, hover, vw, f1].flat().filter(p => !HOLD.has(p.id));
 export const legById = Object.fromEntries(LEG.map(p => [p.id, p]));
 export const LEG_AT = [0.175, 1.14, 0];
 export const LEG_CAT = new Set(['太もも', 'ひざ当て', 'すね', 'すねの飾り', '足']);
@@ -27,6 +28,8 @@ export const LEG_SAMPLES = {
   '裾が大きく広がる重い脚': sample(['thighround', 'kneepad', 'shinflare', 'footheavy']),
   'フレーム': sample(['thighframe', 'kneesmall', 'shinframe', 'footclaw']),
   'タンクつき': sample(['thigharmor', 'knee', 'shintank', 'footsplit']),
+  // ホバー：厚い塊の脚に、推進器の箱と噴射口を組んだ足（parts/leg/hover.js）
+  'ホバー（厚い塊の脚）': sample(['thighmass', 'kneemass', 'shinhover', 'foothover']),
   // 可変翼型：機体エディタ 1 の形式の機体から分けた部品（parts/leg/vw.js）。ひざは 1 点で曲がる
   '可変翼型（裾が広がる・噴射口）': sample(['thighvw', 'kneevw', 'shinvw', 'footvw']),
   // F1 型：取り込んだ機体の、その部分の組み方そのまま（parts/*/f1.js の sample。tools/partimport.mjs が書く）
