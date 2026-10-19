@@ -17,6 +17,7 @@
   .btns{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0}
   .btns button{background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:3px 8px;cursor:pointer}
   .btns button.on{background:#4a7;color:#fff;border-color:#4a7}
+  .btns button:disabled{opacity:.4;cursor:default}
   #seedrow,div[id=seedrow]{display:flex;gap:4px;align-items:center;margin:4px 0}
   #seedrow input,.seedin{width:60px;background:#15171b;color:#eee;border:1px solid #444;border-radius:5px;padding:2px 6px}
   #stat{margin-top:6px;color:#888}
@@ -33,6 +34,7 @@
 <body>
 <div id="ui">
   <h1>機体エディタ Ver3　頭</h1>
+  <div class="btns"><button id="undoBtn" disabled>元に戻す</button><button id="redoBtn" disabled>やり直す</button><span style="color:#777;align-self:center">Ctrl+Z／Ctrl+Y</span></div>
   <div id="seedrow"><span style="color:#aaa;width:52px">形状種</span><button id="prev" class="b">前</button><input id="seed" type="number" value="1" min="0"><button id="next" class="b">次</button></div>
   <div id="seedrow"><span style="color:#aaa;width:52px">色種</span><button class="b sd" data-s="colorSeed" data-d="-1">前</button><input id="colorSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="colorSeed" data-d="1">次</button></div>
   <div id="seedrow"><span style="color:#aaa;width:52px">塗り分け</span><button class="b sd" data-s="paintSeed" data-d="-1">前</button><input id="paintSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="paintSeed" data-d="1">次</button></div>
@@ -222,7 +224,7 @@
   <div class="btns views">
     <button data-v="iso">斜め</button><button data-v="front">正面</button><button data-v="top">上から</button><button data-v="side">横</button>
   </div>
-  <div class="btns" style="margin-top:8px"><button id="reset">初期値に戻す</button><button id="exportBtn">書き出し</button><button id="importBtn">読み込み</button><input id="importFile" type="file" accept=".json,application/json" style="display:none"></div>
+  <div class="btns" style="margin-top:8px"><button id="undoBtn2" disabled>元に戻す</button><button id="redoBtn2" disabled>やり直す</button><button id="reset">初期値に戻す</button><button id="exportBtn">書き出し</button><button id="importBtn">読み込み</button><input id="importFile" type="file" accept=".json,application/json" style="display:none"></div>
   <div id="stat"></div>
 </div>
 <canvas id="c"></canvas>
@@ -1029,7 +1031,40 @@ try {
   if ('brimUnder' in saved && !('brimSlope' in saved)) P.brimSlope = Math.max(0, Math.min(75, 90 - saved.brimUnder));
   if ('eB' in saved && !('rimSlope' in saved)) P.rimSlope = Math.max(0, Math.min(70, 90 - saved.eB));
 } catch (e) {}
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} };
+// 元に戻す／やり直す：値が変わるたび（save）に 1 つ前の全体を積む。同じつまみを 0.8 秒以内に続けて動かした分は 1 歩にまとめる
+const HIST = { undo: [], redo: [], last: JSON.stringify(P), key: null, t: 0, MAX: 300 };
+const changedKeys = (a, b) => { const A = JSON.parse(a), B = JSON.parse(b); return [...new Set([...Object.keys(A), ...Object.keys(B)])].filter(k => JSON.stringify(A[k]) !== JSON.stringify(B[k])).sort().join(','); };
+const undoBtns = () => { for (const id of ['undoBtn', 'undoBtn2']) document.getElementById(id).disabled = !HIST.undo.length; for (const id of ['redoBtn', 'redoBtn2']) document.getElementById(id).disabled = !HIST.redo.length; };
+const save = () => {
+  const cur = JSON.stringify(P);
+  if (cur !== HIST.last) {
+    const keys = changedKeys(HIST.last, cur), now = performance.now();
+    if (!(keys === HIST.key && now - HIST.t < 800 && HIST.undo.length)) { HIST.undo.push(HIST.last); if (HIST.undo.length > HIST.MAX) HIST.undo.shift(); }
+    HIST.redo.length = 0; HIST.key = keys; HIST.t = now; HIST.last = cur;
+  }
+  try { localStorage.setItem(KEY, cur); } catch (e) {}
+  undoBtns();
+};
+function restoreState(json) {
+  const o = JSON.parse(json);
+  for (const k of Object.keys(P)) delete P[k];
+  Object.assign(P, o);
+  HIST.last = json; HIST.key = null;
+  try { localStorage.setItem(KEY, json); } catch (e) {}
+  syncUI(); build(); undoBtns();
+}
+function undo() { if (!HIST.undo.length) return; HIST.redo.push(HIST.last); restoreState(HIST.undo.pop()); }
+function redo() { if (!HIST.redo.length) return; HIST.undo.push(HIST.last); restoreState(HIST.redo.pop()); }
+for (const id of ['undoBtn', 'undoBtn2']) document.getElementById(id).onclick = undo;
+for (const id of ['redoBtn', 'redoBtn2']) document.getElementById(id).onclick = redo;
+addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = e.key.toLowerCase(); if (k !== 'z' && k !== 'y') return;
+  const t = e.target; if (t && t.tagName === 'INPUT' && (t.type === 'number' || t.type === 'text')) return;   // 数字の欄の中は、その欄の取り消し
+  e.preventDefault();
+  if (k === 'y' || e.shiftKey) redo(); else undo();
+});
+window.__hist = HIST; window.__undo = undo; window.__redo = redo;
 const seedEl = document.getElementById('seed');
 function syncUI() {
   for (const el of document.querySelectorAll('input[type=range]')) { el.value = P[el.id]; const val = el.parentElement.querySelector('.val'); val.textContent = Number.isInteger(+el.step) && +el.step >= 1 ? String(P[el.id]) : (+P[el.id]).toFixed(2); }
