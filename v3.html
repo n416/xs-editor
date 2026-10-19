@@ -222,7 +222,7 @@
   <div class="btns views">
     <button data-v="iso">斜め</button><button data-v="front">正面</button><button data-v="top">上から</button><button data-v="side">横</button>
   </div>
-  <div class="btns" style="margin-top:8px"><button id="reset">初期値に戻す</button></div>
+  <div class="btns" style="margin-top:8px"><button id="reset">初期値に戻す</button><button id="exportBtn">書き出し</button><button id="importBtn">読み込み</button><input id="importFile" type="file" accept=".json,application/json" style="display:none"></div>
   <div id="stat"></div>
 </div>
 <canvas id="c"></canvas>
@@ -1052,6 +1052,30 @@ document.getElementById('prev').onclick = () => { P.seed = Math.max(0, P.seed - 
 document.getElementById('next').onclick = () => { P.seed++; syncUI(); save(); build(); };
 for (const el of document.querySelectorAll('input.seedin')) el.addEventListener('change', () => { P[el.id] = Math.max(0, +el.value | 0); save(); build(); });
 for (const b of document.querySelectorAll('button.sd')) b.onclick = () => { P[b.dataset.s] = Math.max(0, P[b.dataset.s] + +b.dataset.d); syncUI(); save(); build(); };
+// 書き出し・読み込み：つまみの値を JSON のファイルに。別の置き場所（公開の版など）へ持って行くため
+document.getElementById('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(P, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `head-${P.seed}-${P.colorSeed}.json`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
+document.getElementById('importFile').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const o = JSON.parse(rd.result);
+      const renamed = { crest: 'crestKind', rotX: 'crestRotX', rotY: 'crestRotY', rotZ: 'crestRotZ', vOpen: 'crestVOpen' };
+      for (const k in o) { const kk = renamed[k] || k; if (kk in P) P[kk] = o[k]; }
+      if ('backUnder' in o && !('backSlope' in o)) P.backSlope = Math.max(0, Math.min(75, 90 - o.backUnder));
+      if ('brimUnder' in o && !('brimSlope' in o)) P.brimSlope = Math.max(0, Math.min(75, 90 - o.brimUnder));
+      if ('eB' in o && !('rimSlope' in o)) P.rimSlope = Math.max(0, Math.min(70, 90 - o.eB));
+      syncUI(); save(); build();
+    } catch (err) { document.getElementById('err').textContent = '読み込めませんでした：' + err.message; }
+    e.target.value = '';
+  };
+  rd.readAsText(f);
+});
 document.getElementById('reset').onclick = () => { Object.assign(P, DEFAULTS); syncUI(); save(); build(); };
 for (const b of document.querySelectorAll('button[data-t]')) b.onclick = () => {
   P[b.dataset.t] = !P[b.dataset.t]; syncUI(); save();
