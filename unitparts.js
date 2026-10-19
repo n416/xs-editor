@@ -14,6 +14,7 @@ import { rotMatrix } from './xsasm.js';
 import { shapesOf, isSub, freeShapes } from './partgeo.js';
 import { freeParts, freeDef } from './freeparts.js';
 import { FREE_SETS } from './parts/free/artillery.js';
+import { FREE_SETS as EYE_SETS } from './parts/free/eyes.js';
 import * as THREE from 'three';
 import { headDims, faceOf } from './xsasm-random.js';
 import { colorOf, roleOf } from './paint.js';
@@ -51,8 +52,8 @@ export function unregisterUser(id) {
   else { const [list, map] = LISTS[def.half] ?? LISTS.lower; delete map[id]; const k = list.indexOf(def); if (k >= 0) list.splice(k, 1); }
 }
 
-// 最初から入っている自由なパーツ（砲撃の大砲とキャタピラの車体：parts/free/artillery.js）
-for (const s of FREE_SETS) registerUser({ ...freeDef(s.id, s.name, s.parts, { tab: s.tab, from: 'sample' }), cat: s.cat, user: false });
+// 最初から入っている自由なパーツ（砲撃の大砲とキャタピラの車体：parts/free/artillery.js。五角のレンズのツインアイ：parts/free/eyes.js）
+for (const s of [...FREE_SETS, ...EYE_SETS]) registerUser({ ...freeDef(s.id, s.name, s.parts, { tab: s.tab, from: 'sample' }), cat: s.cat, user: false });
 
 /** 頭の殻（部位「頭蓋」）の置いたパーツ。無ければ null */
 export const headShell = items => items.find(it => isHead(it.part) && byId[it.part]?.cat === '頭蓋') ?? null;

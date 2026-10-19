@@ -73,9 +73,9 @@ export function noRimEyes(deg) {
 }
 
 export default [
-  ...[15, 18, 21, 24].map(twinEyes),     // 枠あり
-  ...[15, 18, 21, 24].map(noRimEyes),    // 枠なし（暗い板と目）
-  ...[15, 18, 21, 24].map(bareEyes),     // 目だけ
-  ...[15, 18, 21, 24].map(eyeFrame),     // 枠だけ
+  ...[15, 18, 21, 24, 40].map(twinEyes),     // 枠あり
+  ...[15, 18, 21, 24, 40].map(noRimEyes),    // 枠なし（暗い板と目）
+  ...[15, 18, 21, 24, 40].map(bareEyes),     // 目だけ
+  ...[15, 18, 21, 24, 40].map(eyeFrame),     // 枠だけ
 ];
 
