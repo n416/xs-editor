@@ -52,7 +52,7 @@ export function unregisterUser(id) {
   else { const [list, map] = LISTS[def.half] ?? LISTS.lower; delete map[id]; const k = list.indexOf(def); if (k >= 0) list.splice(k, 1); }
 }
 
-// 最初から入っている自由なパーツ（砲撃の大砲とキャタピラの車体：parts/free/artillery.js。五角のレンズのツインアイ：parts/free/eyes.js）
+// 最初から入っている自由なパーツ（砲撃の大砲とキャタピラの車体：parts/free/artillery.js。五角のレンズのバイザー：parts/free/eyes.js）
 for (const s of [...FREE_SETS, ...EYE_SETS]) registerUser({ ...freeDef(s.id, s.name, s.parts, { tab: s.tab, from: 'sample' }), cat: s.cat, user: false });
 
 /** 頭の殻（部位「頭蓋」）の置いたパーツ。無ければ null */
