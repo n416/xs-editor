@@ -1,0 +1,1167 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>機体エディタ Ver3（頭）</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html,body{margin:0;height:100%;background:#1b1d22;color:#ddd;font:12px/1.4 system-ui,"Segoe UI","Yu Gothic UI",sans-serif;overflow:hidden}
+  canvas{display:block;width:100%;height:100%}
+  #ui{position:fixed;left:12px;top:12px;width:250px;max-height:calc(100% - 24px);overflow:auto;background:rgba(20,22,27,.9);border:1px solid #333;border-radius:8px;padding:8px 12px;backdrop-filter:blur(6px)}
+  #ui h1{font-size:14px;margin:0 0 6px;font-weight:600}
+  #ui h2{font-size:11px;margin:8px 0 2px;color:#8a9;font-weight:600;letter-spacing:.05em}
+  .row{display:flex;align-items:center;gap:6px;margin:2px 0}
+  .row label{width:86px;flex:none;color:#aaa}
+  .row input[type=range]{flex:1;min-width:0;height:14px}
+  .row .val{width:34px;text-align:right;color:#8fb;font-variant-numeric:tabular-nums}
+  .btns{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0}
+  .btns button{background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:3px 8px;cursor:pointer}
+  .btns button.on{background:#4a7;color:#fff;border-color:#4a7}
+  #seedrow,div[id=seedrow]{display:flex;gap:4px;align-items:center;margin:4px 0}
+  #seedrow input,.seedin{width:60px;background:#15171b;color:#eee;border:1px solid #444;border-radius:5px;padding:2px 6px}
+  #stat{margin-top:6px;color:#888}
+  .flash{animation:fl 1.4s ease-out}
+  @keyframes fl{0%{background:#4a7;color:#fff}100%{background:transparent}}
+  #ui h2.flash{border-radius:4px;padding:0 4px}
+  #err{position:fixed;left:12px;bottom:12px;color:#f88;white-space:pre-wrap;max-width:60%}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+            "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="ui">
+  <h1>機体エディタ Ver3　頭</h1>
+  <div id="seedrow"><span style="color:#aaa;width:52px">形状種</span><button id="prev" class="b">前</button><input id="seed" type="number" value="1" min="0"><button id="next" class="b">次</button></div>
+  <div id="seedrow"><span style="color:#aaa;width:52px">色種</span><button class="b sd" data-s="colorSeed" data-d="-1">前</button><input id="colorSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="colorSeed" data-d="1">次</button></div>
+  <div id="seedrow"><span style="color:#aaa;width:52px">塗り分け</span><button class="b sd" data-s="paintSeed" data-d="-1">前</button><input id="paintSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="paintSeed" data-d="1">次</button></div>
+  <div class="row"><label>揺らぎ</label><input type="range" id="jitter" min="0" max="1" step="0.01" value="0.3"><span class="val"></span></div>
+  <h2 id="sec-body">全体</h2>
+  <div class="row"><label>幅</label><input type="range" id="W" min="0.7" max="1.4" step="0.01" value="1.0"><span class="val"></span></div>
+  <div class="row"><label>奥行</label><input type="range" id="D" min="0.8" max="1.4" step="0.01" value="1.1"><span class="val"></span></div>
+  <div class="row"><label>高さ</label><input type="range" id="H" min="1.0" max="1.7" step="0.01" value="1.3"><span class="val"></span></div>
+  <div class="row"><label>広い所の高さ</label><input type="range" id="yw" min="-0.4" max="0.35" step="0.01" value="-0.05"><span class="val"></span></div>
+  <h2 id="sec-helmet">兜</h2>
+  <div class="row"><label>上のすぼまり</label><input type="range" id="eU" min="10" max="55" step="1" value="30"><span class="val"></span></div>
+  <div class="row"><label>頭頂の尖り</label><input type="range" id="eC" min="40" max="85" step="1" value="62"><span class="val"></span></div>
+  <div class="row"><label>頭頂の長さ</label><input type="range" id="apexL" min="0" max="0.6" step="0.01" value="0.25"><span class="val"></span></div>
+  <div class="row"><label>正中の折れ</label><input type="range" id="aF" min="0" max="35" step="1" value="14"><span class="val"></span></div>
+  <div class="row"><label>縁の下がり</label><input type="range" id="beltH" min="0.02" max="0.2" step="0.01" value="0.08"><span class="val"></span></div>
+  <div class="row"><label>縁の裏の傾き</label><input type="range" id="rimSlope" min="0" max="70" step="1" value="35"><span class="val"></span></div>
+  <h2 id="sec-occ">兜の後ろ</h2>
+  <div class="row"><label>張り出し</label><input type="range" id="occBulge" min="0.7" max="1.6" step="0.01" value="1.0"><span class="val"></span></div>
+  <div class="row"><label>下がり</label><input type="range" id="occDown" min="0" max="0.4" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>後ろのすぼまり</label><input type="range" id="occEU" min="5" max="60" step="1" value="30"><span class="val"></span></div>
+  <div class="row"><label>面の数</label><input type="range" id="occFacets" min="1" max="3" step="1" value="1"><span class="val"></span></div>
+  <h2 id="sec-brim">ひさし</h2>
+  <div class="row"><label>前出</label><input type="range" id="brimOut" min="0.9" max="1.5" step="0.01" value="1.15"><span class="val"></span></div>
+  <div class="row"><label>奥行</label><input type="range" id="brimBack" min="0.1" max="1.3" step="0.01" value="0.3"><span class="val"></span></div>
+  <div class="row"><label>幅</label><input type="range" id="brimW" min="0.3" max="1.5" step="0.01" value="1.0"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="brimY" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>傾き</label><input type="range" id="brimTilt" min="-30" max="30" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>厚み</label><input type="range" id="brimT" min="0.01" max="0.2" step="0.01" value="0.06"><span class="val"></span></div>
+  <div class="row"><label>真ん中の割れ</label><input type="range" id="brimCut" min="0" max="0.5" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>割れの角度</label><input type="range" id="brimCutAngle" min="-45" max="45" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>上の傾き</label><input type="range" id="brimTopSlope" min="0" max="60" step="1" value="28"><span class="val"></span></div>
+  <div class="row"><label>裏の傾き</label><input type="range" id="brimSlope" min="0" max="75" step="1" value="35"><span class="val"></span></div>
+  <h2 id="sec-muff">首当て（後頭部を包む帯）</h2>
+  <div class="row"><label>色</label><input type="color" id="muffColor" value="#e4e4e4" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="muff" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
+  <div class="row"><label>回り込み</label><input type="range" id="muffFrom" min="40" max="175" step="1" value="80"><span class="val"></span></div>
+  <div class="row"><label>高さ</label><input type="range" id="muffH" min="0.05" max="0.8" step="0.01" value="0.35"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="muffY" min="-0.5" max="0.3" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>前後の傾き</label><input type="range" id="muffPitch" min="-45" max="45" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>横の傾き</label><input type="range" id="muffRoll" min="-45" max="45" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>広がり</label><input type="range" id="muffFlare" min="-30" max="60" step="1" value="15"><span class="val"></span></div>
+  <div class="row"><label>厚み</label><input type="range" id="muffT" min="0.01" max="0.15" step="0.005" value="0.04"><span class="val"></span></div>
+  <div class="row"><label>浮き</label><input type="range" id="muffGap" min="0" max="0.3" step="0.01" value="0.04"><span class="val"></span></div>
+  <div class="row"><label>真ん中の分割</label><input type="range" id="muffCut" min="0" max="90" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>段</label><input type="range" id="muffBands" min="1" max="5" step="1" value="1"><span class="val"></span></div>
+  <div class="row"><label>面の数</label><input type="range" id="muffFacets" min="3" max="24" step="1" value="8"><span class="val"></span></div>
+  <h2 id="sec-guard">側頭</h2>
+  <div class="row"><label>長さ</label><input type="range" id="drop" min="0.2" max="0.8" step="0.01" value="0.5"><span class="val"></span></div>
+  <div class="row"><label>前出</label><input type="range" id="reach" min="0.5" max="1.1" step="0.01" value="0.85"><span class="val"></span></div>
+  <h2 id="sec-back">後頭部</h2>
+  <div class="row"><label>上下</label><input type="range" id="backY" min="-0.4" max="0.3" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>長さ</label><input type="range" id="backDrop" min="0" max="0.8" step="0.01" value="0.2"><span class="val"></span></div>
+  <div class="row"><label>幅</label><input type="range" id="backW" min="0.3" max="1.05" step="0.01" value="0.68"><span class="val"></span></div>
+  <div class="row"><label>出</label><input type="range" id="backOut" min="0.6" max="1.3" step="0.01" value="0.96"><span class="val"></span></div>
+  <div class="row"><label>角の落とし</label><input type="range" id="backCham" min="0" max="0.6" step="0.01" value="0.3"><span class="val"></span></div>
+  <div class="row"><label>角の角度</label><input type="range" id="backSideAz" min="100" max="170" step="1" value="135"><span class="val"></span></div>
+  <div class="row"><label>後ろの傾き</label><input type="range" id="backTilt" min="-40" max="20" step="1" value="-10"><span class="val"></span></div>
+  <div class="row"><label>裏の傾き</label><input type="range" id="backSlope" min="0" max="75" step="1" value="30"><span class="val"></span></div>
+  <h2 id="sec-face">顔</h2>
+  <div class="row"><label>幅</label><input type="range" id="faceW" min="0.3" max="0.8" step="0.01" value="0.5"><span class="val"></span></div>
+  <div class="row"><label>高さ</label><input type="range" id="faceH" min="0.05" max="0.4" step="0.01" value="0.3"><span class="val"></span></div>
+  <div class="row"><label>出</label><input type="range" id="faceOut" min="0.5" max="1.1" step="0.01" value="0.8"><span class="val"></span></div>
+  <div class="btns"><span style="color:#aaa">底面</span><button id="secPent">五角形に戻す</button><button id="secReset">正多角形に戻す</button></div>
+  <canvas id="secCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
+  <div style="color:#777;margin:-2px 0 4px">上から見た顔の断面（上が前）。左右は常に対称。上の尖りが鼻すじ、平らなら平らな顔</div>
+  <div class="row"><label>底面の角の数</label><input type="range" id="secN" min="3" max="10" step="1" value="5"><span class="val"></span></div>
+  <div class="btns"><span style="color:#aaa">正面</span><button id="facePent">五角形に戻す</button><button id="faceReset">正多角形に戻す</button></div>
+  <canvas id="faceCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
+  <div style="color:#777;margin:-2px 0 4px">正面から見た顔の形。左右は常に対称。幅と高さはつまみで</div>
+  <div class="row"><label>正面の角の数</label><input type="range" id="faceN" min="4" max="10" step="1" value="5"><span class="val"></span></div>
+  <div class="row"><label>縁の傾き</label><input type="range" id="faceSlant" min="0" max="70" step="1" value="35"><span class="val"></span></div>
+  <div class="row"><label>縁の奥行</label><input type="range" id="faceShoulder" min="0.02" max="0.3" step="0.01" value="0.08"><span class="val"></span></div>
+  <div class="row"><label>裏の傾き</label><input type="range" id="faceUnder" min="-60" max="60" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>バイザーの高さ</label><input type="range" id="visorH" min="0" max="0.3" step="0.01" value="0.12"><span class="val"></span></div>
+  <div class="row"><label>バイザーの奥</label><input type="range" id="visorOut" min="0.4" max="1.0" step="0.01" value="0.65"><span class="val"></span></div>
+  <h2 id="sec-deco">顔飾り（溝）</h2>
+  <div class="btns"><span style="color:#aaa">配置</span><button data-place="center">中央</button><button data-place="sides">左右</button></div>
+  <div class="row"><label>縦の本数</label><input type="range" id="decoNV" min="0" max="6" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>横の本数</label><input type="range" id="decoNH" min="0" max="6" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>縦の間隔</label><input type="range" id="decoDV" min="0.02" max="0.3" step="0.005" value="0.08"><span class="val"></span></div>
+  <div class="row"><label>横の間隔</label><input type="range" id="decoDH" min="0.02" max="0.3" step="0.005" value="0.08"><span class="val"></span></div>
+  <div class="row"><label>縦の長さ</label><input type="range" id="decoLV" min="0.03" max="0.6" step="0.01" value="0.2"><span class="val"></span></div>
+  <div class="row"><label>横の長さ</label><input type="range" id="decoLH" min="0.03" max="0.6" step="0.01" value="0.2"><span class="val"></span></div>
+  <div class="row"><label>幅</label><input type="range" id="decoW" min="0.004" max="0.08" step="0.002" value="0.02"><span class="val"></span></div>
+  <div class="row"><label>深さ</label><input type="range" id="decoDepth" min="0.002" max="0.06" step="0.002" value="0.01"><span class="val"></span></div>
+  <div class="row"><label>ベベル</label><input type="range" id="decoBevel" min="0" max="0.05" step="0.002" value="0.01"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="decoY" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>左右（左右の時）</label><input type="range" id="decoX" min="0" max="0.4" step="0.01" value="0.15"><span class="val"></span></div>
+  <h2 id="sec-twin">ツインアイ</h2>
+  <div class="btns"><button data-t="twin">ツインアイ</button><button data-t="twinGlow">光る</button><button id="twinReset">正多角形に戻す</button></div>
+  <div class="row"><label>目の色</label><input type="color" id="twinColor" value="#66ff66" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><label style="width:auto;margin-left:8px">枠の色</label><input type="color" id="twinFrameColor" value="#15181c" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"></div>
+  <canvas id="twinCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
+  <div style="color:#777;margin:-2px 0 4px">右目の形。点をつまんで動かす。左目は鏡</div>
+  <div class="row"><label>角の数</label><input type="range" id="twinN" min="3" max="8" step="1" value="4"><span class="val"></span></div>
+  <div class="row"><label>角度</label><input type="range" id="twinAngle" min="-90" max="90" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>大きさ</label><input type="range" id="twinS" min="0.02" max="0.15" step="0.005" value="0.06"><span class="val"></span></div>
+  <div class="row"><label>枠の幅</label><input type="range" id="twinBorder" min="0" max="0.05" step="0.001" value="0.012"><span class="val"></span></div>
+  <div class="row"><label>厚み</label><input type="range" id="twinT" min="0.002" max="0.04" step="0.001" value="0.012"><span class="val"></span></div>
+  <div class="row"><label>左右の間隔</label><input type="range" id="twinX" min="0.04" max="0.35" step="0.005" value="0.16"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="twinY" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>前後</label><input type="range" id="twinZ" min="-0.2" max="0.3" step="0.005" value="0"><span class="val"></span></div>
+  <div class="row"><label>窪み</label><input type="range" id="twinDepth" min="0" max="0.12" step="0.002" value="0"><span class="val"></span></div>
+  <div class="row"><label>ベベル（窪み用）</label><input type="range" id="twinBevel" min="0" max="0.08" step="0.002" value="0.015"><span class="val"></span></div>
+  <h2 id="sec-mono">モノアイ</h2>
+  <div class="btns"><button data-t="mono">モノアイ</button><button data-t="monoGlow">光る</button></div>
+  <div class="row"><label>レンズ色</label><input type="color" id="monoColor" value="#a8203c" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"></div>
+  <div class="row"><label>大きさ</label><input type="range" id="monoR" min="0.03" max="0.22" step="0.005" value="0.08"><span class="val"></span></div>
+  <div class="row"><label>奥行</label><input type="range" id="monoD" min="0.02" max="0.2" step="0.005" value="0.07"><span class="val"></span></div>
+  <div class="row"><label>縁の太さ</label><input type="range" id="monoRim" min="0.05" max="0.5" step="0.01" value="0.22"><span class="val"></span></div>
+  <div class="row"><label>左右</label><input type="range" id="monoX" min="-0.35" max="0.35" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="monoY" min="-0.5" max="0.3" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>前後</label><input type="range" id="monoZ" min="-0.3" max="0.5" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>向き上下</label><input type="range" id="monoPitch" min="-60" max="60" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>向き左右</label><input type="range" id="monoYaw" min="-60" max="60" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>面の数</label><input type="range" id="monoSides" min="6" max="24" step="1" value="12"><span class="val"></span></div>
+  <h2 id="sec-ear">耳</h2>
+  <div class="btns"><button id="earReset">正多角形に戻す</button></div>
+  <div class="row"><label>色</label><input type="color" id="earColor" value="#c0392b" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="ear" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
+  <canvas id="earCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
+  <div style="color:#777;margin:-2px 0 4px">右耳の形（横から見て前が右）。左は鏡</div>
+  <div class="row"><label>角の数</label><input type="range" id="earN" min="3" max="12" step="1" value="4"><span class="val"></span></div>
+  <div class="row"><label>角度</label><input type="range" id="earAngle" min="-90" max="90" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>大きさ</label><input type="range" id="earS" min="0.03" max="0.25" step="0.005" value="0.09"><span class="val"></span></div>
+  <div class="row"><label>高さ</label><input type="range" id="earH" min="0.01" max="0.15" step="0.005" value="0.05"><span class="val"></span></div>
+  <div class="row"><label>中の窪み</label><input type="range" id="earInset" min="0" max="0.06" step="0.002" value="0.02"><span class="val"></span></div>
+  <div class="row"><label>前後</label><input type="range" id="earZ" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="earY" min="-0.3" max="0.2" step="0.01" value="0"><span class="val"></span></div>
+  <h2 id="sec-chin">顎</h2>
+  <div class="btns"><button id="chinTrap">台形に戻す</button><button id="chinReset">正多角形に戻す</button></div>
+  <div class="row"><label>色</label><input type="color" id="chinColor" value="#c0392b" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="chin" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
+  <canvas id="chinCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
+  <div style="color:#777;margin:-2px 0 4px">正面から見た顎の形。左右は常に対称（片方を動かすと反対も動く）</div>
+  <div class="row"><label>角の数</label><input type="range" id="chinN" min="3" max="12" step="1" value="4"><span class="val"></span></div>
+  <div class="row"><label>大きさ</label><input type="range" id="chinS" min="0.02" max="0.25" step="0.005" value="0.08"><span class="val"></span></div>
+  <div class="row"><label>出</label><input type="range" id="chinL" min="0.01" max="0.25" step="0.005" value="0.04"><span class="val"></span></div>
+  <div class="row"><label>先細り</label><input type="range" id="chinTaper" min="0.2" max="1.3" step="0.01" value="0.7"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="chinY" min="-0.2" max="0.2" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>前後</label><input type="range" id="chinZ" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>傾き</label><input type="range" id="chinTilt" min="-60" max="60" step="1" value="0"><span class="val"></span></div>
+  <h2 id="sec-neck">首</h2>
+  <div class="btns"><button data-t="neck">首</button><button id="neckReset">正多角形に戻す</button></div>
+  <div class="row"><label>色</label><input type="color" id="neckColor" value="#262a30" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="neck" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
+  <canvas id="neckCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
+  <div style="color:#777;margin:-2px 0 4px">上から見た首の断面（上が前）。左右は常に対称</div>
+  <div class="row"><label>角の数</label><input type="range" id="neckN" min="3" max="16" step="1" value="8"><span class="val"></span></div>
+  <div class="row"><label>太さ</label><input type="range" id="neckR" min="0.05" max="0.5" step="0.005" value="0.2"><span class="val"></span></div>
+  <div class="row"><label>長さ</label><input type="range" id="neckL" min="0.05" max="1.0" step="0.01" value="0.4"><span class="val"></span></div>
+  <div class="row"><label>先細り</label><input type="range" id="neckTaper" min="0.3" max="1.5" step="0.01" value="1.0"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="neckY" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>前後</label><input type="range" id="neckZ" min="-0.4" max="0.4" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>傾き</label><input type="range" id="neckTilt" min="-40" max="40" step="1" value="0"><span class="val"></span></div>
+  <h2 id="sec-crest">前立</h2>
+  <div class="btns"><button data-kind="none" data-pre="crest">なし</button><button data-kind="v" data-pre="crest">V字</button><button data-kind="kuwagata" data-pre="crest">鍬形</button><button data-kind="moon" data-pre="crest">三日月</button><button data-kind="sun" data-pre="crest">日輪</button><button data-kind="horn" data-pre="crest">角</button><button data-kind="fan" data-pre="crest">扇</button><button data-kind="ram" data-pre="crest">巻き角</button><button data-kind="plate" data-pre="crest">板</button></div>
+  <div class="btns"><button class="gacha" data-pre="crest">ガチャ</button><button class="ungacha" data-pre="crest">戻す</button><span style="color:#aaa;margin-left:6px">出す側</span><button data-side="both" data-pre="crest">両方</button><button data-side="left" data-pre="crest">左</button><button data-side="right" data-pre="crest">右</button></div>
+  <div class="row"><label>色</label><input type="color" id="crestColor" value="#d9b43a" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="crest" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
+  <div class="row"><label>大きさ</label><input type="range" id="crestSize" min="0.1" max="1.2" step="0.01" value="0.5"><span class="val"></span></div>
+  <div class="row"><label>厚み</label><input type="range" id="crestT" min="0.01" max="0.15" step="0.005" value="0.04"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="crestY" min="-0.6" max="0.6" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>前後</label><input type="range" id="crestZ" min="-0.9" max="0.4" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>真ん中の折れ</label><input type="range" id="crestFold" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>左右の離れ</label><input type="range" id="crestSplit" min="0" max="0.9" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>傾き X</label><input type="range" id="crestRotX" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>傾き Y</label><input type="range" id="crestRotY" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>傾き Z</label><input type="range" id="crestRotZ" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>V字の開き</label><input type="range" id="crestVOpen" min="20" max="80" step="1" value="55"><span class="val"></span></div>
+  <h2 id="sec-horn">角</h2>
+  <div class="btns"><button data-kind="none" data-pre="horn">なし</button><button data-kind="v" data-pre="horn">V字</button><button data-kind="kuwagata" data-pre="horn">鍬形</button><button data-kind="moon" data-pre="horn">三日月</button><button data-kind="sun" data-pre="horn">日輪</button><button data-kind="horn" data-pre="horn">角</button><button data-kind="fan" data-pre="horn">扇</button><button data-kind="ram" data-pre="horn">巻き角</button><button data-kind="plate" data-pre="horn">板</button></div>
+  <div class="btns"><button class="gacha" data-pre="horn">ガチャ</button><button class="ungacha" data-pre="horn">戻す</button><span style="color:#aaa;margin-left:6px">出す側</span><button data-side="both" data-pre="horn">両方</button><button data-side="left" data-pre="horn">左</button><button data-side="right" data-pre="horn">右</button></div>
+  <div class="row"><label>色</label><input type="color" id="hornColor" value="#d9b43a" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="horn" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
+  <div class="row"><label>大きさ</label><input type="range" id="hornSize" min="0.1" max="1.2" step="0.01" value="0.6"><span class="val"></span></div>
+  <div class="row"><label>厚み</label><input type="range" id="hornT" min="0.01" max="0.15" step="0.005" value="0.05"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="hornY" min="-0.6" max="0.6" step="0.01" value="0"><span class="val"></span></div>
+  <div class="row"><label>前後</label><input type="range" id="hornZ" min="-0.9" max="0.4" step="0.01" value="-0.2"><span class="val"></span></div>
+  <div class="row"><label>真ん中の折れ</label><input type="range" id="hornFold" min="-180" max="180" step="1" value="90"><span class="val"></span></div>
+  <div class="row"><label>左右の離れ</label><input type="range" id="hornSplit" min="0" max="0.9" step="0.01" value="0.3"><span class="val"></span></div>
+  <div class="row"><label>傾き X</label><input type="range" id="hornRotX" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>傾き Y</label><input type="range" id="hornRotY" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>傾き Z</label><input type="range" id="hornRotZ" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
+  <div class="row"><label>V字の開き</label><input type="range" id="hornVOpen" min="20" max="80" step="1" value="55"><span class="val"></span></div>
+  <div class="btns">
+    <button data-t="chin" id="btn-chin">顎</button>
+    <button data-t="ears" class="on">耳</button>
+    <button data-t="vents" class="on" id="btn-vents">頬の口</button>
+    <button data-t="back" class="on" id="btn-back">後頭部</button>
+    <button data-t="edges">稜</button>
+  </div>
+  <h2>見る</h2>
+  <div class="btns views">
+    <button data-v="iso">斜め</button><button data-v="front">正面</button><button data-v="top">上から</button><button data-v="side">横</button>
+  </div>
+  <div class="btns" style="margin-top:8px"><button id="reset">初期値に戻す</button></div>
+  <div id="stat"></div>
+</div>
+<canvas id="c"></canvas>
+<div id="err"></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const V = THREE.Vector3;
+const PI = Math.PI, D2R = PI / 180;
+const UP = new V(0, 1, 0), ZF = new V(0, 0, 1);
+
+// ---- つまみ ----
+const P = { seed: 1, colorSeed: 0, paintSeed: 0, jitter: 0.3, W: 1.0, D: 1.1, H: 1.3, yw: -0.05, eU: 30, eC: 62, apexL: 0.25, aF: 14, rimSlope: 35, beltH: 0.08, brimOut: 1.15, brimBack: 0.3, brimW: 1.0, brimY: 0, brimTilt: 0, brimCut: 0, brimCutAngle: 0, brimT: 0.06, brimTopSlope: 28, brimSlope: 35, visorH: 0.12, visorOut: 0.65, chinColor: '', chinN: 4, chinS: 0.08, chinL: 0.04, chinTaper: 0.7, chinY: 0, chinZ: 0, chinPts: null,
+  drop: 0.5, reach: 0.85, faceW: 0.5, faceH: 0.3, faceOut: 0.8, faceUnder: 0, faceN: 5, faceSlant: 35, faceShoulder: 0.08, facePts: null, secN: 5, secPts: null, aFace: 28, crestKind: 'none', crestSide: 'both', crestColor: '', crestSize: 0.5, crestT: 0.04, crestY: 0, crestZ: 0, crestFold: 0, crestSplit: 0, crestRotX: 0, crestRotY: 0, crestRotZ: 0, crestVOpen: 55,
+  hornKind: 'none', hornSide: 'both', hornColor: '', hornSize: 0.6, hornT: 0.05, hornY: 0, hornZ: -0.2, hornFold: 90, hornSplit: 0.3, hornRotX: 0, hornRotY: 0, hornRotZ: 0, hornVOpen: 55, chinTilt: 0,
+  muffColor: '', muffFrom: 80, muffH: 0.35, muffY: 0, muffPitch: 0, muffRoll: 0, muffFlare: 15, muffT: 0.04, muffGap: 0.04, muffCut: 0, muffBands: 1, muffFacets: 8,
+  decoPlace: 'center', decoNV: 0, decoNH: 0, decoDV: 0.08, decoDH: 0.08, decoLV: 0.2, decoLH: 0.2, decoW: 0.02, decoDepth: 0.01, decoBevel: 0.01, decoY: 0, decoX: 0.15,
+  twin: false, twinGlow: false, twinColor: '#66ff66', twinFrameColor: '#15181c', twinN: 4, twinAngle: 0, twinS: 0.06, twinBorder: 0.012, twinT: 0.012, twinX: 0.16, twinY: 0, twinZ: 0, twinDepth: 0, twinBevel: 0.015, twinPts: null,
+  earColor: '', earN: 4, earAngle: 0, earS: 0.09, earH: 0.05, earInset: 0.02, earZ: 0, earY: 0, earPts: null,
+  mono: false, monoGlow: false, monoColor: '#a8203c', monoR: 0.08, monoD: 0.07, monoRim: 0.22, monoX: 0, monoY: 0, monoZ: 0, monoPitch: 0, monoYaw: 0, monoSides: 12,
+  occBulge: 1.0, occDown: 0, occEU: 30, occFacets: 1,
+  backY: 0, backDrop: 0.2, backW: 0.68, backOut: 0.96, backCham: 0.3, backSideAz: 135, backTilt: -10, backSlope: 30,
+  neck: false, neckColor: '', neckN: 8, neckR: 0.2, neckL: 0.4, neckTaper: 1.0, neckY: 0, neckZ: 0, neckTilt: 0, neckPts: null,
+  chin: false, ears: true, vents: true, back: true, edges: false };
+
+// ---- 乱数（種で決まる揺らぎ）----
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+let rnd = Math.random, JT = {};
+const jit = key => { if (!(key in JT)) JT[key] = rnd() * 2 - 1; return JT[key] * P.jitter; };
+const pick = arr => arr[Math.floor(rnd() * arr.length)];
+
+// ---- 平面：方位 a（0 が正面、右が +）、仰角 e（+ が上向き）、通る点 p0。内側は n·p <= d ----
+function plane(aDeg, eDeg, p0, key) {
+  const e = (eDeg + (key ? jit(key + 'e') * 8 : 0)) * D2R, a = aDeg * D2R;
+  const n = new V(Math.cos(e) * Math.sin(a), Math.sin(e), Math.cos(e) * Math.cos(a));
+  const d = n.dot(p0) * (key ? 1 + jit(key + 'd') * 0.06 : 1);
+  return { n, d, a: aDeg, e: eDeg };
+}
+// 左右対称の一対（揺らぎは同じ）
+function pair(aDeg, eDeg, p0, key) {
+  const m = p0.clone(); m.x = -m.x;
+  return [plane(aDeg, eDeg, p0, key), plane(-aDeg, eDeg, m, key)];
+}
+const onPlane = (pl, x, y) => Math.abs(pl.n.z) < 0.05 ? null : new V(x, y, (pl.d - pl.n.x * x - pl.n.y * y) / pl.n.z);
+function basis(pl) {
+  const n = pl.n;
+  let tU = Math.abs(n.dot(UP)) < 0.95 ? new V().crossVectors(UP, n) : new V().crossVectors(new V(1, 0, 0), n);
+  tU.normalize();
+  const tV = new V().crossVectors(n, tU).normalize();
+  return { n, tU, tV };
+}
+
+// ---- 三角形を集める ----
+class Tris {
+  constructor() { this.pos = []; this.col = []; this.lines = []; this.part = 0; this.pid = []; }
+  tri(a, b, c, col) { for (const p of [a, b, c]) { this.pos.push(p.x, p.y, p.z); this.col.push(col.r, col.g, col.b); this.pid.push(this.part); } }
+  quad(a, b, c, d, col) { this.tri(a, b, c, col); this.tri(a, c, d, col); }
+  poly(pts, col, edgeOk) { for (let i = 1; i < pts.length - 1; i++) this.tri(pts[0], pts[i], pts[i + 1], col); for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; if (!edgeOk || edgeOk(a, b)) this.lines.push(a.x, a.y, a.z, b.x, b.y, b.z); } }
+  geom() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    g.setAttribute('part', new THREE.Float32BufferAttribute(this.pid, 1));
+    g.computeVertexNormals();
+    return g;
+  }
+  lineGeom() { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(this.lines, 3)); return g; }
+}
+
+// ---- 結晶：平面の集まりの内側。大きな箱を平面で順に切る ----
+function boxFaces(S) {
+  const c = (x, y, z) => new V(x * S, y * S, z * S);
+  return [
+    [c(-1, -1, 1), c(1, -1, 1), c(1, 1, 1), c(-1, 1, 1)],      // +z
+    [c(1, -1, -1), c(-1, -1, -1), c(-1, 1, -1), c(1, 1, -1)],  // -z
+    [c(1, -1, 1), c(1, -1, -1), c(1, 1, -1), c(1, 1, 1)],      // +x
+    [c(-1, -1, -1), c(-1, -1, 1), c(-1, 1, 1), c(-1, 1, -1)],  // -x
+    [c(-1, 1, 1), c(1, 1, 1), c(1, 1, -1), c(-1, 1, -1)],      // +y
+    [c(-1, -1, -1), c(1, -1, -1), c(1, -1, 1), c(-1, -1, 1)],  // -y
+  ];
+}
+// 平面の集まりで箱を切り、面の一覧（点の並びと、その面を作った平面）にする
+const EPS = 1e-9;
+function clipFaces(planes) {
+  let faces = boxFaces(4).map(pts => ({ pts, pl: null }));
+  for (const pl of planes) {
+    const next = [], cap = [];
+    for (const f of faces) {
+      const out = [];
+      for (let i = 0; i < f.pts.length; i++) {
+        const a = f.pts[i], b = f.pts[(i + 1) % f.pts.length];
+        const da = pl.n.dot(a) - pl.d, db = pl.n.dot(b) - pl.d;
+        // 平面の上に乗っている点（|da| が極小）は残し、切り口の輪郭にも入れる。入れないと切り口の面にその点が欠けて穴になる
+        if (da <= EPS) out.push(a);
+        if (Math.abs(da) <= EPS) cap.push(a);
+        else if ((da < -EPS && db > EPS) || (da > EPS && db < -EPS)) { const p = a.clone().lerp(b, da / (da - db)); out.push(p); cap.push(p); }
+      }
+      if (out.length >= 3) next.push({ pts: out, pl: f.pl });
+    }
+    const pts = [];
+    for (const p of cap) if (!pts.some(q => q.distanceToSquared(p) < 1e-12)) pts.push(p);
+    if (pts.length >= 3) {
+      const c = pts.reduce((s, p) => s.add(p), new V()).multiplyScalar(1 / pts.length);
+      const e1 = pts[0].clone().sub(c).normalize(), e2 = new V().crossVectors(pl.n, e1).normalize();
+      const ang = p => { const r = p.clone().sub(c); return Math.atan2(r.dot(e2), r.dot(e1)); };
+      pts.sort((p, q) => ang(p) - ang(q));
+      next.push({ pts, pl });
+    }
+    faces = next;
+  }
+  return faces;
+}
+// 結晶：平面の集まりの内側。cutters（削る結晶：平面の集まり）があれば、その分をくり抜く。
+// くり抜きは凸のまま行う：引かれた形を「削る面 i の外側で、面 0..i-1 の内側」という凸のかけらに分け、かけらごとに作る。
+// かけらどうしの境は中に隠れるので描かず、表に出る境の線も引かない
+function crystal(T, planes, col, cutters) {
+  if (!cutters || !cutters.length) { for (const f of clipFaces(planes)) T.poly(f.pts, col); return clipFaces(planes).map(f => f.pts); }
+  let pieces = [{ planes, internal: [] }];
+  for (const C of cutters) {
+    const next = [];
+    for (const pc of pieces) {
+      if (!clipFaces([...pc.planes, ...C]).length) { next.push(pc); continue; }   // この削りに当たらないかけらはそのまま
+      for (let i = 0; i < C.length; i++) {
+        const outside = { n: C[i].n.clone().negate(), d: -C[i].d };
+        const inner = C.slice(0, i);
+        const cand = { planes: [...pc.planes, outside, ...inner], internal: [...pc.internal, ...inner] };
+        if (clipFaces(cand.planes).length) next.push(cand);
+      }
+    }
+    pieces = next;
+  }
+  const out = [];
+  for (const pc of pieces) {
+    const onInternal = p => pc.internal.some(pl => Math.abs(pl.n.dot(p) - pl.d) < 1e-6);
+    const edgeOk = (a, b) => !pc.internal.some(pl => Math.abs(pl.n.dot(a) - pl.d) < 1e-6 && Math.abs(pl.n.dot(b) - pl.d) < 1e-6);
+    for (const f of clipFaces(pc.planes)) {
+      if (pc.internal.includes(f.pl)) continue;   // かけらどうしの境：中に隠れる
+      T.poly(f.pts, col, edgeOk); out.push(f.pts);
+    }
+  }
+  return out;
+}
+// 面の上の輪郭から「削る結晶」を作る：表の輪郭 rim から、深さ depth の底の輪郭 bottom へすぼまる筒。表より少し上まで開いている
+function socketCutter(c, n, rim3, bottom3, depth) {
+  const C = [];
+  const center = c.clone().addScaledVector(n, -depth / 2);
+  for (let k = 0; k < rim3.length; k++) {
+    const a = rim3[k], b = rim3[(k + 1) % rim3.length], q = bottom3[k];
+    const nn = new V().crossVectors(b.clone().sub(a), q.clone().sub(a)).normalize();
+    if (nn.dot(center.clone().sub(a)) > 0) nn.negate();
+    C.push({ n: nn, d: nn.dot(a) });
+  }
+  const bn = n.clone().negate(); C.push({ n: bn, d: bn.dot(c.clone().addScaledVector(n, -depth)) });   // 底
+  C.push({ n: n.clone(), d: n.dot(c.clone().addScaledVector(n, 0.08)) });                              // 上（表より少し上で閉じる）
+  return C;
+}
+
+// ---- 平面の上に置く小さな部品 ----
+// 四角い台：中心 base、軸 axis、幅 w（e1）、高さ h（e2）、長さ L、先の縮み tw/th
+function block(T, base, axis, e1, e2, w, h, L, tw, th, col) {
+  if (new V().crossVectors(e1, e2).dot(axis) < 0) e1 = e1.clone().negate();
+  const S = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  const b = S.map(([s1, s2]) => base.clone().addScaledVector(e1, s1 * w / 2).addScaledVector(e2, s2 * h / 2));
+  const t = S.map(([s1, s2]) => base.clone().addScaledVector(axis, L).addScaledVector(e1, s1 * w * tw / 2).addScaledVector(e2, s2 * h * th / 2));
+  T.poly(t, col);
+  for (let i = 0; i < 4; i++) T.poly([b[i], b[(i + 1) % 4], t[(i + 1) % 4], t[i]], col);
+  T.poly([b[3], b[2], b[1], b[0]], col);
+}
+function polyBlock(T, base, axis, e1, e2, k, r, L, taper, col) {
+  if (new V().crossVectors(e1, e2).dot(axis) < 0) e1 = e1.clone().negate();
+  const ring = (rr, off) => { const o = []; for (let i = 0; i < k; i++) { const a = (i + 0.5) / k * 2 * PI; o.push(base.clone().addScaledVector(axis, off).addScaledVector(e1, rr * Math.cos(a)).addScaledVector(e2, rr * Math.sin(a))); } return o; };
+  const b = ring(r, 0), t = ring(r * taper, L);
+  T.poly(t, col);
+  for (let i = 0; i < k; i++) T.poly([b[i], b[(i + 1) % k], t[(i + 1) % k], t[i]], col);
+}
+
+// 平らな輪郭（u 右、v 上、単位の大きさ）を w の向きに厚み t だけ押し出す。凹んだ輪郭も可
+function extrude(T, mount, u, v, w, outline, S, t, col, sink = 0) {
+  const pts = outline.map(([a, b]) => new THREE.Vector2(a * S, b * S - sink));
+  const tris = THREE.ShapeUtils.triangulateShape(pts, []);
+  const to3 = (q, off) => mount.clone().addScaledVector(u, q.x).addScaledVector(v, q.y).addScaledVector(w, off);
+  const back = pts.map(q => to3(q, -t / 2)), front = pts.map(q => to3(q, t / 2));
+  for (const [a, b, c] of tris) { T.tri(front[a], front[b], front[c], col); T.tri(back[c], back[b], back[a], col); }
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    T.quad(back[i], back[j], front[j], front[i], col);
+    T.lines.push(front[i].x, front[i].y, front[i].z, front[j].x, front[j].y, front[j].z, back[i].x, back[i].y, back[i].z, back[j].x, back[j].y, back[j].z);
+  }
+}
+// 輪郭を u = 0 で切って片側だけ残す（side = +1 で右、-1 で左）
+function halfOutline(outline, side) {
+  const out = [];
+  for (let i = 0; i < outline.length; i++) {
+    const a = outline[i], b = outline[(i + 1) % outline.length];
+    const da = a[0] * side, db = b[0] * side;
+    if (da >= 0) out.push(a);
+    if ((da < 0 && db > 0) || (da > 0 && db < 0)) { const t = da / (da - db); out.push([0, a[1] + (b[1] - a[1]) * t]); }
+  }
+  return out.filter((q, k) => k === 0 || Math.hypot(q[0] - out[k - 1][0], q[1] - out[k - 1][1]) > 1e-6);
+}
+const arc = (cx, cy, r, a0, a1, n) => { const o = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; o.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } return o; };
+const CREST = {
+  // 鍬形：中央の茎から左右へ分かれて上へ反る二股（根元は v<0 で兜に差し込む）
+  kuwagata: () => { const h = [[0.12, -0.25], [0.12, 0.25], [0.3, 0.55], [0.5, 0.95], [0.44, 1.05], [0.3, 0.85], [0.17, 0.62], [0.06, 0.5], [0, 0.48]]; return [...h.slice().reverse().map(([a, b]) => [-a, b]), ...h.slice(0, -1)]; },
+  // 三日月：先が上を向く弓形。外の弧は下へ膨らみ、内の弧で戻る
+  moon: () => [...arc(0, 1.0, 1.0, PI, 2 * PI, 24), ...arc(0, 1.22, 0.92, 2 * PI, PI, 24)],
+  // 日輪：円。下に差し込みの茎
+  sun: () => [...arc(0, 0.6, 0.6, -PI / 2 + 0.35, 3 * PI / 2 - 0.35, 40), [-0.1, -0.25], [0.1, -0.25]],
+  // 角：一本の反った刃
+  horn: () => [[-0.12, -0.25], [0.12, -0.25], [0.12, 0], [0.1, 0.45], [0.04, 0.8], [0, 1.0], [-0.06, 0.8], [-0.12, 0.45]],
+  // 巻き角：根元から上へ、外へ、下へと巻く角の一対。折れ 90 度と左右の離れで、頭の横を後ろへ巻く角になる
+  ram: () => {
+    const C = [0.5, 0.4], R0 = 0.5, N = 28, outer = [], inner = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N, ph = PI - t * (290 * D2R), R = R0 * (1 - 0.55 * t), w = 0.2 * (1 - 0.8 * t) + 0.03;
+      outer.push([C[0] + R * Math.cos(ph), C[1] + R * Math.sin(ph)]);
+      inner.push([C[0] + (R - w) * Math.cos(ph), C[1] + (R - w) * Math.sin(ph)]);
+    }
+    const right = [[0.2, -0.25], [0.2, 0.4], ...inner.slice(1), ...outer.slice().reverse()];          // (0.2,-0.25) → 茎 → 内側 → 先 → 外側 → (0,0.4)
+    const left = right.slice().reverse().map(([a, b]) => [-a, b]);                                      // (0,0.4) → 外側 → 先 → 内側 → 茎 → (-0.2,-0.25)
+    return [...right, ...left.slice(1)].filter((q, k, arr) => k === 0 || Math.hypot(q[0] - arr[k - 1][0], q[1] - arr[k - 1][1]) > 1e-6);
+  },
+  // 板：角を落とした板。根元が広く、先がやや狭い
+  plate: () => [[-0.3, -0.25], [0.3, -0.25], [0.3, 0.55], [0.22, 0.85], [0.08, 1.0], [-0.08, 1.0], [-0.22, 0.85], [-0.3, 0.55]],
+  // 扇：要が下
+  fan: () => [...arc(0, 0.1, 1.0, PI * 0.78, PI * 0.22, 28), [0.1, 0.25], [0.1, -0.25], [-0.1, -0.25], [-0.1, 0.25]],
+};
+const CREST_SINK = { moon: 0.04, kuwagata: 0, sun: 0, horn: 0, fan: 0, ram: 0, plate: 0 };
+
+// 輪の筒：外径 R、内径 Ri、長さ L。前は輪、中は空（レンズを沈めるため）
+function ringBlock(T, base, axis, e1, e2, k, R, Ri, L, col) {
+  if (new V().crossVectors(e1, e2).dot(axis) < 0) e1 = e1.clone().negate();
+  const ring = (rr, off) => { const o = []; for (let i = 0; i < k; i++) { const a = (i + 0.5) / k * 2 * PI; o.push(base.clone().addScaledVector(axis, off).addScaledVector(e1, rr * Math.cos(a)).addScaledVector(e2, rr * Math.sin(a))); } return o; };
+  const ob = ring(R, 0), of = ring(R, L), ib = ring(Ri, 0), iff = ring(Ri, L);
+  for (let i = 0; i < k; i++) {
+    const j = (i + 1) % k;
+    T.poly([ob[i], ob[j], of[j], of[i]], col);        // 外の側面
+    T.poly([iff[i], iff[j], ib[j], ib[i]], col);      // 内の側面
+    T.poly([of[i], of[j], iff[j], iff[i]], col);      // 前の輪
+    T.poly([ib[i], ib[j], ob[j], ob[i]], col);        // 後ろの輪
+  }
+}
+
+// 多角形の板：中心 c、面の基底 tU/tV、法線 n。輪郭 pts（2 次元）を n の向きに厚み t
+function facePlate(T, c, n, tU, tV, pts, t, col) {
+  const v2 = pts.map(([a, b]) => new THREE.Vector2(a, b));
+  let tris = THREE.ShapeUtils.triangulateShape(v2, []);
+  if (THREE.ShapeUtils.isClockWise(v2)) tris = tris.map(([a, b, cc]) => [cc, b, a]);
+  const to3 = (q, off) => c.clone().addScaledVector(tU, q.x).addScaledVector(tV, q.y).addScaledVector(n, off);
+  const back = v2.map(q => to3(q, 0)), front = v2.map(q => to3(q, t));
+  for (const [a, b, cc] of tris) T.tri(front[a], front[b], front[cc], col);
+  const m = v2.length;
+  for (let i = 0; i < m; i++) { const j = (i + 1) % m; T.poly([back[i], back[j], front[j], front[i]], col); }
+}
+// 多角形の柱：輪郭 pts を軸 axis の向きに長さ L、先は taper 倍（台形柱など）
+function taperPlate(T, c, axis, e1, e2, pts, L, taper, col) {
+  if (new V().crossVectors(e1, e2).dot(axis) < 0) e1 = e1.clone().negate();
+  const v2 = pts.map(([a, b]) => new THREE.Vector2(a, b));
+  let tris = THREE.ShapeUtils.triangulateShape(v2, []);
+  if (THREE.ShapeUtils.isClockWise(v2)) tris = tris.map(([a, b, cc]) => [cc, b, a]);
+  const to3 = (q, off, k) => c.clone().addScaledVector(e1, q.x * k).addScaledVector(e2, q.y * k).addScaledVector(axis, off);
+  const back = v2.map(q => to3(q, 0, 1)), front = v2.map(q => to3(q, L, taper));
+  for (const [a, b, cc] of tris) { T.tri(front[a], front[b], front[cc], col); T.tri(back[cc], back[b], back[a], col); }
+  const m = v2.length;
+  for (let i = 0; i < m; i++) { const j = (i + 1) % m; T.poly([back[i], back[j], front[j], front[i]], col); }
+}
+// 2 つの輪郭（同じ点の数）をつなぐ板：下 ptsA（面の上）から上 ptsB（厚み t の所）へ。縁を斜めにした枠に使う
+function loftPlate(T, c, n, tU, tV, ptsA, ptsB, t, col) {
+  const to3 = (q, off) => c.clone().addScaledVector(tU, q[0]).addScaledVector(tV, q[1]).addScaledVector(n, off);
+  const A = ptsA.map(q => to3(q, 0)), Bp = ptsB.map(q => to3(q, t));
+  const v2 = ptsB.map(([a, b]) => new THREE.Vector2(a, b));
+  let tris = THREE.ShapeUtils.triangulateShape(v2, []);
+  if (THREE.ShapeUtils.isClockWise(v2)) tris = tris.map(([a, b, cc]) => [cc, b, a]);
+  for (const [a, b, cc] of tris) T.tri(Bp[a], Bp[b], Bp[cc], col);
+  const m = A.length;
+  for (let i = 0; i < m; i++) { const j = (i + 1) % m; T.poly([A[i], A[j], Bp[j], Bp[i]], col); }
+}
+const TRAPEZOID = [[-1, 0.5], [1, 0.5], [0.6, -0.5], [-0.6, -0.5]];
+const SQUARE = [[-0.75, 0.75], [0.75, 0.75], [0.75, -0.75], [-0.75, -0.75]];
+// 部位ごとの「角の数 n の形」：顎の 4 は台形、耳の 4 は正方形、他は正多角形
+const PENTAGON = [[-1, 1], [1, 1], [1, -0.2], [0, -1], [-1, -0.2]];
+const SEC_PENT = [[0, 1], [1, 0.7], [1, -0.25], [-1, -0.25], [-1, 0.7]];           // 上から見た断面：鼻すじのある五角形
+const SEC_HEX = [[-0.5, 1], [0.5, 1], [1, 0.6], [1, -0.25], [-1, -0.25], [-1, 0.6]];  // 平らな正面に斜めの頬の六角形
+const defaultShape = (key, n) => key === 'chinPts' && n === 4 ? TRAPEZOID.map(q => q.slice()) : key === 'earPts' && n === 4 ? SQUARE.map(q => q.slice()) : key === 'facePts' && n === 5 ? PENTAGON.map(q => q.slice()) : key === 'secPts' && n === 5 ? SEC_PENT.map(q => q.slice()) : key === 'secPts' && n === 6 ? SEC_HEX.map(q => q.slice()) : regularEye(n);
+// 輪郭を幅 w だけ外へ広げる（角は留め継ぎ、鋭い角は伸びすぎないよう抑える）
+function offsetPoly(pts, w) {
+  const m = pts.length, out = [];
+  const cw = THREE.ShapeUtils.isClockWise(pts.map(([a, b]) => new THREE.Vector2(a, b)));
+  const sgn = cw ? -1 : 1;
+  for (let i = 0; i < m; i++) {
+    const p = pts[i], a = pts[(i - 1 + m) % m], b = pts[(i + 1) % m];
+    const d1 = [p[0] - a[0], p[1] - a[1]], d2 = [b[0] - p[0], b[1] - p[1]];
+    const l1 = Math.hypot(d1[0], d1[1]) || 1, l2 = Math.hypot(d2[0], d2[1]) || 1;
+    const n1 = [sgn * d1[1] / l1, -sgn * d1[0] / l1], n2 = [sgn * d2[1] / l2, -sgn * d2[0] / l2];
+    let bx = n1[0] + n2[0], by = n1[1] + n2[1]; const bl = Math.hypot(bx, by) || 1; bx /= bl; by /= bl;
+    const cosHalf = Math.max(0.35, bx * n1[0] + by * n1[1]);
+    out.push([p[0] + bx * w / cosHalf, p[1] + by * w / cosHalf]);
+  }
+  return out;
+}
+const rotPts2 = (pts, deg) => { const a = deg * D2R; return pts.map(([x, y]) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)]); };
+function regularEye(n) { const o = []; for (let i = 0; i < n; i++) { const a = PI / 2 + i / n * 2 * PI; o.push([+Math.cos(a).toFixed(3), +Math.sin(a).toFixed(3)]); } return o; }
+
+// ---- 部位の番号（3D を押した所から左の欄を光らせるため）----
+const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16 };
+const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck' };
+const setPart = id => { M.part = id; G.part = id; };
+
+// ---- 頭 ----
+let M, G, COL;
+function head() {
+  const H = P.H, rx = P.W / 2, rz = P.D / 2, yw = P.yw * H / 2;
+  const aF = P.aF;
+  // 正中の折れが 0 に近い時、正面・後ろの一対は 1 枚にする（ほぼ重なる 2 枚は面が壊れて穴が開く）
+  const fp = (a, e, p0, key) => (aF < 1 && (a === aF || a === 180 - aF)) ? [plane(a === aF ? 0 : 180, e, p0, key)] : pair(a, e, p0, key);
+
+  // 兜：頭頂の 2 つの頂点、一番広い稜、ひさしの裏
+  const hp = [];
+  const apexZ = a => P.apexL / 2 * Math.sign(Math.cos(a * D2R)) * (Math.abs(Math.cos(a * D2R)) > 0.3 ? 1 : 0);
+  for (const a of [aF, 55, 125, 180 - aF]) {
+    const top = new V(0, H / 2, apexZ(a));
+    hp.push(...fp(a, P.eC, top, 'crown' + a));
+  }
+  // 後頭部：方位が 90 度（真横）から 180 度（真後ろ）へ行くほど効く。張り出しは縁の半径、下がりは縁の高さ、後ろのすぼまりは上の面の傾き
+  const occ = a => Math.max(0, -Math.cos(a * D2R));
+  const belt = a => { const k = 1 + (P.occBulge - 1) * occ(a); return new V(rx * k * Math.sin(a * D2R), yw - P.occDown * occ(a), rz * k * Math.cos(a * D2R)); };
+  const rearAz = { 1: [135], 2: [120, 150], 3: [112, 135, 157] }[P.occFacets] || [135];
+  const ringAz = [aF, 45, 90, ...rearAz, 180 - aF];
+  for (const a of ringAz) hp.push(...fp(a, P.eU + (P.occEU - P.eU) * occ(a), belt(a), 'up' + a));
+  for (const a of ringAz) { const b = belt(a); b.y -= P.beltH; b.multiply(new V(0.985, 1, 0.985)); hp.push(...fp(a, -(90 - P.rimSlope), b, 'brim' + a)); }
+  // 兜は 1 つの結晶だが、押した時に前と後ろを分けて光らせるため、z = 0 で前後に分けて描く（境の面と線は出さない）
+  const helmetFaces = clipFaces(hp).map(f => f.pts);
+  {
+    const onSplit = p => Math.abs(p.z) < 1e-6;
+    for (const [extra, part] of [[{ n: new V(0, 0, -1), d: 0 }, PART.helmet], [{ n: new V(0, 0, 1), d: 0 }, PART.occ]]) {
+      setPart(part);
+      for (const f of clipFaces([...hp, extra])) { if (f.pl === extra) continue; M.poly(f.pts, PC('helmet'), (a, b) => !(onSplit(a) && onSplit(b))); }
+    }
+  }
+  window.__dbgHelmet = { planes: hp.map(p => [p.a, p.e, +p.d.toFixed(4)]), faces: helmetFaces.map(f => f.length) };
+  const frontUp = hp.find(p => p.a === aF && p.e === P.eU);
+
+  // 楔：前の縁が刃、後ろへ行くほど厚い薄い結晶。ひさしと耳当てに使う。正面向きで作って、向きと位置を後から変える
+  const wedge = (o) => {
+    const yE = yw - P.beltH * 0.3 + (o.dy || 0);
+    const edge = a => { const b = belt(a); b.y = yE; b.x *= 0.97 * (o.width || 1); return b; };
+    const br = [];
+    for (const a of [aF, 50, 95]) br.push(...fp(a, -5, edge(a), o.key + 'F' + a));
+    br.push(plane(0, 90 - (o.topSlope ?? 28), edge(0), o.key + 'Top'));   // 上の傾きは水平からの角度：前の縁から後ろへ上がる角度
+    br.push(plane(0, -(90 - o.slope), edge(0).sub(new V(0, o.t, 0)), o.key + 'Under'));   // 裏の傾きは水平からの角度
+    br.push(plane(180, 0, new V(0, yw, -rz * (o.back || 0.3))));   // 後ろの端：奥行
+    br.push(plane(0, -85, new V(0, yw + (o.dy || 0) - P.beltH - o.t * 2, 0)));   // 底：上下と一緒に動く
+    const piv = edge(0), X = new V(1, 0, 0), Y = new V(0, 1, 0), Z = new V(0, 0, 1);
+    const rotAbout = (pl, axis, rad, pv) => { const n2 = pl.n.clone().applyAxisAngle(axis, rad); pl.d = n2.dot(pv) + (pl.d - pl.n.dot(pv)); pl.n = n2; };
+    for (const pl of br) rotAbout(pl, X, -o.tilt * D2R, piv);
+    // 向き：Y 軸で回す（原点の周りなので d はそのまま）。位置：回した後の前へ平行移動
+    const ang = (o.az || 0) * D2R, fwd = new V(Math.sin(ang), 0, Math.cos(ang));
+    for (const pl of br) { pl.n.applyAxisAngle(Y, ang); pl.d += pl.n.dot(fwd) * (o.out || 0); }
+    // 真ん中の割れ：正中で切って左右 2 枚にし、それぞれを正中の軸で「割れの角度」だけ回す（＋で外の端が上がる）
+    const cut = o.cut || 0, ca = (o.cutAngle || 0) * D2R;
+    if (cut < 1e-4 && Math.abs(ca) < 1e-6) { crystal(M, br, o.col || COL.main); return; }
+    for (const sgn of [1, -1]) {
+      const half = br.map(pl => ({ n: pl.n.clone(), d: pl.d, a: pl.a, e: pl.e }));
+      half.push(plane(-sgn * 90, 0, new V(sgn * cut / 2, 0, 0)));
+      const pz = new V(0, piv.y, 0);
+      for (const pl of half) rotAbout(pl, Z, sgn * ca, pz);
+      crystal(M, half, o.col || COL.main);
+    }
+  };
+  // ひさし
+  setPart(PART.brim);
+  wedge({ key: 'brim', t: P.brimT, slope: P.brimSlope, topSlope: P.brimTopSlope, tilt: P.brimTilt, dy: P.brimY, back: P.brimBack, out: (P.brimOut - 1) * rz, width: P.brimW, col: PC('brim'), cut: P.brimCut, cutAngle: P.brimCutAngle });
+  // 側頭：顔の両脇に下がる 2 つの結晶
+  setPart(PART.guard);
+  const fw = P.faceW * rx, drop = P.drop * H / 2 + P.beltH;
+  for (const s of [1, -1]) {
+    const g = [];
+    g.push(plane(s * 90, -12, new V(s * rx * 0.97, yw - 0.12, rz * 0.15), 'gOuter'));
+    g.push(plane(s * 22, -6, new V(s * (fw + 0.05), yw - 0.2, rz * P.reach), 'gFront'));
+    g.push(plane(-s * 90, 0, new V(s * (fw + 0.005), yw - 0.3, 0)));                      // 顔に接する側（隠れる）
+    g.push(plane(s * 155, -8, new V(s * rx * 0.6, yw - 0.2, -rz * 0.5), 'gBack'));
+    g.push(plane(s * 50, -55, new V(s * rx * 0.6, yw - drop, rz * 0.35), 'gBot1'));
+    g.push(plane(s * 140, -55, new V(s * rx * 0.6, yw - drop, -rz * 0.1), 'gBot2'));
+    g.push(plane(0, 85, new V(0, yw - P.beltH * 0.6, 0)));                                  // 兜の中（隠れる）
+    g.push(plane(s * 60, 25, new V(s * rx * 0.9, yw - P.beltH * 0.5, rz * 0.5), 'gTop'));  // 兜の縁から内へ入る上面
+    setPart(PART.guard);
+    const faces = crystal(M, g, PC('guard'));
+    if (P.vents) {
+      setPart(PART.vent);
+      const pl = g[1], pt = onPlane(pl, s * (fw + rx * 0.22), yw - 0.26);
+      if (pt) { const B = basis(pl); block(M, pt, B.n, B.tU, B.tV, 0.11, 0.08, 0.03, 0.85, 0.85, COL.dark); block(M, pt.clone().addScaledVector(B.n, 0.03), B.n, B.tU, B.tV, 0.08, 0.012, 0.006, 1, 1, COL.main); }
+    }
+    if (P.ears) {
+      setPart(PART.ear);
+      if (!P.earPts || P.earPts.length !== P.earN) P.earPts = defaultShape('earPts', P.earN);
+      const pl = g[0], B = basis(pl);
+      const T0 = new V(s * rx * 0.97, yw - 0.22 + P.earY, rz * 0.12 + P.earZ);
+      const pz = T0.clone().addScaledVector(pl.n, -(pl.n.dot(T0) - pl.d));            // 外の面の上へ
+      const ang = P.earAngle * D2R, rot = ([a, b]) => [a * Math.cos(ang) - b * Math.sin(ang), a * Math.sin(ang) + b * Math.cos(ang)];
+      let pts = P.earPts.map(rot).map(([a, b]) => [a * P.earS, b * P.earS]);
+      // 図の右＝前。右の側頭では tU が後ろ向きなので左右を返す。左は鏡
+      const flipU = B.tU.z < 0 ? -1 : 1;
+      pts = pts.map(([a, b]) => [a * flipU * s, b]);
+      if (flipU * s < 0) pts = pts.reverse();
+      const col = P.earColor ? new THREE.Color(P.earColor) : PC('ear');
+      facePlate(M, pz, B.n, B.tU, B.tV, pts, P.earH, col);
+      if (P.earInset > 0.0005) facePlate(M, pz.clone().addScaledVector(B.n, P.earH - 0.006), B.n, B.tU, B.tV, offsetPoly(pts, -P.earInset), 0.004, COL.dark);
+    }
+  }
+
+  // 後ろ：襟
+  if (P.back) {
+    setPart(PART.back);
+    const b = [];
+    b.push(plane(180, P.backTilt, new V(0, yw + P.backY - 0.2, -rz * P.backOut), 'bBack'));
+    // 幅は真横の面で決める。後ろの角は「角の落とし」の分だけ内側から「角の角度」の面で落とす。角度を変えても幅と出は変わらない
+    b.push(...pair(90, -10, new V(rx * P.backW, yw + P.backY - 0.2, -rz * P.backOut * 0.5), 'bSide'));
+    if (P.backCham > 0.005) b.push(...pair(P.backSideAz, -10, new V(rx * P.backW * (1 - P.backCham), yw + P.backY - 0.2, -rz * P.backOut), 'bCham'));
+    // 長さ＝後ろの面の下の縁が兜の縁からどれだけ下がるか。裏の面はそこから前へ上がる
+    // 裏の傾きは水平からの角度：0 で水平、大きいほど後ろの下の縁から首へ向かって急に上がる
+    b.push(plane(0, -(90 - P.backSlope), new V(0, yw + P.backY - P.beltH - P.backDrop, -rz * P.backOut), 'bBot'));
+    b.push(plane(0, 0, new V(0, 0, -rz * 0.1)));
+    b.push(plane(0, 85, new V(0, yw + P.backY - P.beltH * 0.6, 0)));
+    b.push(plane(180, 30, new V(0, yw + P.backY - P.beltH * 0.5, -rz * 0.9), 'bTop'));
+    crystal(M, b, PC('back'));
+  }
+
+  // バイザー：ひさしの下、顔の上に沈んだ暗い帯
+  const yVisTop = yw - P.beltH * 0.6, yVisBot = yVisTop - P.visorH;
+  if (P.visorH > 0.005) {
+    setPart(PART.visor);
+    const vz = rz * P.visorOut, vy = (yVisTop + yVisBot) / 2, vv = [];
+    vv.push(...pair(P.aFace + 6, -4, new V(0, vy, vz), 'vFront'));
+    vv.push(...pair(90, 0, new V(fw * 1.02, vy, 0)));
+    vv.push(plane(0, 88, new V(0, yVisTop, 0)));
+    vv.push(plane(0, -88, new V(0, yVisBot, 0)));
+    vv.push(plane(180, 0, new V(0, vy, -0.1)));
+    crystal(M, vv, COL.dark);
+  }
+
+  // モノアイ：カメラの筒。縁の輪、沈めたレンズ、光る瞳。バイザーの正中に、無ければ顔の正中に
+  if (P.mono) {
+    setPart(PART.mono);
+    const hasVisor = P.visorH > 0.005;
+    const cy = hasVisor ? (yVisTop + yVisBot) / 2 : yVisBot - P.faceH * 0.25;
+    const cz = hasVisor ? rz * P.visorOut : rz * P.faceOut;
+    const fwd = hasVisor ? new V(0, Math.sin(-4 * D2R), Math.cos(-4 * D2R)) : new V(0, Math.sin(-8 * D2R), Math.cos(-8 * D2R));
+    const axis = fwd.clone().applyAxisAngle(new V(1, 0, 0), -P.monoPitch * D2R).applyAxisAngle(new V(0, 1, 0), P.monoYaw * D2R).normalize();
+    const e1 = new V().crossVectors(new V(0, 1, 0), axis).normalize(), e2 = new V().crossVectors(axis, e1).normalize();
+    const B = new V(P.monoX, cy + P.monoY, cz + P.monoZ).addScaledVector(axis, -P.monoD * 0.6);
+    const R = P.monoR, Ri = R * (1 - P.monoRim), k = P.monoSides, lens = new THREE.Color(P.monoColor);
+    ringBlock(M, B, axis, e1, e2, k, R, Ri, P.monoD, COL.dark);                                    // 筒
+    polyBlock(M, B.clone().addScaledVector(axis, P.monoD - 0.02 - 0.012), axis, e1, e2, k, Ri * 0.999, 0.012, 1, lens);  // レンズ：縁より 0.02 沈める
+    polyBlock(M, B, axis, e1, e2, k, Ri * 0.999, 0.01, 1, COL.dark);                              // 筒の底
+    if (P.monoGlow) polyBlock(G, B.clone().addScaledVector(axis, P.monoD - 0.02 + 0.001), axis, e1, e2, k, Ri * 0.3, 0.004, 1, lens.clone().lerp(new THREE.Color(0xffffff), 0.5));  // 瞳
+  }
+
+  // 顔：バイザーの下、側頭の間
+  const yF = yVisBot - P.faceH * 0.5, zF = rz * P.faceOut;
+  const f = [];
+  // 底面（上から見た断面）：左右対称の多角形の辺ごとに 1 枚、少し下向き（-8 度）の面。前を向く辺が、目や溝を置く「顔の面」
+  if (!P.secPts || P.secPts.length !== P.secN) P.secPts = defaultShape('secPts', P.secN);
+  const frontFaces = [];
+  {
+    const el = -8 * D2R;
+    const sp = P.secPts.map(([u, v]) => [u * fw, v * zF]);
+    const ccw = !THREE.ShapeUtils.isClockWise(sp.map(([a, b]) => new THREE.Vector2(a, b)));
+    for (let i = 0; i < sp.length; i++) {
+      const a = sp[i], b = sp[(i + 1) % sp.length];
+      const ex = b[0] - a[0], ez = b[1] - a[1], L = Math.hypot(ex, ez) || 1;
+      let nu = ez / L, nz = -ex / L; if (!ccw) { nu = -nu; nz = -nz; }
+      const n = new V(nu * Math.cos(el), Math.sin(el), nz * Math.cos(el)).normalize();
+      const pl = { n, d: n.dot(new V(a[0], yF, a[1])), a: 0, e: -8 };
+      f.push(pl);
+      if (nz > 0.2) frontFaces.push({ pl, x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]) });
+    }
+  }
+  // x の位置から、目や溝を置く顔の面を選ぶ
+  const faceAtX = x => frontFaces.find(ff => x >= ff.x0 - 1e-9 && x <= ff.x1 + 1e-9) || frontFaces.reduce((best, ff) => { const d = Math.max(ff.x0 - x, x - ff.x1, 0); return !best || d < best.d ? { d, ff } : best; }, null)?.ff;
+  const centerFace = frontFaces.find(ff => ff.x0 < -1e-6 && ff.x1 > 1e-6);   // 正中をまたぐ平らな面（無ければ鼻すじ）
+  // 輪郭の面：正面から見た形（左右対称の多角形）の辺ごとに 1 枚。辺を通り、「縁の傾き」だけ後ろへ開く（前が狭く、後ろが広い）
+  if (!P.facePts || P.facePts.length !== P.faceN) P.facePts = defaultShape('facePts', P.faceN);
+  const outlinePlanes = [];
+  {
+    const th = P.faceSlant * D2R, zE = zF * 0.75;
+    const pts = P.facePts.map(([u, v]) => [u * fw, v * P.faceH / 2]);
+    const ccw = !THREE.ShapeUtils.isClockWise(pts.map(([a, b]) => new THREE.Vector2(a, b)));
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const ex = b[0] - a[0], ey = b[1] - a[1], L = Math.hypot(ex, ey) || 1;
+      let nu = ey / L, nv = -ex / L; if (!ccw) { nu = -nu; nv = -nv; }
+      // 斜めの面は「縁の奥行」の分だけ。その奥からは真っ直ぐ後ろへ（斜めのままだと後ろで大きく広がり、顔が巨大な楔になる）
+      const n = new V(nu * Math.cos(th), nv * Math.cos(th), Math.sin(th)).normalize();
+      const pl = { n, d: n.dot(new V(a[0], yF + a[1], zE)), a: 0, e: 0, nv };
+      outlinePlanes.push(pl); f.push(pl);
+      const grow = P.faceShoulder * Math.tan(th), n2 = new V(nu, nv, 0);
+      f.push({ n: n2, d: n2.dot(new V(a[0] + nu * grow, yF + a[1] + nv * grow, zE - P.faceShoulder)), a: 0, e: 0 });
+    }
+  }
+  f.push(plane(180, 0, new V(0, yF, -0.1)));
+  {   // 底（顔の裏）：前の縁を軸に傾ける。＋で後ろ（喉側）が上がり、−で下がる、0 で水平
+    const t = P.faceUnder * D2R, n = new V(0, -Math.cos(t), -Math.sin(t)), p0 = new V(0, yF - P.faceH * 0.62, zF * 0.7);
+    f.push({ n, d: n.dot(p0), a: 0, e: -90 });
+  }
+  f.push(plane(0, 88, new V(0, yw - P.beltH * 0.6, 0)));
+  // ツインアイ：顔の前の 2 面に、多角形の目と、その周りを同じ幅で囲む光らない枠。右目の形を点で決め、左目は鏡
+  // 窪みがあれば、顔の面に穴を開け、斜めの壁（ベベル）を下ろして、底に枠と目を置く
+  const twinCutters = [], twinAfter = [];
+  if (P.twin) {
+    if (!P.twinPts || P.twinPts.length !== P.twinN) P.twinPts = regularEye(P.twinN);
+    const ang = P.twinAngle * D2R, S = P.twinS;
+    const rot = ([a, b]) => [a * Math.cos(ang) - b * Math.sin(ang), a * Math.sin(ang) + b * Math.cos(ang)];
+    const eyeCol = new THREE.Color(P.twinColor), frameCol = new THREE.Color(P.twinFrameColor);
+    const yE = yF + P.faceH * 0.25 + P.twinY;
+    for (let i = 0; i < 2; i++) {
+      const sgn = i === 0 ? 1 : -1, ff = faceAtX(sgn * P.twinX); if (!ff) continue;
+      const pl = ff.pl, c = onPlane(pl, sgn * P.twinX, yE);
+      if (!c) continue;
+      const B = basis(pl);
+      let pts = P.twinPts.map(rot).map(([a, b]) => [a * S, b * S]);
+      if (sgn < 0) pts = pts.map(([a, b]) => [-a, b]).reverse();
+      const outer = P.twinBorder > 0.0005 ? offsetPoly(pts, P.twinBorder) : pts;
+      const at = (q, off) => c.clone().addScaledVector(B.tU, q[0]).addScaledVector(B.tV, q[1]).addScaledVector(B.n, off);
+      const depth = P.twinDepth;
+      if (depth > 0.0005) {
+        const rim = P.twinBevel > 0.0005 ? offsetPoly(outer, P.twinBevel) : outer;
+        twinCutters.push(socketCutter(c, B.n, rim.map(q => at(q, 0)), outer.map(q => at(q, -depth)), depth));
+        twinAfter.push(() => {
+          const base = c.clone().addScaledVector(B.n, -depth + P.twinZ);
+          const ft = P.twinBorder > 0.0005 ? P.twinT : 0.002;
+          facePlate(M, base, B.n, B.tU, B.tV, outer, ft, frameCol);
+          facePlate(P.twinGlow ? G : M, base.clone().addScaledVector(B.n, ft), B.n, B.tU, B.tV, pts, 0.004, eyeCol);
+        });
+      } else {
+        twinAfter.push(() => {   // 窪み無し：枠は面の上に乗せる。ベベルは削った縁の角を落とす物なので、窪みが無ければ効かない
+          const base = c.clone().addScaledVector(B.n, 0.01 + P.twinZ);
+          if (P.twinBorder > 0.0005) facePlate(M, base, B.n, B.tU, B.tV, outer, P.twinT, frameCol);
+          facePlate(P.twinGlow ? G : M, base.clone().addScaledVector(B.n, P.twinT), B.n, B.tU, B.tV, pts, 0.004, eyeCol);
+        });
+      }
+    }
+  }
+  setPart(PART.face);
+  // 顔飾り：顔の前の 2 面に彫る溝。縦横の本数と間隔、中央（正中をまたぐ）か左右（それぞれの面の中）か。溝は底が平らでベベルの壁を持つ削る結晶
+  if (P.decoNV > 0 || P.decoNH > 0) {
+    const w = P.decoW, dep = P.decoDepth, bv = P.decoBevel, yC = yF + P.faceH * 0.1 + P.decoY;
+    const groove = (cx, cy, len, vertical) => {   // (cx, cy) を中心に、長さ len の溝。面は x で選ぶ
+      const ff = faceAtX(cx); if (!ff) return;
+      const pl = ff.pl, c = onPlane(pl, cx, cy); if (!c) return;
+      const B = basis(pl);
+      const hw = vertical ? w / 2 : len / 2, hh = vertical ? len / 2 : w / 2;
+      const pts = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+      const rim = bv > 0.0005 ? offsetPoly(pts, bv) : pts;
+      const at = (q, off) => c.clone().addScaledVector(B.tU, q[0]).addScaledVector(B.tV, q[1]).addScaledVector(B.n, off);
+      twinCutters.push(socketCutter(c, B.n, rim.map(q => at(q, 0)), pts.map(q => at(q, -dep)), dep));
+    };
+    // 横線を面ごとの区間に分ける（正中をまたぐ線は、またぐ面が無ければ鼻すじで 2 本に）
+    const hLine = (x0, x1, y) => { for (const ff of frontFaces) { const s0 = Math.max(x0, ff.x0), s1 = Math.min(x1, ff.x1); if (s1 - s0 > 1e-4) groove((s0 + s1) / 2, y, s1 - s0, false); } };
+    for (let k = 0; k < P.decoNV; k++) {
+      const off = (k - (P.decoNV - 1) / 2) * P.decoDV;
+      if (P.decoPlace === 'sides') for (const sgn of [1, -1]) groove(sgn * (P.decoX + off), yC, P.decoLV, true);
+      else if (Math.abs(off) < 1e-6 && !centerFace) for (const sgn of [1, -1]) groove(sgn * w / 4, yC, P.decoLV, true);   // 鼻すじの上の線：両面に半分ずつ
+      else groove(off, yC, P.decoLV, true);
+    }
+    for (let k = 0; k < P.decoNH; k++) {
+      const y = yC + (k - (P.decoNH - 1) / 2) * P.decoDH;
+      if (P.decoPlace === 'sides') for (const sgn of [1, -1]) hLine(sgn * P.decoX - P.decoLH / 2, sgn * P.decoX + P.decoLH / 2, y);
+      else hLine(-P.decoLH / 2, P.decoLH / 2, y);
+    }
+  }
+  crystal(M, f, PC('face'), twinCutters);
+  setPart(PART.twin);
+  for (const fn of twinAfter) fn();
+  // 目：顔の前の 2 面の上
+  // 目は置かない（依頼主：チープすぎる）。目の高さ・間隔のつまみは残してある
+  // 顎：左右の顎の面が交わる正中の稜の上に、左右対称に置く。正面から見た形を点で決め、「出」の向きに先細りで押し出す
+  if (P.chin) {
+    setPart(PART.chin);
+    if (!P.chinPts || P.chinPts.length !== P.chinN) P.chinPts = P.chinN === 4 ? TRAPEZOID.map(q => q.slice()) : regularEye(P.chinN);
+    const downs = outlinePlanes.filter(pl => pl.nv < -0.3);
+    const n0 = downs.length ? downs.reduce((acc, pl) => acc.add(pl.n), new V()).normalize() : new V(0, -0.7, 0.7).normalize();
+    const axis = n0.clone().applyAxisAngle(new V(1, 0, 0), -P.chinTilt * D2R);
+    const e1 = new V(1, 0, 0), e2 = new V().crossVectors(axis, e1).normalize();
+    const pts = P.chinPts.map(([a, b]) => [a * P.chinS, b * P.chinS]);
+    const col = P.chinColor ? new THREE.Color(P.chinColor) : PC('chin');
+    taperPlate(M, new V(0, yF - P.faceH * 0.55 + P.chinY, zF * 0.85 + P.chinZ).addScaledVector(axis, -0.01), axis, e1, e2, pts, P.chinL, P.chinTaper, col);
+  }
+
+  // 首：頭の下から下へ伸びる多角形の柱。断面は上から見た左右対称の多角形、下へ行くほど先細り、前後に傾けられる
+  if (P.neck) {
+    setPart(PART.neck);
+    if (!P.neckPts || P.neckPts.length !== P.neckN) P.neckPts = regularEye(P.neckN);
+    const top = new V(0, yF - P.faceH * 0.55 + 0.05 + P.neckY, zF * 0.3 + P.neckZ);
+    const tl = P.neckTilt * D2R, axis = new V(0, -Math.cos(tl), Math.sin(tl));   // ＋で下が前へ
+    const e1 = new V(1, 0, 0), e2 = new V().crossVectors(axis, e1).normalize();   // e2 は断面の「上＝前」
+    const pts = P.neckPts.map(([a, b]) => [a * P.neckR, b * P.neckR]);
+    const col = P.neckColor ? new THREE.Color(P.neckColor) : PC('neck');
+    taperPlate(M, top, axis, e1, e2, pts, P.neckL, P.neckTaper, col);
+  }
+
+  // 前立と角：兜の正面の正中に立てる。形は平らな輪郭を厚みの分だけ押し出した物。X・Y・Z の傾きは取り付け点を中心に回す
+  const placeCrest = pre => {
+    const g = k => P[pre + k];
+    if (!frontUp || g('Kind') === 'none') return;
+    setPart(PART[pre]);
+    const B = basis(frontUp);
+    const base0 = onPlane(frontUp, 0, yw + 0.16 + g('Y'));
+    if (!base0) return;
+    // 前後は正中の向きで動かす（右の面の法線だと右へ寄る）
+    const frontUpL = hp.find(p => p.a === -aF && p.e === P.eU);
+    const nMid = frontUpL ? B.n.clone().add(frontUpL.n).normalize() : B.n;
+    const mount = base0.clone().addScaledVector(nMid, g('Z'));
+    const X = new V(1, 0, 0), Y = new V(0, 1, 0), Z = new V(0, 0, 1);
+    const fr = [X.clone(), Y.clone(), Z.clone()];
+    for (const a of fr) { a.applyAxisAngle(Z, g('RotZ') * D2R); a.applyAxisAngle(X, g('RotX') * D2R); a.applyAxisAngle(Y, g('RotY') * D2R); }
+    const [u, v, w] = fr, S = g('Size'), t = g('T'), split = g('Split');
+    const col = g('Color') ? new THREE.Color(g('Color')) : PC(pre);   // 空なら塗り分けの色
+    // 真ん中の折れ：正中を軸に左右の半分を後ろへ折る（＋で両端が後ろへ下がる）
+    const fo = g('Fold') * D2R;
+    const sideFrame = sgn => { const us = u.clone().multiplyScalar(Math.cos(fo)).addScaledVector(w, -sgn * Math.sin(fo)); return { u: us, w: new V().crossVectors(us, v).normalize() }; };
+    const sides = g('Side') === 'left' ? [-1] : g('Side') === 'right' ? [1] : [1, -1];   // 正面から見て右が +x
+    if (g('Kind') === 'v') {
+      for (const sgn of sides) {
+        const F = sideFrame(sgn), th = g('VOpen') * D2R;
+        const dir = F.u.clone().multiplyScalar(sgn * Math.sin(th)).addScaledVector(v, Math.cos(th)).normalize();
+        const e1 = new V().crossVectors(dir, F.w).normalize();
+        block(M, mount.clone().addScaledVector(v, -0.08).addScaledVector(u, sgn * split), dir, e1, F.w, 0.26 * S, t, S + 0.08, 0.2, 0.5, col);
+      }
+    } else {
+      const outline = CREST[g('Kind')](), sink = CREST_SINK[g('Kind')] * S;
+      // 左右の離れ：正中で切った半分ずつを、左右へ離して置く
+      if (Math.abs(fo) < 1e-4 && split < 1e-4 && sides.length === 2) extrude(M, mount, u, v, w, outline, S, t, col, sink);
+      else for (const sgn of sides) { const F = sideFrame(sgn), half = halfOutline(outline, sgn); if (half.length >= 3) extrude(M, mount.clone().addScaledVector(u, sgn * split), F.u, v, F.w, half, S, t, col, sink); }
+    }
+  };
+  placeCrest('crest');
+  placeCrest('horn');
+
+  setPart(PART.muff);
+  // 耳当て：兜の縁から下がって後頭部を包む帯。横から後ろへ回り、平らな面を並べて作る。真ん中で分けられ、段に重ねられる
+  {
+    const col = P.muffColor ? new THREE.Color(P.muffColor) : PC('muff');
+    const from = P.muffFrom * D2R, cut = P.muffCut * D2R / 2, nB = P.muffBands;
+    const yTop0 = yw - P.beltH * 0.6 + P.muffY, hB = P.muffH / nB, flare = Math.tan(P.muffFlare * D2R);
+    const rad = th => 1 / Math.hypot(Math.sin(th) / rx, Math.cos(th) / rz);
+    const N = P.muffFacets;
+    for (let k = 0; k < nB; k++) {
+      const yTop = yTop0 - k * hB * 0.8, yBot = yTop - hB, gap = P.muffGap + k * (P.muffT + 0.015);
+      // 傾き：上の縁はそのまま、下へ行くほど後ろへずれる（＋で後ろ、−で前）。帯のどこでも同じだけ傾く
+      // 横の傾き：下へ行くほど左右へ開く（＋で外へ、−で内へ）。前後の傾きと独立
+      const lean = Math.tan(P.muffPitch * D2R), leanX = Math.tan(P.muffRoll * D2R);
+      const ring = (th, y, extra) => { const r = rad(th) + gap + extra; const x = r * Math.sin(th); return new V(x + Math.sign(x) * (yTop0 - y) * leanX, y, r * Math.cos(th) - (yTop0 - y) * lean); };
+      const pieces = cut > 0.005 ? [[from, PI - cut], [PI + cut, 2 * PI - from]] : [[from, 2 * PI - from]];
+      for (const [t0, t1] of pieces) {
+        const n = Math.max(1, Math.round(N * (t1 - t0) / (2 * PI - 2 * from)));
+        const th = i => t0 + (t1 - t0) * i / n;
+        const quad = (a, b, c, d) => M.poly([a, b, c, d], col);
+        const outerT = i => ring(th(i), yTop, 0), outerB = i => ring(th(i), yBot, hB * flare);
+        const innerT = i => ring(th(i), yTop, -P.muffT), innerB = i => ring(th(i), yBot, hB * flare - P.muffT);
+        for (let i = 0; i < n; i++) {
+          quad(outerT(i), outerB(i), outerB(i + 1), outerT(i + 1));
+          quad(innerT(i + 1), innerB(i + 1), innerB(i), innerT(i));
+          quad(innerT(i), outerT(i), outerT(i + 1), innerT(i + 1));
+          quad(outerB(i), innerB(i), innerB(i + 1), outerB(i + 1));
+        }
+        quad(innerT(0), innerB(0), outerB(0), outerT(0));
+        quad(outerT(n), outerB(n), innerB(n), innerT(n));
+      }
+    }
+  }
+  return helmetFaces.length;
+}
+
+// ---- 色 ----
+// 色種 0〜4 は決め打ちの 5 組、5 以上は色種から作る
+const PALETTES = [
+  { main: 0xe4e4e4, sub: 0xe4e4e4, face: 0xe4e4e4, accent: 0xc0392b, fin: 0xd9b43a, dark: 0x262a30, eye: 0x7cff8a },
+  { main: 0xe4e4e4, sub: 0x2b4f9e, face: 0xe4e4e4, accent: 0xc0392b, fin: 0xd9b43a, dark: 0x262a30, eye: 0x7cff8a },
+  { main: 0x3a3f47, sub: 0x3a3f47, face: 0xd0d0d0, accent: 0xb03030, fin: 0xd9b43a, dark: 0x16181c, eye: 0xff5a4a },
+  { main: 0x1f2328, sub: 0x1f2328, face: 0x1f2328, accent: 0xb08a3e, fin: 0xb08a3e, dark: 0x0c0d10, eye: 0xffcc33 },
+  { main: 0x4d5a3c, sub: 0x3a452c, face: 0x8a8a7a, accent: 0x7a2a2a, fin: 0xb0a070, dark: 0x1a1d16, eye: 0x9cff5a },
+];
+function palette(colorSeed) {
+  if (colorSeed < PALETTES.length) { const o = {}; for (const k in PALETTES[colorSeed]) o[k] = new THREE.Color(PALETTES[colorSeed][k]); return o; }
+  const keep = rnd; rnd = rng(colorSeed * 2654435761 + 7); const o = randomPalette(); rnd = keep; return o;
+}
+// 色相を 1 つ引き、白地・色地・暗地のどれかで、本体・側頭・顔・差し色・前立・暗部を決める
+function randomPalette() {
+  const hsl = (h, sl, l) => new THREE.Color().setHSL(((h % 360) + 360) / 360 % 1, sl, l);
+  const h = rnd() * 360, scheme = pick(['white', 'white', 'colored', 'dark']);
+  const h2 = h + 180 + (rnd() - 0.5) * 60, h3 = h + pick([120, 240]) + (rnd() - 0.5) * 40;
+  const gold = hsl(40 + (rnd() - 0.5) * 20, 0.55 + rnd() * 0.2, 0.45 + rnd() * 0.1);
+  const fin = rnd() < 0.6 ? gold : hsl(h2, 0.5, 0.5);
+  if (scheme === 'white') {
+    const main = hsl(h, 0.05 + rnd() * 0.1, 0.84 + rnd() * 0.08);
+    return { main, sub: rnd() < 0.5 ? main : hsl(h2, 0.45 + rnd() * 0.2, 0.3 + rnd() * 0.15), face: main, accent: hsl(h3, 0.55 + rnd() * 0.2, 0.4 + rnd() * 0.1), fin, dark: hsl(h, 0.1, 0.12), eye: hsl(120, 1, 0.7) };
+  }
+  if (scheme === 'colored') {
+    const main = hsl(h, 0.35 + rnd() * 0.25, 0.35 + rnd() * 0.2);
+    return { main, sub: rnd() < 0.5 ? main : hsl(h, 0.4, 0.25), face: rnd() < 0.6 ? hsl(h, 0.08, 0.82) : main, accent: hsl(h2, 0.55 + rnd() * 0.2, 0.4 + rnd() * 0.1), fin, dark: hsl(h, 0.15, 0.1), eye: hsl(120, 1, 0.7) };
+  }
+  const main = hsl(h, 0.1 + rnd() * 0.15, 0.14 + rnd() * 0.1);
+  return { main, sub: main, face: rnd() < 0.5 ? hsl(h, 0.08, 0.3) : hsl(h, 0.06, 0.8), accent: hsl(h2, 0.6, 0.38 + rnd() * 0.1), fin, dark: hsl(h, 0.1, 0.06), eye: hsl(0, 1, 0.6) };
+}
+
+// ---- 塗り分け：部位ごとに配色のどの色を塗るか。塗り分け 0 は今まで通り、1 以上は塗り分け種で引く ----
+const PAINT_CHOICES = {
+  helmet: ['main', 'main', 'main', 'sub'], brim: ['main', 'main', 'accent', 'sub'], muff: ['main', 'sub', 'accent'],
+  guard: ['sub', 'main', 'main'], back: ['sub', 'main'], face: ['face', 'face', 'main'], chin: ['accent', 'accent', 'fin'],
+  ear: ['accent', 'main', 'sub'], crest: ['fin', 'fin', 'accent'], horn: ['fin', 'accent', 'main'],
+  neck: ['dark', 'dark', 'sub', 'main'],
+};
+function paintMap(paintSeed) {
+  const m = {};
+  if (paintSeed === 0) { for (const k in PAINT_CHOICES) m[k] = PAINT_CHOICES[k][0]; return m; }
+  const keep = rnd; rnd = rng(paintSeed * 40503 + 11);
+  for (const k in PAINT_CHOICES) m[k] = pick(PAINT_CHOICES[k]);
+  rnd = keep; return m;
+}
+let PAINT = {};
+const PC = part => COL[PAINT[part]];
+
+// ---- 三次元 ----
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1b1d22);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 50);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xdde4f0, 0x2a2622, 0.8));
+const key = new THREE.DirectionalLight(0xffffff, 1.7); key.position.set(2, 3, 2.5); scene.add(key);
+const fillL = new THREE.DirectionalLight(0x9fb4d8, 0.45); fillL.position.set(-2.5, 0.5, -1.5); scene.add(fillL);
+const matMetal = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.35, roughness: 0.5, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const matGlow = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false });
+const matLine = new THREE.LineBasicMaterial({ color: 0x0e1013, transparent: true, opacity: 0.55 });
+let group = null;
+
+function build() {
+  if (group) { scene.remove(group); group.traverse(o => o.geometry && o.geometry.dispose()); }
+  rnd = rng(P.seed * 7919 + 17); JT = {};
+  COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed);
+  M = new Tris(); G = new Tris();
+  const nf = head();
+  group = new THREE.Group();
+  group.add(new THREE.Mesh(M.geom(), matMetal));
+  group.add(new THREE.Mesh(G.geom(), matGlow));
+  const lines = new THREE.LineSegments(M.lineGeom(), matLine); lines.name = 'edges'; lines.visible = P.edges; group.add(lines);
+  scene.add(group); window.__head = () => ({ group, COL, camera, controls });
+  for (const pre of ['crest', 'horn', 'muff', 'ear', 'chin', 'neck']) { const el = document.getElementById(pre + 'Color'); if (el && !P[pre + 'Color']) el.value = '#' + PC(pre).getHexString(); }
+  document.getElementById('stat').textContent = `兜の面 ${nf}　三角形 ${M.pos.length / 9 | 0}　種 ${P.seed}`;
+}
+
+function setView(v) {
+  const d = 4.6;
+  if (v === 'iso') camera.position.set(2.5, 1.3, 3.3);
+  if (v === 'front') camera.position.set(0, 0.05, d);
+  if (v === 'top') camera.position.set(0, d, 0.001);
+  if (v === 'side') camera.position.set(d, 0.05, 0);
+  controls.target.set(0, -0.05, 0); controls.update();
+}
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize(); setView('iso');
+(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+
+// ---- 3D を押すと、その部位の欄を光らせて見える所へ送る ----
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+let downAt = null;
+canvas.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+canvas.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4 || !group) { downAt = null; return; }
+  downAt = null;
+  const r = canvas.getBoundingClientRect();
+  ptr.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const hits = ray.intersectObjects([group.children[0], group.children[1]], false);
+  if (!hits.length) return;
+  const h = hits[0], attr = h.object.geometry.getAttribute('part');
+  const id = attr ? attr.getX(h.face.a) : 0;
+  flashPart(PART_TARGET[id]);
+});
+function flashPart(targetId) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  const items = [el];
+  if (el.tagName === 'H2') { let n = el.nextElementSibling; while (n && n.tagName !== 'H2') { items.push(n); n = n.nextElementSibling; } }
+  for (const it of items) { it.classList.remove('flash'); void it.offsetWidth; it.classList.add('flash'); }
+  el.scrollIntoView({ behavior: 'smooth', block: el.tagName === 'H2' ? 'start' : 'center' });
+  setTimeout(() => { for (const it of items) it.classList.remove('flash'); }, 1500);
+}
+
+// ---- 配線 ----
+const DEFAULTS = JSON.parse(JSON.stringify(P));
+const KEY = 'crystal-head-knobs';
+try {
+  const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+  const renamed = { crest: 'crestKind', rotX: 'crestRotX', rotY: 'crestRotY', rotZ: 'crestRotZ', vOpen: 'crestVOpen' };   // 前の版の名前
+  for (const k in saved) { const kk = renamed[k] || k; if (kk in P) P[kk] = saved[k]; }
+  if ('backUnder' in saved && !('backSlope' in saved)) P.backSlope = Math.max(0, Math.min(75, 90 - saved.backUnder));
+  if ('brimUnder' in saved && !('brimSlope' in saved)) P.brimSlope = Math.max(0, Math.min(75, 90 - saved.brimUnder));
+  if ('eB' in saved && !('rimSlope' in saved)) P.rimSlope = Math.max(0, Math.min(70, 90 - saved.eB));
+} catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} };
+const seedEl = document.getElementById('seed');
+function syncUI() {
+  for (const el of document.querySelectorAll('input[type=range]')) { el.value = P[el.id]; const val = el.parentElement.querySelector('.val'); val.textContent = Number.isInteger(+el.step) && +el.step >= 1 ? String(P[el.id]) : (+P[el.id]).toFixed(2); }
+  seedEl.value = P.seed;
+  for (const el of document.querySelectorAll('input.seedin')) el.value = P[el.id];
+  document.getElementById('monoColor').value = P.monoColor;
+  document.getElementById('twinColor').value = P.twinColor; document.getElementById('twinFrameColor').value = P.twinFrameColor;
+  if (typeof drawTwin === 'function') { drawTwin(); drawEar(); drawChin(); drawFace(); drawSec(); drawNeck(); }
+  for (const pre of ['crest', 'horn', 'muff', 'ear', 'chin', 'neck']) if (P[pre + 'Color'] || (COL && PAINT[pre])) document.getElementById(pre + 'Color').value = P[pre + 'Color'] || '#' + PC(pre).getHexString();
+  for (const b of document.querySelectorAll('button[data-t]')) b.classList.toggle('on', !!P[b.dataset.t]);
+  for (const b of document.querySelectorAll('button[data-kind]')) b.classList.toggle('on', P[b.dataset.pre + 'Kind'] === b.dataset.kind);
+  for (const b of document.querySelectorAll('button[data-side]')) b.classList.toggle('on', P[b.dataset.pre + 'Side'] === b.dataset.side);
+  for (const b of document.querySelectorAll('button[data-place]')) b.classList.toggle('on', P.decoPlace === b.dataset.place);
+}
+for (const el of document.querySelectorAll('input[type=range]')) {
+  el.addEventListener('input', () => { P[el.id] = +el.value; syncUI(); save(); build(); });
+}
+seedEl.addEventListener('change', () => { P.seed = Math.max(0, +seedEl.value | 0); save(); build(); });
+document.getElementById('prev').onclick = () => { P.seed = Math.max(0, P.seed - 1); syncUI(); save(); build(); };
+document.getElementById('next').onclick = () => { P.seed++; syncUI(); save(); build(); };
+for (const el of document.querySelectorAll('input.seedin')) el.addEventListener('change', () => { P[el.id] = Math.max(0, +el.value | 0); save(); build(); });
+for (const b of document.querySelectorAll('button.sd')) b.onclick = () => { P[b.dataset.s] = Math.max(0, P[b.dataset.s] + +b.dataset.d); syncUI(); save(); build(); };
+document.getElementById('reset').onclick = () => { Object.assign(P, DEFAULTS); syncUI(); save(); build(); };
+for (const b of document.querySelectorAll('button[data-t]')) b.onclick = () => {
+  P[b.dataset.t] = !P[b.dataset.t]; syncUI(); save();
+  if (b.dataset.t === 'edges') { const l = group.getObjectByName('edges'); if (l) l.visible = P.edges; } else build();
+};
+for (const pre of ['crest', 'horn', 'muff']) document.getElementById(pre + 'Color').addEventListener('input', e => { P[pre + 'Color'] = e.target.value; save(); build(); });
+document.getElementById('monoColor').addEventListener('input', e => { P.monoColor = e.target.value; save(); build(); });
+for (const id of ['twinColor', 'twinFrameColor']) document.getElementById(id).addEventListener('input', e => { P[id] = e.target.value; save(); build(); drawTwin(); });
+document.getElementById('twinReset').onclick = () => { P.twinPts = regularEye(P.twinN); save(); build(); drawTwin(); };
+document.getElementById('twinN').addEventListener('input', () => { P.twinPts = regularEye(P.twinN); save(); build(); drawTwin(); });
+// 形を点で編集する小さな画面（ツインアイと耳）
+const rotPts = (pts, deg) => { const a = deg * D2R; return pts.map(([x, y]) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)]); };
+function shapeEditor(canvasId, keys, style) {
+  const tc = document.getElementById(canvasId), tcx = tc.getContext('2d');
+  const TC = { cx: tc.width / 2, cy: tc.height / 2, unit: 42 };
+  const toPx = ([a, b]) => [TC.cx + a * TC.unit, TC.cy - b * TC.unit];
+  const fromPx = (x, y) => [+((x - TC.cx) / TC.unit).toFixed(3), +((TC.cy - y) / TC.unit).toFixed(3)];
+  const ensure = () => { if (!P[keys.pts] || P[keys.pts].length !== P[keys.n]) P[keys.pts] = defaultShape(keys.pts, P[keys.n]); };
+  const path = arr => { tcx.beginPath(); arr.forEach((q, k) => { const [x, y] = toPx(q); k ? tcx.lineTo(x, y) : tcx.moveTo(x, y); }); tcx.closePath(); };
+  function draw() {
+    ensure();
+    tcx.clearRect(0, 0, tc.width, tc.height);
+    tcx.strokeStyle = '#2a2f37'; tcx.beginPath(); tcx.moveTo(TC.cx, 0); tcx.lineTo(TC.cx, tc.height); tcx.moveTo(0, TC.cy); tcx.lineTo(tc.width, TC.cy); tcx.stroke();
+    const pts = rotPts(P[keys.pts], keys.angle ? P[keys.angle] : 0), st = style(pts);
+    if (st.outer) { path(st.outer); tcx.fillStyle = st.outerColor; tcx.fill(); tcx.strokeStyle = '#555'; tcx.stroke(); }
+    path(pts); tcx.fillStyle = st.fill; tcx.fill();
+    if (st.inner) { path(st.inner); tcx.fillStyle = st.innerColor; tcx.fill(); }
+    tcx.fillStyle = '#fff'; tcx.strokeStyle = '#000';
+    for (const q of pts) { const [x, y] = toPx(q); tcx.beginPath(); tcx.arc(x, y, 4.5, 0, 2 * PI); tcx.fill(); tcx.stroke(); }
+  }
+  let drag = -1;
+  const xy = e => { const r = tc.getBoundingClientRect(); return [(e.clientX - r.left) * tc.width / r.width, (e.clientY - r.top) * tc.height / r.height]; };
+  tc.addEventListener('pointerdown', e => {
+    ensure();
+    const [x, y] = xy(e); let best = -1, bd = 12;
+    rotPts(P[keys.pts], keys.angle ? P[keys.angle] : 0).forEach((q, k) => { const [px, py] = toPx(q); const d = Math.hypot(px - x, py - y); if (d < bd) { bd = d; best = k; } });
+    drag = best; if (best >= 0) tc.setPointerCapture(e.pointerId);
+  });
+  tc.addEventListener('pointermove', e => {
+    if (drag < 0) return;
+    const [x, y] = xy(e), [q] = rotPts([fromPx(x, y)], -(keys.angle ? P[keys.angle] : 0));   // 角度を戻して保存
+    P[keys.pts][drag] = [+q[0].toFixed(3), +q[1].toFixed(3)];
+    if (keys.mirror) {   // 左右対称：相方（鏡の位置に一番近い別の点）を鏡へ。相方が自分なら正中に置く
+      const arr = P[keys.pts], me = arr[drag]; let best = -1, bd = 1e9;
+      arr.forEach((r, k) => { if (k === drag) return; const d = Math.hypot(r[0] + me[0], r[1] - me[1]); if (d < bd) { bd = d; best = k; } });
+      if (best >= 0 && bd < 0.6) arr[best] = [-me[0], me[1]]; else me[0] = 0;
+    }
+    draw(); build();
+  });
+  tc.addEventListener('pointerup', () => { if (drag >= 0) save(); drag = -1; });
+  tc.addEventListener('pointercancel', () => { drag = -1; });
+  return draw;
+}
+const drawTwin = shapeEditor('twinCanvas', { pts: 'twinPts', n: 'twinN', angle: 'twinAngle' }, pts => ({
+  fill: P.twinColor, outer: P.twinBorder > 0.0005 ? offsetPoly(pts, P.twinBorder / P.twinS) : null, outerColor: P.twinFrameColor }));
+const drawEar = shapeEditor('earCanvas', { pts: 'earPts', n: 'earN', angle: 'earAngle' }, pts => ({
+  fill: P.earColor || (COL && PAINT.ear ? '#' + PC('ear').getHexString() : '#888'), inner: P.earInset > 0.0005 ? offsetPoly(pts, -P.earInset / P.earS) : null, innerColor: '#15181c' }));
+const drawChin = shapeEditor('chinCanvas', { pts: 'chinPts', n: 'chinN', mirror: true }, pts => ({
+  fill: P.chinColor || (COL && PAINT.chin ? '#' + PC('chin').getHexString() : '#888'), inner: offsetPoly(pts, 0).map(([a, b]) => [a * P.chinTaper, b * P.chinTaper]), innerColor: 'rgba(255,255,255,0.18)' }));
+document.getElementById('chinReset').onclick = () => { P.chinPts = regularEye(P.chinN); save(); build(); drawChin(); };
+document.getElementById('chinTrap').onclick = () => { P.chinN = 4; P.chinPts = TRAPEZOID.map(q => q.slice()); syncUI(); save(); build(); };
+document.getElementById('chinN').addEventListener('input', () => { P.chinPts = P.chinN === 4 ? TRAPEZOID.map(q => q.slice()) : regularEye(P.chinN); save(); build(); drawChin(); });
+document.getElementById('chinColor').addEventListener('input', e => { P.chinColor = e.target.value; save(); build(); drawChin(); });
+const drawNeck = shapeEditor('neckCanvas', { pts: 'neckPts', n: 'neckN', mirror: true }, pts => ({ fill: P.neckColor || ((COL && PAINT.neck) ? '#' + PC('neck').getHexString() : '#555') }));
+document.getElementById('neckReset').onclick = () => { P.neckPts = regularEye(P.neckN); save(); build(); drawNeck(); };
+document.getElementById('neckN').addEventListener('input', () => { P.neckPts = regularEye(P.neckN); save(); build(); drawNeck(); });
+document.getElementById('neckColor').addEventListener('input', e => { P.neckColor = e.target.value; save(); build(); drawNeck(); });
+const drawSec = shapeEditor('secCanvas', { pts: 'secPts', n: 'secN', mirror: true }, pts => ({ fill: (COL && PAINT.face) ? '#' + PC('face').getHexString() : '#999' }));
+document.getElementById('secReset').onclick = () => { P.secPts = regularEye(P.secN); save(); build(); drawSec(); };
+document.getElementById('secPent').onclick = () => { P.secN = 5; P.secPts = SEC_PENT.map(q => q.slice()); syncUI(); save(); build(); };
+document.getElementById('secN').addEventListener('input', () => { P.secPts = defaultShape('secPts', P.secN); save(); build(); drawSec(); });
+const drawFace = shapeEditor('faceCanvas', { pts: 'facePts', n: 'faceN', mirror: true }, pts => ({ fill: (COL && PAINT.face) ? '#' + PC('face').getHexString() : '#999' }));
+document.getElementById('faceReset').onclick = () => { P.facePts = regularEye(P.faceN); save(); build(); drawFace(); };
+document.getElementById('facePent').onclick = () => { P.faceN = 5; P.facePts = PENTAGON.map(q => q.slice()); syncUI(); save(); build(); };
+document.getElementById('faceN').addEventListener('input', () => { P.facePts = defaultShape('facePts', P.faceN); save(); build(); drawFace(); });
+document.getElementById('earReset').onclick = () => { P.earPts = defaultShape('earPts', P.earN); save(); build(); drawEar(); };
+document.getElementById('earN').addEventListener('input', () => { P.earPts = defaultShape('earPts', P.earN); save(); build(); drawEar(); });
+document.getElementById('earColor').addEventListener('input', e => { P.earColor = e.target.value; save(); build(); drawEar(); });
+for (const b of document.querySelectorAll('button.colreset')) b.onclick = () => { P[b.dataset.pre + 'Color'] = ''; syncUI(); save(); build(); };
+// ガチャ：その欄のつまみを乱数で引き直す。戻すで 1 つ前へ
+const GACHA_HIST = { crest: [], horn: [] };
+const CREST_KEYS = ['Kind', 'Size', 'T', 'Y', 'Z', 'Fold', 'Split', 'RotX', 'RotY', 'VOpen'];
+function gacha(pre) {
+  const r = Math.random, R = (a, b) => a + (b - a) * r(), pk = arr => arr[Math.floor(r() * arr.length)], rd = (x, d = 2) => +x.toFixed(d);
+  GACHA_HIST[pre].push(Object.fromEntries(CREST_KEYS.map(k => [pre + k, P[pre + k]])));
+  if (GACHA_HIST[pre].length > 30) GACHA_HIST[pre].shift();
+  const horn = pre === 'horn';
+  P[pre + 'Kind'] = pk(['v', 'kuwagata', 'moon', 'sun', 'horn', 'fan', 'ram', 'ram', 'horn', 'moon', 'plate']);
+  P[pre + 'Size'] = rd(R(0.3, horn ? 1.0 : 0.9));
+  P[pre + 'T'] = rd(R(0.02, 0.09), 3);
+  P[pre + 'Y'] = rd(R(-0.2, 0.35));
+  P[pre + 'Z'] = rd(horn ? R(-0.7, 0.05) : R(-0.3, 0.2));
+  P[pre + 'Fold'] = horn ? Math.round(pk([1, -1]) * R(50, 120)) : Math.round(pk([0, 0, 1, -1]) * R(20, 90));
+  P[pre + 'Split'] = rd(horn ? R(0.1, 0.45) : pk([0, 0, R(0.05, 0.4)]));
+  P[pre + 'RotX'] = Math.round(pk([0, R(-70, 70), R(-70, 70), pk([180, -180]) + R(-30, 30)]));
+  P[pre + 'RotY'] = Math.round(pk([0, 0, R(-40, 40)]));
+  // 傾き Z は触らない（依頼主）
+  P[pre + 'VOpen'] = Math.round(R(25, 75));
+  syncUI(); save(); build();
+}
+for (const b of document.querySelectorAll('button.gacha')) b.onclick = () => gacha(b.dataset.pre);
+for (const b of document.querySelectorAll('button.ungacha')) b.onclick = () => { const h = GACHA_HIST[b.dataset.pre].pop(); if (!h) return; Object.assign(P, h); syncUI(); save(); build(); };
+for (const b of document.querySelectorAll('button[data-place]')) b.onclick = () => { P.decoPlace = b.dataset.place; syncUI(); save(); build(); };
+for (const b of document.querySelectorAll('button[data-side]')) b.onclick = () => { P[b.dataset.pre + 'Side'] = b.dataset.side; syncUI(); save(); build(); };
+for (const b of document.querySelectorAll('button[data-kind]')) b.onclick = () => { P[b.dataset.pre + 'Kind'] = b.dataset.kind; syncUI(); save(); build(); };
+syncUI();
+for (const b of document.querySelectorAll('button[data-v]')) b.onclick = () => setView(b.dataset.v);
+addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; if (e.key === 'ArrowRight') document.getElementById('next').click(); if (e.key === 'ArrowLeft') document.getElementById('prev').click(); });
+addEventListener('error', e => document.getElementById('err').textContent = String(e.message || e));
+build();
+</script>
+</body>
+</html>
