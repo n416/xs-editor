@@ -18,6 +18,19 @@
   .btns button{background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:3px 8px;cursor:pointer}
   .btns button.on{background:#4a7;color:#fff;border-color:#4a7}
   .btns button:disabled{opacity:.4;cursor:default}
+  #ui .sec{display:none}
+  #ui .sec.open{display:block}
+  #ui .sec h2{cursor:pointer}
+  #ui .sec h2::after{content:"　×";color:#667}
+  #map{display:block;width:100%;height:auto;margin:4px 0 0;user-select:none}
+  #map .pt{fill:#2b2f37;stroke:#5a6068;stroke-width:1;cursor:pointer}
+  #map .pt:hover{fill:#3b4553}
+  #map .pt.on{fill:#4a7;stroke:#8fd}
+  #map .pt.flash{animation:flpt 1.2s ease-out}
+  @keyframes flpt{0%{fill:#fff}100%{fill:#4a7}}
+  #map text{fill:#aab;font-size:9px;text-anchor:middle;pointer-events:none}
+  #map text.cap{fill:#667;font-size:8px}
+  #maplabel{color:#8fb;min-height:16px;margin:0 0 4px;text-align:center}
   #seedrow,div[id=seedrow]{display:flex;gap:4px;align-items:center;margin:4px 0}
   #seedrow input,.seedin{width:60px;background:#15171b;color:#eee;border:1px solid #444;border-radius:5px;padding:2px 6px}
   #stat{margin-top:6px;color:#888}
@@ -39,6 +52,44 @@
   <div id="seedrow"><span style="color:#aaa;width:52px">色種</span><button class="b sd" data-s="colorSeed" data-d="-1">前</button><input id="colorSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="colorSeed" data-d="1">次</button></div>
   <div id="seedrow"><span style="color:#aaa;width:52px">塗り分け</span><button class="b sd" data-s="paintSeed" data-d="-1">前</button><input id="paintSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="paintSeed" data-d="1">次</button></div>
   <div class="row"><label>揺らぎ</label><input type="range" id="jitter" min="0" max="1" step="0.01" value="0.3"><span class="val"></span></div>
+  <svg id="map" viewBox="0 0 226 150" xmlns="http://www.w3.org/2000/svg">
+    <g class="pt" data-sec="sec-body" data-name="全体"><rect x="2" y="2" width="34" height="16" rx="3"/><text x="19" y="14">全体</text></g>
+    <text class="cap" x="58" y="149">正面</text><text class="cap" x="165" y="149">横（左が前）</text>
+    <!-- 正面 -->
+    <polygon class="pt" data-sec="sec-crest" data-name="前立" points="58,4 50,26 66,26"/>
+    <polygon class="pt" data-sec="sec-horn" data-name="角" points="30,12 42,30 30,32"/>
+    <polygon class="pt" data-sec="sec-horn" data-name="角" points="86,12 74,30 86,32"/>
+    <polygon class="pt" data-sec="sec-helmet" data-name="兜" points="58,20 36,32 26,54 26,70 90,70 90,54 80,32"/>
+    <polygon class="pt" data-sec="sec-brim" data-name="ひさし" points="22,70 94,70 98,78 18,78"/>
+    <polygon class="pt" data-sec="sec-face" data-name="顔" points="34,78 82,78 84,104 70,118 46,118 32,104"/>
+    <polygon class="pt" data-sec="sec-twin" data-name="ツインアイ" points="38,84 54,84 54,92 38,92"/>
+    <polygon class="pt" data-sec="sec-twin" data-name="ツインアイ" points="62,84 78,84 78,92 62,92"/>
+    <circle class="pt" data-sec="sec-mono" data-name="モノアイ" cx="58" cy="97" r="4"/>
+    <polygon class="pt" data-sec="sec-deco" data-name="顔飾り（溝）" points="55,104 61,104 61,116 55,116"/>
+    <polygon class="pt" data-sec="sec-ear" data-name="耳" points="22,80 32,80 32,96 22,96"/>
+    <polygon class="pt" data-sec="sec-ear" data-name="耳" points="84,80 94,80 94,96 84,96"/>
+    <polygon class="pt" data-sec="sec-guard" data-name="側頭" points="22,96 32,96 34,114 24,114"/>
+    <polygon class="pt" data-sec="sec-guard" data-name="側頭" points="84,96 94,96 92,114 82,114"/>
+    <polygon class="pt" data-sec="sec-chin" data-name="顎" points="44,118 72,118 68,128 48,128"/>
+    <polygon class="pt" data-sec="sec-neck" data-name="首" points="48,128 68,128 68,140 48,140"/>
+    <text x="58" y="52">兜</text>
+    <!-- 横（左が前） -->
+    <polygon class="pt" data-sec="sec-crest" data-name="前立" points="162,6 168,6 167,22 163,22"/>
+    <polygon class="pt" data-sec="sec-helmet" data-name="兜" points="165,20 140,34 132,54 132,70 165,70"/>
+    <polygon class="pt" data-sec="sec-occ" data-name="兜の後ろ" points="165,20 190,34 198,54 198,70 165,70"/>
+    <polygon class="pt" data-sec="sec-brim" data-name="ひさし" points="126,70 166,70 166,78 122,78"/>
+    <polygon class="pt" data-sec="sec-face" data-name="顔" points="134,78 166,78 166,118 142,118 132,104"/>
+    <polygon class="pt" data-sec="sec-twin" data-name="ツインアイ" points="138,84 158,84 158,92 138,92"/>
+    <circle class="pt" data-sec="sec-mono" data-name="モノアイ" cx="148" cy="98" r="4"/>
+    <polygon class="pt" data-sec="sec-ear" data-name="耳" points="166,80 178,80 178,96 166,96"/>
+    <polygon class="pt" data-sec="sec-guard" data-name="側頭" points="166,96 178,96 178,114 166,114"/>
+    <polygon class="pt" data-sec="sec-back" data-name="後頭部" points="178,78 200,78 200,110 178,110"/>
+    <polygon class="pt" data-sec="sec-muff" data-name="首当て" points="168,114 202,114 204,126 166,126"/>
+    <polygon class="pt" data-sec="sec-chin" data-name="顎" points="142,118 166,118 164,128 146,128"/>
+    <polygon class="pt" data-sec="sec-neck" data-name="首" points="150,128 172,128 172,140 150,140"/>
+    <text x="150" y="50">兜</text><text x="182" y="50">後ろ</text><text x="189" y="97">後頭部</text>
+  </svg>
+  <div id="maplabel"></div>
   <h2 id="sec-body">全体</h2>
   <div class="row"><label>幅</label><input type="range" id="W" min="0.7" max="1.4" step="0.01" value="1.0"><span class="val"></span></div>
   <div class="row"><label>奥行</label><input type="range" id="D" min="0.8" max="1.4" step="0.01" value="1.1"><span class="val"></span></div>
@@ -213,7 +264,7 @@
   <div class="row"><label>傾き Y</label><input type="range" id="hornRotY" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
   <div class="row"><label>傾き Z</label><input type="range" id="hornRotZ" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
   <div class="row"><label>V字の開き</label><input type="range" id="hornVOpen" min="20" max="80" step="1" value="55"><span class="val"></span></div>
-  <div class="btns">
+  <div class="btns" id="toggles">
     <button data-t="chin" id="btn-chin">顎</button>
     <button data-t="ears" class="on">耳</button>
     <button data-t="vents" class="on" id="btn-vents">頬の口</button>
@@ -1010,9 +1061,42 @@ canvas.addEventListener('pointerup', e => {
   const id = attr ? attr.getX(h.face.a) : 0;
   flashPart(PART_TARGET[id]);
 });
+// 欄は部位ごとに包んで、模型（か 3D）で押した部位の欄だけを出す
+const UI_KEY = 'crystal-head-ui';
+{
+  const stop = document.getElementById('toggles');
+  for (const h of [...document.querySelectorAll('#ui h2[id^=sec-]')]) {
+    const wrap = document.createElement('div'); wrap.className = 'sec'; wrap.dataset.sec = h.id;
+    h.parentNode.insertBefore(wrap, h);
+    let n = h; while (n && n !== stop && (n === h || n.tagName !== 'H2')) { const nx = n.nextElementSibling; wrap.appendChild(n); n = nx; }
+  }
+}
+let openId = null;
+const HINT = '模型の部位を押すと、その欄が開きます（3D の部品を押しても同じ）';
+const mapLabel = t => { document.getElementById('maplabel').textContent = t; };
+function openSec(id) {
+  if (id && !document.querySelector('#ui .sec[data-sec="' + id + '"]')) id = null;
+  openId = id;
+  for (const w of document.querySelectorAll('#ui .sec')) w.classList.toggle('open', w.dataset.sec === id);
+  for (const g of document.querySelectorAll('#map .pt')) g.classList.toggle('on', g.dataset.sec === id);
+  mapLabel(id ? document.getElementById(id).textContent : HINT);
+  try { localStorage.setItem(UI_KEY, id || ''); } catch (e) {}
+}
+for (const g of document.querySelectorAll('#map .pt')) {
+  g.addEventListener('click', () => openSec(openId === g.dataset.sec ? null : g.dataset.sec));
+  g.addEventListener('mouseenter', () => mapLabel(g.dataset.name));
+  g.addEventListener('mouseleave', () => mapLabel(openId ? document.getElementById(openId).textContent : HINT));
+}
+for (const h of document.querySelectorAll('#ui .sec h2')) h.addEventListener('click', () => openSec(null));   // 題名を押すと閉じる
+openSec((() => { try { return localStorage.getItem(UI_KEY) || null; } catch (e) { return null; } })());
+window.__openSec = openSec; window.__flashPart = flashPart;
 function flashPart(targetId) {
   const el = document.getElementById(targetId);
   if (!el) return;
+  if (el.tagName === 'H2' && el.id.startsWith('sec-')) {
+    openSec(el.id);
+    for (const g of document.querySelectorAll('#map .pt[data-sec="' + el.id + '"]')) { g.classList.remove('flash'); void g.getBBox(); g.classList.add('flash'); setTimeout(() => g.classList.remove('flash'), 1300); }
+  }
   const items = [el];
   if (el.tagName === 'H2') { let n = el.nextElementSibling; while (n && n.tagName !== 'H2') { items.push(n); n = n.nextElementSibling; } }
   for (const it of items) { it.classList.remove('flash'); void it.offsetWidth; it.classList.add('flash'); }
