@@ -1562,7 +1562,7 @@ const BODY_SECS = [
     ['r', 'hullW', '車体の幅', 1, 4, 0.02, 2.4], ['r', 'hullH', '車体の高さ', 0.3, 2.5, 0.02, 1.1], ['r', 'hullD', '車体の長さ', 1, 5, 0.02, 3.0], ['r', 'treadL', '履帯の長さ', 1, 6, 0.02, 3.6], ['r', 'treadH', '履帯の高さ', 0.4, 2.5, 0.02, 1.3], ['r', 'treadW', '履帯の幅', 0.3, 1.6, 0.02, 0.9], ['r', 'treadDown', '履帯の下がり', -0.5, 1, 0.01, 0.2], ['r', 'treadWheels', '転輪の数', 0, 8, 1, 5], ['c', 'tread', '履帯の色'], ['c', 'hull', '車体の色'],
     ['r', 'ballR', '球の半径', 0.6, 3, 0.02, 1.6], ['r', 'ballRy', '球の縦の比', 0.5, 1.5, 0.01, 1.0], ['r', 'ballRz', '球の前後の比', 0.5, 1.5, 0.01, 1.0], ['r', 'ballN', '球の面の数', 6, 20, 1, 12], ['r', 'ballArmY', '球の腕の上下', -1.5, 1.5, 0.01, -0.2], ['r', 'ballArmZ', '球の腕の前後', -1.5, 1.5, 0.01, 0.4], ['c', 'ball', '球の色'],
     ['r', 'hipX', '股の幅', 0.3, 1.2, 0.01, 0.6], ['r', 'legSpread', '脚の開き', -5, 20, 1, 5], ['r', 'armOut', '腕の開き', -5, 25, 1, 6], ['r', 'elbowBend', '肘の曲げ', 0, 90, 1, 8],
-    ['r', 'shoulderOut', '肩の出', 0, 0.8, 0.01, 0.3], ['r', 'shoulderDown', '肩の高さ', 0, 0.8, 0.01, 0.35]]],
+    ]],
   ['sec-chest', '胴', [['c', 'chest'], ['r', 'chestW', '幅', 1.2, 4, 0.02, 2.4], ['r', 'chestD', '奥行', 0.8, 2.4, 0.02, 1.5], ['r', 'chestH', '高さ', 1, 3, 0.02, 1.9], ['r', 'chestFold', '正中の折れ', 0, 45, 1, 18], ['r', 'chestLean', '胸の張り', -10, 35, 1, 10], ['r', 'chestTopSlope', '上の傾き', 10, 80, 1, 45], ['r', 'chestTopIn', '上の引き', 0.2, 1, 0.01, 0.55], ['r', 'chestBotSlope', '下の絞り', 0, 70, 1, 35], ['r', 'chestTaper', '脇の絞り', -10, 30, 1, 12], ['r', 'chestShoulderSlope', '肩口の傾き', 20, 85, 1, 60], ['r', 'chestShoulderDrop', '肩口の落ち', 0, 1, 0.01, 0.3], ['r', 'chestFacets', '角の面', 0, 2, 1, 1], ['r', 'chestBackFold', '背の折れ', 0, 30, 1, 10],
     ['r', 'collarH', '襟の高さ', 0, 0.4, 0.01, 0.12], ['r', 'collarR', '襟の太さ', 0.2, 0.8, 0.01, 0.42], ['r', 'collarT', '襟の厚み', 0.03, 0.2, 0.01, 0.08], ['c', 'collar', '襟の色'],
     ['toggle', 'chestFrontOn', '胸の前だけ別の色', false], ['c', 'chestFront', '胸の前の色'],
@@ -1575,7 +1575,7 @@ const BODY_SECS = [
     ['r', 'skirtFW', '前の幅', 0, 1.2, 0.01, 0.55], ['r', 'skirtFL', '前の長さ', 0.2, 2, 0.01, 1.0], ['r', 'skirtFTilt', '前の開き', -10, 45, 1, 10], ['r', 'skirtFOut', '前の外開き', -10, 45, 1, 8], ['r', 'skirtFTaper', '前の先', 0.5, 1.5, 0.01, 0.95],
     ['r', 'skirtSW', '横の幅', 0, 1.5, 0.01, 0.8], ['r', 'skirtSL', '横の長さ', 0.2, 2.2, 0.01, 1.2], ['r', 'skirtSOut', '横の開き', -10, 45, 1, 12], ['r', 'skirtSZ', '横の前後', -0.6, 0.6, 0.01, 0], ['r', 'skirtSTaper', '横の先', 0.5, 1.5, 0.01, 1.05],
     ['r', 'skirtBW', '後ろの幅', 0, 1.5, 0.01, 0.75], ['r', 'skirtBL', '後ろの長さ', 0.2, 2.2, 0.01, 1.0], ['r', 'skirtBTilt', '後ろの開き', -10, 45, 1, 12], ['r', 'skirtBOut', '後ろの外開き', -10, 45, 1, 5], ['r', 'skirtBTaper', '後ろの先', 0.5, 1.5, 0.01, 1.0]]],
-  ['sec-shoulder', '肩', [['c', 'shoulder'], ['r', 'shW', '幅', 0.4, 2.2, 0.02, 1.25], ['r', 'shH', '高さ', 0.4, 2, 0.02, 1.1], ['r', 'shD', '奥行', 0.4, 2.2, 0.02, 1.3], ['r', 'shUp', '上下', -0.5, 0.8, 0.01, 0.2], ['r', 'shIn', '内の寄せ', -0.4, 0.4, 0.01, 0.15], ['r', 'shOutTilt', '外の傾き', -20, 45, 1, 12], ['r', 'shTopSlope', '上の傾き', 20, 85, 1, 60], ['r', 'shTopFrom', '上の傾きの始まり', 0, 1, 0.01, 0.35], ['r', 'shFacets', '角の面', 0, 3, 1, 1], ['r', 'shoulderPitch', '前後の傾き', -30, 30, 1, 0], ['r', 'shoulderRoll', '横の傾き', -30, 45, 1, 0],
+  ['sec-shoulder', '肩', [['c', 'shoulder'], ['r', 'shoulderOut', '付け根の出', 0, 0.8, 0.01, 0.3], ['r', 'shoulderDown', '付け根の高さ', 0, 0.8, 0.01, 0.35], ['r', 'shW', '幅', 0.4, 2.2, 0.02, 1.25], ['r', 'shH', '高さ', 0.4, 2, 0.02, 1.1], ['r', 'shD', '奥行', 0.4, 2.2, 0.02, 1.3], ['r', 'shUp', '上下', -0.5, 0.8, 0.01, 0.2], ['r', 'shIn', '内の寄せ', -0.4, 0.4, 0.01, 0.15], ['r', 'shOutTilt', '外の傾き', -20, 45, 1, 12], ['r', 'shTopSlope', '上の傾き', 20, 85, 1, 60], ['r', 'shTopFrom', '上の傾きの始まり', 0, 1, 0.01, 0.35], ['r', 'shFacets', '角の面', 0, 3, 1, 1], ['r', 'shoulderPitch', '前後の傾き', -30, 30, 1, 0], ['r', 'shoulderRoll', '横の傾き', -30, 45, 1, 0],
     ['r', 'shGrooveN', '溝の数', 0, 4, 1, 0], ['r', 'shGrooveW', '溝の幅', 0.02, 0.2, 0.005, 0.05], ['r', 'shGrooveL', '溝の長さ', 0.1, 1.2, 0.01, 0.5], ['r', 'shGrooveGap', '溝の間隔', 0.05, 0.5, 0.01, 0.18], ['r', 'shGrooveDepth', '溝の深さ', 0.01, 0.15, 0.005, 0.04],
     ['toggle', 'shSame', '左右同じ'], ['kinds', 'shR', [['box', '箱'], ['spike', 'スパイク'], ['shield', '盾'], ['round', '丸'], ['none', 'なし']], '右肩'], ['kinds', 'shL', [['box', '箱'], ['spike', 'スパイク'], ['shield', '盾'], ['round', '丸'], ['none', 'なし']], '左肩'], ['r', 'shLSize', '左の大きさ', 0.5, 1.6, 0.01, 1],
     ['r', 'shSpikeN', 'スパイクの数', 1, 4, 1, 3], ['r', 'shSpikeL', 'スパイクの長さ', 0.1, 1.5, 0.01, 0.45], ['r', 'shSpikeR', 'スパイクの根元', 0.05, 0.4, 0.01, 0.14],
@@ -1902,7 +1902,7 @@ document.getElementById('libName').addEventListener('keydown', e => { if (e.key 
 showMap((() => { try { return localStorage.getItem(UI_KEY + '-map') === 'head' ? 'head' : 'body'; } catch (e) { return 'body'; } })());
 openSec((() => { try { return localStorage.getItem(UI_KEY) || null; } catch (e) { return null; } })());
 setView('iso');
-loadTplIndex();
+// loadTplIndex();   // 機械変換の型（Ver2 の塊をそのまま組に分けた物）は、形の意味のつまみになっていないので出さない（依頼主、2026-10-20）
 window.__openSec = openSec; window.__flashPart = flashPart;
 function flashPart(targetId) {
   const el = document.getElementById(targetId);
@@ -1964,6 +1964,16 @@ addEventListener('keydown', e => {
 });
 window.__hist = HIST; window.__undo = undo; window.__redo = redo;
 // 確かめる道具：決まった大きさで描いて PNG にする（view: iso/front/side/top/back、置き場所へ送る）
+// 確かめる道具：好きな位置から（pos から target を見る）
+window.__shotAt = async (pos, target, w = 900, h = 900, post = '') => {
+  const keepPos = camera.position.clone(), keepT = controls.target.clone();
+  renderer.setPixelRatio(1); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  camera.position.set(pos[0], pos[1], pos[2]); controls.target.set(target[0], target[1], target[2]); controls.update(); renderer.render(scene, camera);
+  const url = canvas.toDataURL('image/png');
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio)); resize(); camera.position.copy(keepPos); controls.target.copy(keepT); controls.update();
+  if (post) { const r = await fetch(post, { method: 'POST', body: url }); return await r.text(); }
+  return url;
+};
 window.__shot = async (view, w = 900, h = 1200, post = '') => {
   const keepW = canvas.width, keepH = canvas.height, keepPos = camera.position.clone(), keepT = controls.target.clone();
   renderer.setPixelRatio(1); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
