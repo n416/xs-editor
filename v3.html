@@ -38,6 +38,10 @@
   @keyframes flpt{0%{fill:#fff}100%{fill:#4a7}}
   #map text{fill:#aab;font-size:9px;text-anchor:middle;pointer-events:none}
   #map text.cap{fill:#667;font-size:8px}
+  #crumbs{color:#8fb;margin:-2px 0 6px;font-size:12px}
+  #crumbs a{color:#9bd;text-decoration:none}
+  #crumbs a:hover{text-decoration:underline}
+  #crumbs .here{color:#fff}
   #maplabel{color:#8fb;min-height:16px;margin:0 0 4px;text-align:center}
   #seedrow,div[id=seedrow]{display:flex;gap:4px;align-items:center;margin:4px 0}
   #seedrow input,.seedin{width:60px;background:#15171b;color:#eee;border:1px solid #444;border-radius:5px;padding:2px 6px}
@@ -55,6 +59,7 @@
 <body>
 <div id="ui">
   <h1>機体エディタ Ver3　頭</h1>
+  <div id="crumbs"></div>
   <div class="btns"><button id="undoBtn" disabled>元に戻す</button><button id="redoBtn" disabled>やり直す</button><span style="color:#777;align-self:center">Ctrl+Z／Ctrl+Y</span></div>
   <div id="seedrow"><span style="color:#aaa;width:52px">形状種</span><button id="prev" class="b">前</button><input id="seed" type="number" value="1" min="0"><button id="next" class="b">次</button></div>
   <div id="seedrow"><span style="color:#aaa;width:52px">色種</span><button class="b sd" data-s="colorSeed" data-d="-1">前</button><input id="colorSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="colorSeed" data-d="1">次</button></div>
@@ -1104,18 +1109,32 @@ const UI_KEY = 'crystal-head-ui';
 }
 let openId = null, mapMode = 'body';
 const HINT = '模型の部位を押すと、その欄が開きます（3D の部品を押しても同じ）';
+function crumbs() {
+  const el = document.getElementById('crumbs');
+  const parts = [['全身', () => { openSec(null); showMap('body'); }]];
+  if (mapMode === 'head') parts.push(['頭', () => { openSec(null); showMap('head'); }]);
+  if (openId) parts.push([document.getElementById(openId).textContent.replace(/（.*）/, ''), null]);
+  el.textContent = '';
+  parts.forEach(([t, fn], i) => {
+    if (i) el.append(' ＞ ');
+    const a = document.createElement(fn ? 'a' : 'span'); a.textContent = t;
+    if (fn) { a.href = '#'; a.onclick = e => { e.preventDefault(); fn(); }; } else a.className = 'here';
+    el.append(a);
+  });
+}
 function showMap(mode) {
   mapMode = mode;
   document.getElementById('mapBody').style.display = mode === 'body' ? '' : 'none';
   document.getElementById('map').style.display = mode === 'head' ? '' : 'none';
   try { localStorage.setItem(UI_KEY + '-map', mode); } catch (e) {}
+  crumbs();
 }
 for (const g of document.querySelectorAll('#mapBody .pt')) {
   g.addEventListener('click', () => { if (g.dataset.part === 'head') { showMap('head'); mapLabel(openId ? document.getElementById(openId).textContent : HINT); } else mapLabel(g.dataset.name + '：まだありません（体はこれから）'); });
   g.addEventListener('mouseenter', () => mapLabel(g.dataset.name + (g.classList.contains('todo') ? '（これから）' : '')));
   g.addEventListener('mouseleave', () => mapLabel(openId ? document.getElementById(openId).textContent : '全身。頭を押すと頭の図に'));
 }
-document.getElementById('mapToBody').addEventListener('click', () => { showMap('body'); mapLabel('全身。頭を押すと頭の図に'); });
+document.getElementById('mapToBody').addEventListener('click', () => { openSec(null); showMap('body'); mapLabel('全身。頭を押すと頭の図に'); });
 const mapLabel = t => { document.getElementById('maplabel').textContent = t; };
 function openSec(id) {
   if (id && !document.querySelector('#ui .sec[data-sec="' + id + '"]')) id = null;
@@ -1125,6 +1144,7 @@ function openSec(id) {
   if (id) showMap('head');
   mapLabel(id ? document.getElementById(id).textContent : (mapMode === 'head' ? HINT : '全身。頭を押すと頭の図に'));
   try { localStorage.setItem(UI_KEY, id || ''); } catch (e) {}
+  crumbs();
 }
 for (const g of document.querySelectorAll('#map .pt')) {
   g.addEventListener('click', () => openSec(openId === g.dataset.sec ? null : g.dataset.sec));
