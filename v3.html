@@ -22,7 +22,15 @@
   #ui .sec.open{display:block}
   #ui .sec h2{cursor:pointer}
   #ui .sec h2::after{content:"　×";color:#667}
-  #map{display:block;width:100%;height:auto;margin:4px 0 0;user-select:none}
+  #map,#mapBody{display:block;width:100%;height:auto;margin:4px 0 0;user-select:none}
+  #mapBody .pt{fill:#2b2f37;stroke:#5a6068;stroke-width:1;cursor:pointer}
+  #mapBody .pt:hover{fill:#3b4553}
+  #mapBody .pt.todo{fill:#22252b;stroke-dasharray:3 2}
+  #mapBody .pt.on{fill:#4a7;stroke:#8fd}
+  #mapBody text{fill:#aab;font-size:9px;text-anchor:middle;pointer-events:none}
+  #map .nav{cursor:pointer}
+  #map .nav rect{fill:#2b2f37;stroke:#5a6068}
+  #map .nav:hover rect{fill:#3b4553}
   #map .pt{fill:#2b2f37;stroke:#5a6068;stroke-width:1;cursor:pointer}
   #map .pt:hover{fill:#3b4553}
   #map .pt.on{fill:#4a7;stroke:#8fd}
@@ -52,8 +60,31 @@
   <div id="seedrow"><span style="color:#aaa;width:52px">色種</span><button class="b sd" data-s="colorSeed" data-d="-1">前</button><input id="colorSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="colorSeed" data-d="1">次</button></div>
   <div id="seedrow"><span style="color:#aaa;width:52px">塗り分け</span><button class="b sd" data-s="paintSeed" data-d="-1">前</button><input id="paintSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="paintSeed" data-d="1">次</button></div>
   <div class="row"><label>揺らぎ</label><input type="range" id="jitter" min="0" max="1" step="0.01" value="0.3"><span class="val"></span></div>
-  <svg id="map" viewBox="0 0 226 150" xmlns="http://www.w3.org/2000/svg">
-    <g class="pt" data-sec="sec-body" data-name="全体"><rect x="2" y="2" width="34" height="16" rx="3"/><text x="19" y="14">全体</text></g>
+  <svg id="mapBody" viewBox="0 0 226 150" xmlns="http://www.w3.org/2000/svg">
+    <polygon class="pt" data-part="head" data-name="頭" points="113,4 101,10 99,20 103,30 123,30 127,20 125,10"/>
+    <polygon class="pt todo" data-part="neck" data-name="首" points="108,30 118,30 118,36 108,36"/>
+    <polygon class="pt todo" data-part="chest" data-name="胴" points="88,36 138,36 134,70 92,70"/>
+    <polygon class="pt todo" data-part="shoulder" data-name="肩" points="64,34 88,36 88,56 68,56"/>
+    <polygon class="pt todo" data-part="shoulder" data-name="肩" points="162,34 138,36 138,56 158,56"/>
+    <polygon class="pt todo" data-part="upperarm" data-name="上腕" points="70,56 86,56 86,80 72,80"/>
+    <polygon class="pt todo" data-part="upperarm" data-name="上腕" points="156,56 140,56 140,80 154,80"/>
+    <polygon class="pt todo" data-part="forearm" data-name="前腕" points="68,80 86,80 86,106 70,106"/>
+    <polygon class="pt todo" data-part="forearm" data-name="前腕" points="158,80 140,80 140,106 156,106"/>
+    <polygon class="pt todo" data-part="hand" data-name="手" points="70,106 86,106 84,118 72,118"/>
+    <polygon class="pt todo" data-part="hand" data-name="手" points="156,106 140,106 142,118 154,118"/>
+    <polygon class="pt todo" data-part="waist" data-name="腰" points="92,70 134,70 136,86 90,86"/>
+    <polygon class="pt todo" data-part="thigh" data-name="腿" points="92,86 111,86 110,114 94,114"/>
+    <polygon class="pt todo" data-part="thigh" data-name="腿" points="134,86 115,86 116,114 132,114"/>
+    <polygon class="pt todo" data-part="shin" data-name="脛" points="94,114 110,114 110,138 92,138"/>
+    <polygon class="pt todo" data-part="shin" data-name="脛" points="132,114 116,114 116,138 134,138"/>
+    <polygon class="pt todo" data-part="foot" data-name="足" points="88,138 110,138 112,148 84,148"/>
+    <polygon class="pt todo" data-part="foot" data-name="足" points="138,138 116,138 114,148 142,148"/>
+    <text x="113" y="20">頭</text><text x="113" y="56">胴</text><text x="113" y="81">腰</text>
+    <text x="30" y="130" style="fill:#667;font-size:8px;text-anchor:start">点線はこれから</text>
+  </svg>
+  <svg id="map" viewBox="0 0 226 150" xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <g class="pt" data-sec="sec-body" data-name="頭の全体"><rect x="2" y="2" width="44" height="16" rx="3"/><text x="24" y="14">頭の全体</text></g>
+    <g class="nav" id="mapToBody"><rect x="178" y="2" width="46" height="16" rx="3"/><text x="201" y="14">← 全身</text></g>
     <text class="cap" x="58" y="149">正面</text><text class="cap" x="165" y="149">横（左が前）</text>
     <!-- 正面 -->
     <polygon class="pt" data-sec="sec-crest" data-name="前立" points="58,4 50,26 66,26"/>
@@ -1071,15 +1102,28 @@ const UI_KEY = 'crystal-head-ui';
     let n = h; while (n && n !== stop && (n === h || n.tagName !== 'H2')) { const nx = n.nextElementSibling; wrap.appendChild(n); n = nx; }
   }
 }
-let openId = null;
+let openId = null, mapMode = 'body';
 const HINT = '模型の部位を押すと、その欄が開きます（3D の部品を押しても同じ）';
+function showMap(mode) {
+  mapMode = mode;
+  document.getElementById('mapBody').style.display = mode === 'body' ? '' : 'none';
+  document.getElementById('map').style.display = mode === 'head' ? '' : 'none';
+  try { localStorage.setItem(UI_KEY + '-map', mode); } catch (e) {}
+}
+for (const g of document.querySelectorAll('#mapBody .pt')) {
+  g.addEventListener('click', () => { if (g.dataset.part === 'head') { showMap('head'); mapLabel(openId ? document.getElementById(openId).textContent : HINT); } else mapLabel(g.dataset.name + '：まだありません（体はこれから）'); });
+  g.addEventListener('mouseenter', () => mapLabel(g.dataset.name + (g.classList.contains('todo') ? '（これから）' : '')));
+  g.addEventListener('mouseleave', () => mapLabel(openId ? document.getElementById(openId).textContent : '全身。頭を押すと頭の図に'));
+}
+document.getElementById('mapToBody').addEventListener('click', () => { showMap('body'); mapLabel('全身。頭を押すと頭の図に'); });
 const mapLabel = t => { document.getElementById('maplabel').textContent = t; };
 function openSec(id) {
   if (id && !document.querySelector('#ui .sec[data-sec="' + id + '"]')) id = null;
   openId = id;
   for (const w of document.querySelectorAll('#ui .sec')) w.classList.toggle('open', w.dataset.sec === id);
   for (const g of document.querySelectorAll('#map .pt')) g.classList.toggle('on', g.dataset.sec === id);
-  mapLabel(id ? document.getElementById(id).textContent : HINT);
+  if (id) showMap('head');
+  mapLabel(id ? document.getElementById(id).textContent : (mapMode === 'head' ? HINT : '全身。頭を押すと頭の図に'));
   try { localStorage.setItem(UI_KEY, id || ''); } catch (e) {}
 }
 for (const g of document.querySelectorAll('#map .pt')) {
@@ -1088,6 +1132,7 @@ for (const g of document.querySelectorAll('#map .pt')) {
   g.addEventListener('mouseleave', () => mapLabel(openId ? document.getElementById(openId).textContent : HINT));
 }
 for (const h of document.querySelectorAll('#ui .sec h2')) h.addEventListener('click', () => openSec(null));   // 題名を押すと閉じる
+showMap((() => { try { return localStorage.getItem(UI_KEY + '-map') === 'head' ? 'head' : 'body'; } catch (e) { return 'body'; } })());
 openSec((() => { try { return localStorage.getItem(UI_KEY) || null; } catch (e) { return null; } })());
 window.__openSec = openSec; window.__flashPart = flashPart;
 function flashPart(targetId) {
