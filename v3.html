@@ -44,6 +44,8 @@
   #crumbs .here{color:#fff}
   .txt{background:#15171b;color:#eee;border:1px solid #444;border-radius:5px;padding:2px 6px}
   #libList .btns button{padding:2px 6px}
+  .tplknobs details{margin:2px 0;border-left:2px solid #333;padding-left:6px}
+  .tplknobs summary{cursor:pointer;color:#9bd;font-size:11px}
   #maplabel{color:#8fb;min-height:16px;margin:0 0 4px;text-align:center}
   #seedrow,div[id=seedrow]{display:flex;gap:4px;align-items:center;margin:4px 0}
   #seedrow input,.seedin{width:60px;background:#15171b;color:#eee;border:1px solid #444;border-radius:5px;padding:2px 6px}
@@ -54,8 +56,10 @@
   #err{position:fixed;left:12px;bottom:12px;color:#f88;white-space:pre-wrap;max-width:60%}
 </style>
 <script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-            "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "three-mesh-bvh":"https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.15/build/index.module.js",
+            "three-bvh-csg":"https://cdn.jsdelivr.net/npm/three-bvh-csg@0.0.16/build/index.module.js"}}
 </script>
 </head>
 <body>
@@ -70,6 +74,8 @@
   <svg id="mapBody" viewBox="0 0 226 150" xmlns="http://www.w3.org/2000/svg">
     <g class="pt" data-sec="sec-fig" data-name="全身"><rect x="2" y="2" width="34" height="16" rx="3"/><text x="19" y="14">全身</text></g>
     <g class="pt" data-sec="sec-pack" data-name="背中"><rect x="190" y="2" width="34" height="16" rx="3"/><text x="207" y="14">背中</text></g>
+    <g class="pt" data-sec="sec-pipe" data-name="パイプ"><rect x="2" y="22" width="34" height="16" rx="3"/><text x="19" y="34">パイプ</text></g>
+    <g class="pt" data-sec="sec-cannon" data-name="砲"><rect x="190" y="22" width="34" height="16" rx="3"/><text x="207" y="34">砲</text></g>
     <polygon class="pt" data-part="head" data-name="頭" points="113,4 101,10 99,20 103,30 123,30 127,20 125,10"/>
     <polygon class="pt" data-sec="sec-neck" data-name="首" points="108,30 118,30 118,36 108,36"/>
     <polygon class="pt" data-sec="sec-chest" data-name="胴" points="88,36 138,36 134,62 92,62"/>
@@ -135,13 +141,17 @@
     <text x="150" y="50">兜</text><text x="182" y="50">後ろ</text><text x="189" y="97">後頭部</text>
   </svg>
   <div id="maplabel"></div>
+  <div id="samples" class="btns"><span style="color:#aaa;align-self:center">見本</span><select id="sampleSel" class="txt" style="flex:1;min-width:0"></select><button id="sampleOpen">開く</button></div>
+  <div class="btns" id="v2row"><span style="color:#aaa;align-self:center">Ver2 の機体</span><select id="v2Sel" class="txt" style="flex:1;min-width:0"><option value="">（ファイルから）</option></select><button id="v2Open">読む</button><button id="v2Clear">消す</button><input id="v2File" type="file" accept=".json,application/json" style="display:none"></div>
+  <div class="btns" id="v2row2"><button data-t="v2Side">横に並べる</button><button data-t="v2Only">Ver2 だけ</button><span id="v2stat" style="color:#777;align-self:center"></span></div>
   <div id="lib"><div class="btns"><span id="libTitle" style="color:#aaa;align-self:center"></span><input id="libName" class="txt" placeholder="名前" style="width:84px"><button id="libSave">保存</button></div><div id="libList" style="margin:0 0 4px"></div></div>
   <h2 id="sec-body">全体</h2>
   <div class="row"><label>幅</label><input type="range" id="W" min="0.7" max="1.4" step="0.01" value="1.0"><span class="val"></span></div>
   <div class="row"><label>奥行</label><input type="range" id="D" min="0.8" max="1.4" step="0.01" value="1.1"><span class="val"></span></div>
-  <div class="row"><label>高さ</label><input type="range" id="H" min="1.0" max="1.7" step="0.01" value="1.3"><span class="val"></span></div>
+  <div class="row"><label>高さ</label><input type="range" id="H" min="0.6" max="1.7" step="0.01" value="1.3"><span class="val"></span></div>
   <div class="row"><label>広い所の高さ</label><input type="range" id="yw" min="-0.4" max="0.35" step="0.01" value="-0.05"><span class="val"></span></div>
   <h2 id="sec-helmet">兜</h2>
+  <div class="row"><label>色</label><input type="color" id="helmetColor" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="helmet" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <div class="row"><label>上のすぼまり</label><input type="range" id="eU" min="10" max="55" step="1" value="30"><span class="val"></span></div>
   <div class="row"><label>頭頂の尖り</label><input type="range" id="eC" min="40" max="85" step="1" value="62"><span class="val"></span></div>
   <div class="row"><label>頭頂の長さ</label><input type="range" id="apexL" min="0" max="0.6" step="0.01" value="0.25"><span class="val"></span></div>
@@ -154,6 +164,7 @@
   <div class="row"><label>後ろのすぼまり</label><input type="range" id="occEU" min="5" max="60" step="1" value="30"><span class="val"></span></div>
   <div class="row"><label>面の数</label><input type="range" id="occFacets" min="1" max="3" step="1" value="1"><span class="val"></span></div>
   <h2 id="sec-brim">ひさし</h2>
+  <div class="row"><label>色</label><input type="color" id="brimColor" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="brim" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <div class="row"><label>前出</label><input type="range" id="brimOut" min="0.9" max="1.5" step="0.01" value="1.15"><span class="val"></span></div>
   <div class="row"><label>奥行</label><input type="range" id="brimBack" min="0.1" max="1.3" step="0.01" value="0.3"><span class="val"></span></div>
   <div class="row"><label>幅</label><input type="range" id="brimW" min="0.3" max="1.5" step="0.01" value="1.0"><span class="val"></span></div>
@@ -165,6 +176,7 @@
   <div class="row"><label>上の傾き</label><input type="range" id="brimTopSlope" min="0" max="60" step="1" value="28"><span class="val"></span></div>
   <div class="row"><label>裏の傾き</label><input type="range" id="brimSlope" min="0" max="75" step="1" value="35"><span class="val"></span></div>
   <h2 id="sec-muff">首当て（後頭部を包む帯）</h2>
+  <div class="btns"><button data-t="muffOn">首当て</button></div>
   <div class="row"><label>色</label><input type="color" id="muffColor" value="#e4e4e4" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="muff" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <div class="row"><label>回り込み</label><input type="range" id="muffFrom" min="40" max="175" step="1" value="80"><span class="val"></span></div>
   <div class="row"><label>高さ</label><input type="range" id="muffH" min="0.05" max="0.8" step="0.01" value="0.35"><span class="val"></span></div>
@@ -178,9 +190,11 @@
   <div class="row"><label>段</label><input type="range" id="muffBands" min="1" max="5" step="1" value="1"><span class="val"></span></div>
   <div class="row"><label>面の数</label><input type="range" id="muffFacets" min="3" max="24" step="1" value="8"><span class="val"></span></div>
   <h2 id="sec-guard">側頭</h2>
+  <div class="row"><label>色</label><input type="color" id="guardColor" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="guard" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <div class="row"><label>長さ</label><input type="range" id="drop" min="0.2" max="0.8" step="0.01" value="0.5"><span class="val"></span></div>
   <div class="row"><label>前出</label><input type="range" id="reach" min="0.5" max="1.1" step="0.01" value="0.85"><span class="val"></span></div>
   <h2 id="sec-back">後頭部</h2>
+  <div class="row"><label>色</label><input type="color" id="backColor" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="back" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <div class="row"><label>上下</label><input type="range" id="backY" min="-0.4" max="0.3" step="0.01" value="0"><span class="val"></span></div>
   <div class="row"><label>長さ</label><input type="range" id="backDrop" min="0" max="0.8" step="0.01" value="0.2"><span class="val"></span></div>
   <div class="row"><label>幅</label><input type="range" id="backW" min="0.3" max="1.05" step="0.01" value="0.68"><span class="val"></span></div>
@@ -190,6 +204,7 @@
   <div class="row"><label>後ろの傾き</label><input type="range" id="backTilt" min="-40" max="20" step="1" value="-10"><span class="val"></span></div>
   <div class="row"><label>裏の傾き</label><input type="range" id="backSlope" min="0" max="75" step="1" value="30"><span class="val"></span></div>
   <h2 id="sec-face">顔</h2>
+  <div class="row"><label>色</label><input type="color" id="faceColor" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="face" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <div class="row"><label>幅</label><input type="range" id="faceW" min="0.3" max="0.8" step="0.01" value="0.5"><span class="val"></span></div>
   <div class="row"><label>高さ</label><input type="range" id="faceH" min="0.05" max="0.4" step="0.01" value="0.3"><span class="val"></span></div>
   <div class="row"><label>出</label><input type="range" id="faceOut" min="0.5" max="1.1" step="0.01" value="0.8"><span class="val"></span></div>
@@ -283,7 +298,7 @@
   <div class="row"><label>前後</label><input type="range" id="neckZ" min="-0.4" max="0.4" step="0.01" value="0"><span class="val"></span></div>
   <div class="row"><label>傾き</label><input type="range" id="neckTilt" min="-40" max="40" step="1" value="0"><span class="val"></span></div>
   <h2 id="sec-crest">前立</h2>
-  <div class="btns"><button data-kind="none" data-pre="crest">なし</button><button data-kind="v" data-pre="crest">V字</button><button data-kind="kuwagata" data-pre="crest">鍬形</button><button data-kind="moon" data-pre="crest">三日月</button><button data-kind="sun" data-pre="crest">日輪</button><button data-kind="horn" data-pre="crest">角</button><button data-kind="fan" data-pre="crest">扇</button><button data-kind="ram" data-pre="crest">巻き角</button><button data-kind="plate" data-pre="crest">板</button></div>
+  <div class="btns"><button data-kind="none" data-pre="crest">なし</button><button data-kind="v" data-pre="crest">V字</button><button data-kind="kuwagata" data-pre="crest">鍬形</button><button data-kind="moon" data-pre="crest">三日月</button><button data-kind="sun" data-pre="crest">日輪</button><button data-kind="horn" data-pre="crest">角</button><button data-kind="fan" data-pre="crest">扇</button><button data-kind="ram" data-pre="crest">巻き角</button><button data-kind="plate" data-pre="crest">板</button><button data-kind="tubes" data-pre="crest">筒</button></div>
   <div class="btns"><button class="gacha" data-pre="crest">ガチャ</button><button class="ungacha" data-pre="crest">戻す</button><span style="color:#aaa;margin-left:6px">出す側</span><button data-side="both" data-pre="crest">両方</button><button data-side="left" data-pre="crest">左</button><button data-side="right" data-pre="crest">右</button></div>
   <div class="row"><label>色</label><input type="color" id="crestColor" value="#d9b43a" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="crest" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <div class="row"><label>大きさ</label><input type="range" id="crestSize" min="0.1" max="1.2" step="0.01" value="0.5"><span class="val"></span></div>
@@ -297,7 +312,7 @@
   <div class="row"><label>傾き Z</label><input type="range" id="crestRotZ" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
   <div class="row"><label>V字の開き</label><input type="range" id="crestVOpen" min="20" max="80" step="1" value="55"><span class="val"></span></div>
   <h2 id="sec-horn">角</h2>
-  <div class="btns"><button data-kind="none" data-pre="horn">なし</button><button data-kind="v" data-pre="horn">V字</button><button data-kind="kuwagata" data-pre="horn">鍬形</button><button data-kind="moon" data-pre="horn">三日月</button><button data-kind="sun" data-pre="horn">日輪</button><button data-kind="horn" data-pre="horn">角</button><button data-kind="fan" data-pre="horn">扇</button><button data-kind="ram" data-pre="horn">巻き角</button><button data-kind="plate" data-pre="horn">板</button></div>
+  <div class="btns"><button data-kind="none" data-pre="horn">なし</button><button data-kind="v" data-pre="horn">V字</button><button data-kind="kuwagata" data-pre="horn">鍬形</button><button data-kind="moon" data-pre="horn">三日月</button><button data-kind="sun" data-pre="horn">日輪</button><button data-kind="horn" data-pre="horn">角</button><button data-kind="fan" data-pre="horn">扇</button><button data-kind="ram" data-pre="horn">巻き角</button><button data-kind="plate" data-pre="horn">板</button><button data-kind="tubes" data-pre="horn">筒</button></div>
   <div class="btns"><button class="gacha" data-pre="horn">ガチャ</button><button class="ungacha" data-pre="horn">戻す</button><span style="color:#aaa;margin-left:6px">出す側</span><button data-side="both" data-pre="horn">両方</button><button data-side="left" data-pre="horn">左</button><button data-side="right" data-pre="horn">右</button></div>
   <div class="row"><label>色</label><input type="color" id="hornColor" value="#d9b43a" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="horn" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <div class="row"><label>大きさ</label><input type="range" id="hornSize" min="0.1" max="1.2" step="0.01" value="0.6"><span class="val"></span></div>
@@ -346,6 +361,7 @@ const P = { seed: 1, colorSeed: 0, paintSeed: 0, jitter: 0.3, W: 1.0, D: 1.1, H:
   occBulge: 1.0, occDown: 0, occEU: 30, occFacets: 1,
   backY: 0, backDrop: 0.2, backW: 0.68, backOut: 0.96, backCham: 0.3, backSideAz: 135, backTilt: -10, backSlope: 30,
   neck: false, neckColor: '', neckN: 8, neckR: 0.2, neckL: 0.4, neckTaper: 1.0, neckY: 0, neckZ: 0, neckTilt: 0, neckPts: null,
+  helmetColor: '', brimColor: '', guardColor: '', backColor: '', faceColor: '', muffOn: true, headOn: true, v2Side: true, v2Only: false,
   chin: false, ears: true, vents: true, back: true, edges: false };
 
 // ---- 乱数（種で決まる揺らぎ）----
@@ -438,8 +454,9 @@ function clipFaces(planes) {
 // 結晶：平面の集まりの内側。cutters（削る結晶：平面の集まり）があれば、その分をくり抜く。
 // くり抜きは凸のまま行う：引かれた形を「削る面 i の外側で、面 0..i-1 の内側」という凸のかけらに分け、かけらごとに作る。
 // かけらどうしの境は中に隠れるので描かず、表に出る境の線も引かない
-function crystal(T, planes, col, cutters) {
-  if (!cutters || !cutters.length) { for (const f of clipFaces(planes)) T.poly(f.pts, col); return clipFaces(planes).map(f => f.pts); }
+function crystal(T, planes, col0, cutters) {
+  const col = typeof col0 === 'function' ? col0 : () => col0;
+  if (!cutters || !cutters.length) { const fs = clipFaces(planes); for (const f of fs) T.poly(f.pts, col(f)); return fs.map(f => f.pts); }
   let pieces = [{ planes, internal: [] }];
   for (const C of cutters) {
     const next = [];
@@ -460,7 +477,7 @@ function crystal(T, planes, col, cutters) {
     const edgeOk = (a, b) => !pc.internal.some(pl => Math.abs(pl.n.dot(a) - pl.d) < 1e-6 && Math.abs(pl.n.dot(b) - pl.d) < 1e-6);
     for (const f of clipFaces(pc.planes)) {
       if (pc.internal.includes(f.pl)) continue;   // かけらどうしの境：中に隠れる
-      T.poly(f.pts, col, edgeOk); out.push(f.pts);
+      T.poly(f.pts, col(f), edgeOk); out.push(f.pts);
     }
   }
   return out;
@@ -628,8 +645,8 @@ const rotPts2 = (pts, deg) => { const a = deg * D2R; return pts.map(([x, y]) => 
 function regularEye(n) { const o = []; for (let i = 0; i < n; i++) { const a = PI / 2 + i / n * 2 * PI; o.push([+Math.cos(a).toFixed(3), +Math.sin(a).toFixed(3)]); } return o; }
 
 // ---- 部位の番号（3D を押した所から左の欄を光らせるため）----
-const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30 };
-const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-pelvis', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack' };
+const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36 };
+const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-pelvis', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest' };
 const setPart = id => { M.part = id; G.part = id; };
 
 // ---- 頭 ----
@@ -926,9 +943,10 @@ function head() {
   }
 
   // 首：頭の下から下へ伸びる多角形の柱。断面は上から見た左右対称の多角形、下へ行くほど先細り、前後に傾けられる
+  ANCHOR.face = { yBot: yF - P.faceH * 0.5, zF, rx, rz, yw, H };
   ANCHOR.y = (yF - P.faceH * 0.55 + 0.05 + P.neckY) - (P.neck ? P.neckL * Math.cos(P.neckTilt * D2R) : 0.15);
   ANCHOR.z = zF * 0.3 + P.neckZ + (P.neck ? P.neckL * Math.sin(P.neckTilt * D2R) : 0);
-  if (P.neck) {
+  if (P.neck && P.headOn) {
     setPart(PART.neck);
     if (!P.neckPts || P.neckPts.length !== P.neckN) P.neckPts = regularEye(P.neckN);
     const top = new V(0, yF - P.faceH * 0.55 + 0.05 + P.neckY, zF * 0.3 + P.neckZ);
@@ -944,6 +962,12 @@ function head() {
     const g = k => P[pre + k];
     if (!frontUp || g('Kind') === 'none') return;
     setPart(PART[pre]);
+    if (g('Kind') === 'tubes') {   // 額から前へ出る筒の束（3 本）
+      const B0 = basis(frontUp), base0 = onPlane(frontUp, 0, yw + 0.16 + g('Y')); if (!base0) return;
+      const S0 = g('Size'), tcol = g('Color') ? new THREE.Color(g('Color')) : PC(pre);
+      for (const k of [-1, 0, 1]) { const c = base0.clone().addScaledVector(B0.tU, k * S0 * 0.42).addScaledVector(B0.n, g('Z') - S0 * 0.3); ringBlock(M, c, B0.n, B0.tU, B0.tV, 12, S0 * 0.18, S0 * 0.11, S0 * 0.9, tcol); }
+      return;
+    }
     const B = basis(frontUp);
     const base0 = onPlane(frontUp, 0, yw + 0.16 + g('Y'));
     if (!base0) return;
@@ -977,6 +1001,7 @@ function head() {
   placeCrest('crest');
   placeCrest('horn');
 
+  if (P.muffOn) {
   setPart(PART.muff);
   // 耳当て：兜の縁から下がって後頭部を包む帯。横から後ろへ回り、平らな面を並べて作る。真ん中で分けられ、段に重ねられる
   {
@@ -1008,6 +1033,7 @@ function head() {
         quad(outerT(n), outerB(n), innerB(n), innerT(n));
       }
     }
+  }
   }
   return helmetFaces.length;
 }
@@ -1070,9 +1096,45 @@ function ringAt(S, center, axis, k, R, Ri, L, col) {
   ringBlock(M, S.p(center.clone().addScaledVector(ax, -L / 2)), S.v(ax), S.v(e1), S.v(e2), k, R, Ri, L, col);
 }
 const rotX = (v, deg) => v.clone().applyAxisAngle(new V(1, 0, 0), deg * D2R), rotZ = (v, deg) => v.clone().applyAxisAngle(new V(0, 0, 1), deg * D2R);
+// 楕円体に接する平面の集まり（nAz × nEl 枚と上下の蓋）：丸い塊
+function ellipsoidPlanes(nAz, nEl, rx, ry, rz) {
+  const out = [];
+  for (let j = 0; j < nEl; j++) {
+    const el = -PI / 2 + (j + 0.5) / nEl * PI;
+    for (let i = 0; i < nAz; i++) {
+      const az = (i + 0.5) / nAz * 2 * PI;
+      const pt = new V(rx * Math.cos(el) * Math.sin(az), ry * Math.sin(el), rz * Math.cos(el) * Math.cos(az));
+      const n = new V(Math.cos(el) * Math.sin(az) / rx, Math.sin(el) / ry, Math.cos(el) * Math.cos(az) / rz).normalize();
+      out.push({ n, d: n.dot(pt) });
+    }
+  }
+  out.push({ n: new V(0, 1, 0), d: ry * 0.98 }, { n: new V(0, -1, 0), d: ry * 0.98 });
+  return out;
+}
+const boxPlanes = (w, h, d, c = new V()) => [plane(90, 0, new V(c.x + w / 2, c.y, c.z)), plane(-90, 0, new V(c.x - w / 2, c.y, c.z)), plane(0, 90, new V(c.x, c.y + h / 2, c.z)), plane(0, -90, new V(c.x, c.y - h / 2, c.z)), plane(0, 0, new V(c.x, c.y, c.z + d / 2)), plane(180, 0, new V(c.x, c.y, c.z - d / 2))];
+// 管の一節：base から axis の向きに長さ L、半径 r
+function tubeSeg(S, base, axis, r, L, col, k = 8) {
+  const e1 = Math.abs(axis.y) < 0.9 ? new V().crossVectors(UP, axis).normalize() : new V(1, 0, 0), e2 = new V().crossVectors(axis, e1).normalize();
+  const ring = off => { const o = []; for (let i = 0; i < k; i++) { const a = (i + 0.5) / k * 2 * PI; o.push(S.p(base.clone().addScaledVector(axis, off).addScaledVector(e1, r * Math.cos(a)).addScaledVector(e2, r * Math.sin(a)))); } return S.mirror ? o.reverse() : o; };
+  const b0 = ring(0), t0 = ring(L);
+  M.poly(t0, col); M.poly(b0.slice().reverse(), col);
+  for (let i = 0; i < k; i++) M.poly([b0[i], b0[(i + 1) % k], t0[(i + 1) % k], t0[i]], col);
+}
+// 動力パイプ：a から b へ、ctrl を制御点にした曲線に沿う節のある管（太い節と細い節が交互）
+function pipeAt(S, a, b, ctrl, r, segs, col) {
+  const pts = [];
+  for (let i = 0; i <= segs; i++) { const t = i / segs; pts.push(a.clone().multiplyScalar((1 - t) * (1 - t)).addScaledVector(ctrl, 2 * (1 - t) * t).addScaledVector(b, t * t)); }
+  for (let i = 0; i < segs; i++) {
+    const p0 = pts[i], axis = pts[i + 1].clone().sub(p0), L = axis.length(); axis.normalize();
+    tubeSeg(S, p0.clone().addScaledVector(axis, -L * 0.06), axis, i % 2 ? r * 0.8 : r, L * 1.12, col);
+  }
+}
+// 円錐（スパイク）：base から axis の向きに長さ L、根元の半径 r
+function spikeAt(S, base, axis, r, L, col) { const ax = axis.clone().normalize(); const e1 = Math.abs(ax.y) < 0.9 ? new V().crossVectors(UP, ax).normalize() : new V(1, 0, 0), e2 = new V().crossVectors(ax, e1).normalize(); polyBlock(M, S.p(base), S.v(ax), S.v(e1), S.v(e2), 8, r, L, 0.06, col); }
 
 function body() {
-  const y0 = ANCHOR.y + 0.12, X = new V(1, 0, 0), Y = UP, Z = ZF, DOWN = new V(0, -1, 0);
+  const y0 = ANCHOR.y + 0.12 + P.headSink, X = new V(1, 0, 0), Y = UP, Z = ZF, DOWN = new V(0, -1, 0);
+  const fig = P.figKind;   // human / tread / ball
   const W = space(new V(0, 0, 0));
   const fp0 = (a, e, p0, key) => (a < 1) ? [plane(0, e, p0, key)] : pair(a, e, p0, key);
   const fpB = (a, e, p0, key) => (a < 1) ? [plane(180, e, p0, key)] : pair(180 - a, e, p0, key);
@@ -1098,23 +1160,64 @@ function body() {
         cutters.push(grooveAt(pl, c, P.chestDuctW, P.chestDuctH, P.chestDuctDepth, P.chestDuctBevel));
       }
     }
-    crystal(M, f, colOf('chest'), cutters);
+    const chestCol = colOf('chest'), frontCol = colOf('chestFront');
+    if (fig === 'ball') {
+      setPart(PART.ball);
+      const R = P.ballR, c = new V(0, y0 - R * P.ballRy, 0);
+      crystalAt(space(c), ellipsoidPlanes(P.ballN, Math.max(4, P.ballN >> 1), R, R * P.ballRy, R * P.ballRz), colOf('ball'));
+      setPart(PART.chest);
+    } else if (P.chestTKind && P.chestTKind !== 'crystal' && drawTemplate(P.chestTKind, space(new V(0, y0, 0)), PART.chest)) { /* 型 */ }
+    else crystal(M, f, P.chestFrontOn ? (fc => fc.pl && fc.pl.n.z > 0.55 ? frontCol : chestCol) : chestCol, cutters);
     if (P.collarH > 0.005) ringBlock(M, new V(0, y0 - 0.02, ANCHOR.z), Y, X, Z, 12, P.collarR, Math.max(0.05, P.collarR - P.collarT), P.collarH, colOf('collar'));
+    // 胴の目：胸の正面の帯と光る円（頭なしの型に）
+    if (P.chestEye) {
+      setPart(PART.chestEye);
+      const zE = fig === 'ball' ? P.ballR * P.ballRz : cd / 2, yE = fig === 'ball' ? y0 - P.ballR * P.ballRy + P.chestEyeY : y0 - P.chestEyeY;
+      const c = new V(0, yE, zE * 0.995);
+      block(M, c.clone().addScaledVector(Z, -0.06), Z, X, Y, P.chestEyeBand, P.chestEyeR * 2.6, 0.1, 1, 1, COL.dark);
+      const eyeT = P.chestEyeGlow ? G : M;
+      polyBlock(eyeT, c.clone().addScaledVector(Z, 0.04), Z, X, Y, 14, P.chestEyeR, 0.03, 1, new THREE.Color(P.chestEyeColor));
+    }
+    // 腹のハッチ：胸の下の正面に付く箱
+    if (P.hatch) {
+      setPart(PART.hatch);
+      const c = fig === 'ball' ? new V(0, y0 - P.ballR * P.ballRy + P.hatchY, P.ballR * P.ballRz + P.hatchD / 2 - 0.1) : new V(0, y0 - ch * 0.8 + P.hatchY, cd / 2 + P.hatchD / 2 - 0.06);
+      const f2 = boxPlanes(P.hatchW, P.hatchH, P.hatchD, c); f2.push(plane(0, 45, new V(0, c.y + P.hatchH / 2, c.z + P.hatchD / 2 - P.hatchH * 0.25), 'hT'), plane(0, -45, new V(0, c.y - P.hatchH / 2, c.z + P.hatchD / 2 - P.hatchH * 0.25), 'hB'));
+      crystal(M, f2, colOf('hatch'));
+    }
   }
 
   // 腹：多角形の柱。蛇腹は細い段と太い段を交互に
   const yA = y0 - ch - P.abdH;
   setPart(PART.abd);
-  {
+  if (fig !== 'ball') {
     const k = P.abdBands, L = P.abdH + 0.25, top = y0 - ch + 0.2, col = colOf('abd');
-    if (k <= 1) crystalAt(W, prismPlanes(P.abdN, P.abdW / 2, P.abdD / 2, L, 1, P.abdTaper, P.abdRot, 0, 0.5, 'abd', top), col);
+    if (P.abdTKind && P.abdTKind !== 'crystal' && drawTemplate(P.abdTKind, space(new V(0, y0 - ch + 0.1, 0)), PART.abd)) { /* 型 */ }
+    else if (k <= 1) crystalAt(W, prismPlanes(P.abdN, P.abdW / 2, P.abdD / 2, L, 1, P.abdTaper, P.abdRot, 0, 0.5, 'abd', top), col);
     else { const h = L / k; for (let i = 0; i < k; i++) { const sc = i % 2 ? P.abdBellow : 1, kt = 1 + (P.abdTaper - 1) * i / k, kb = 1 + (P.abdTaper - 1) * (i + 1) / k; crystalAt(W, prismPlanes(P.abdN, P.abdW / 2 * sc, P.abdD / 2 * sc, h, kt, kb, P.abdRot, 0, 0.5, '', top - i * h), col); } }
   }
 
   // 腰：箱に近い結晶。上は腹の中へ少し入る
   const ph = P.pelH, pw = P.pelW, pd = P.pelD, yHip = yA - ph + P.hipUp;
+  if (fig === 'tread') {   // キャタピラ：腹の下に車体、その両脇に履帯
+    setPart(PART.tread);
+    const hw = P.hullW, hh = P.hullH, hd = P.hullD, yc = yA + 0.1 - hh / 2;
+    const fh = boxPlanes(hw, hh, hd, new V(0, yc, 0)); fh.push(plane(0, 40, new V(0, yc + hh / 2, hd / 2 * 0.7), 'hullT'), plane(180, 40, new V(0, yc + hh / 2, -hd / 2 * 0.7), 'hullB'), plane(0, -35, new V(0, yc - hh / 2, hd / 2 * 0.75), 'hullU'));
+    crystal(M, fh, colOf('hull'));
+    const tl = P.treadL, th = P.treadH, tw = P.treadW, ty = yc - hh / 2 + th / 2 - P.treadDown;
+    for (const sgn of [1, -1]) {
+      const cx = sgn * (hw / 2 + tw / 2 - 0.05);
+      const f = [plane(90, 0, new V(cx + tw / 2, ty, 0)), plane(-90, 0, new V(cx - tw / 2, ty, 0)), plane(0, 90, new V(cx, ty + th / 2, 0)), plane(0, -90, new V(cx, ty - th / 2, 0))];
+      for (const sz of [1, -1]) for (const th2 of [-60, -30, 0, 30, 60]) { const n = new V(0, Math.sin(th2 * D2R), sz * Math.cos(th2 * D2R)); const cz = sz * (tl / 2 - th / 2); f.push({ n, d: n.dot(new V(cx, ty, cz)) + th / 2 }); }
+      crystal(M, f, colOf('tread'));
+      // 転輪の筋：履帯の外側に浅い溝
+      const cutters = []; const side = plane(sgn * 90, 0, new V(cx + sgn * tw / 2, ty, 0));
+      for (let k = 0; k < P.treadWheels; k++) { const z = (k - (P.treadWheels - 1) / 2) * (tl - th) / Math.max(1, P.treadWheels - 1); cutters.push(grooveAt(side, onPl(side, new V(cx + sgn * tw / 2, ty - th * 0.1, z)), th * 0.45, th * 0.45, 0.04, 0.02)); }
+      if (cutters.length) crystal(M, f.map(pl => ({ n: pl.n, d: pl.d - 0.002 })), colOf('tread'), cutters);
+    }
+  }
   setPart(PART.pelvis);
-  {
+  if (fig === 'human') {
     const f = [plane(0, 90, new V(0, yA + 0.12, 0)), plane(0, -90, new V(0, yA - ph, 0))];
     f.push(...pair(90, -P.pelTaper, new V(pw / 2, yA - ph * 0.35, 0), 'pSide'));
     f.push(...fp0(P.pelFold, -6, new V(0, yA - ph * 0.35, pd / 2), 'pFront'));
@@ -1126,10 +1229,13 @@ function body() {
     crystal(M, f, colOf('pelvis'));
   }
 
-  // スカート：腰の上の縁の蝶番から下がる板。前掛け（真ん中、動かない）、前、横、後ろ
-  if (P.skirt) {
+  // スカート：腰の上の縁の蝶番から下がる板。前掛け（真ん中、動かない）、前、横、後ろ。一体の型は腰を包む裾広がりの筒
+  if (P.skirt && fig === 'human') {
     setPart(PART.skirt);
     const col = colOf('skirt'), t = P.skirtT, yS = yA - 0.02;
+    if (P.skirtKind === 'wrap') crystalAt(W, prismPlanes(P.skirtWrapN, pw / 2 + 0.06, pd / 2 + 0.06, P.skirtWrapL, 1, 1 + P.skirtWrapFlare, P.skirtWrapRot, 0, 0.5, 'skw', yS), col);
+    if (P.skirtKind === 'wrap' && P.apronW > 0.01) plateAt(W, new V(0, yS, pd / 2 + 0.07), rotX(DOWN, -P.apronTilt), X, rotX(Z, -P.apronTilt), P.apronW, t, P.apronL, P.apronTaper, col);
+    if (P.skirtKind === 'plates') {
     if (P.apronW > 0.01) plateAt(W, new V(0, yS, pd / 2 + 0.01), rotX(DOWN, -P.apronTilt), X, rotX(Z, -P.apronTilt), P.apronW, t, P.apronL, P.apronTaper, col);
     for (const sgn of [1, -1]) {
       const S = space(new V(0, 0, 0), [0, 0, 0], sgn < 0);
@@ -1137,21 +1243,31 @@ function body() {
       if (P.skirtSW > 0.01) plateAt(S, new V(pw / 2 + 0.01, yS, P.skirtSZ), rotZ(DOWN, P.skirtSOut), Z, rotZ(X, P.skirtSOut), P.skirtSW, t, P.skirtSL, P.skirtSTaper, col);
       if (P.skirtBW > 0.01) plateAt(S, new V(P.skirtBW / 2 * 1.05, yS, -pd / 2 * 0.9), rotZ(rotX(DOWN, P.skirtBTilt), P.skirtBOut), rotZ(X, P.skirtBOut), rotZ(rotX(Z.clone().negate(), P.skirtBTilt), P.skirtBOut), P.skirtBW, t, P.skirtBL, P.skirtBTaper, col);
     }
+    }
   }
 
+  // 蛇腹の柱：k 段を交互の太さで積む（1 段なら普通の柱）
+  const bandedPrism = (S, k, n, rx, rz, L, kTop, kBot, rot, key, yTop, col, slim) => {
+    if (k <= 1) return crystalAt(S, prismPlanes(n, rx, rz, L, kTop, kBot, rot, 0, 0.5, key, yTop), col);
+    const h = L / k;
+    for (let i = 0; i < k; i++) { const sc = i % 2 ? slim : 1, kt = kTop + (kBot - kTop) * i / k, kb = kTop + (kBot - kTop) * (i + 1) / k; crystalAt(S, prismPlanes(n, rx * sc, rz * sc, h * 1.04, kt, kb, rot, 0, 0.5, '', yTop - i * h), col); }
+  };
   // 脚：股関節から腿（膝を覆う）、膝の軸、脛（ふくらはぎで膨らみ足首で絞る）、裾、膝当て、足
-  for (const sgn of [1, -1]) {
+  if (fig === 'human') for (const sgn of [1, -1]) {
     const mir = sgn < 0;
     const hip = new V(P.hipX, yHip, 0);
     const SthR = space(hip, [0, 0, P.legSpread]), Sth = space(hip, [0, 0, P.legSpread], mir);
     setPart(PART.thigh);
-    crystalAt(Sth, prismPlanes(P.thighN, P.thighR, P.thighR * P.thighDz, P.thighL + P.kneeOverlap, P.thighTop, P.thighBot, P.thighRot, P.thighBulge > 1.001 ? P.thighBulge : 0, 0.45, 'thigh'), colOf('thigh'));
+    if (P.thighBands > 1) bandedPrism(Sth, P.thighBands, P.thighN, P.thighR, P.thighR * P.thighDz, P.thighL + P.kneeOverlap, P.thighTop, P.thighBot, P.thighRot, 'thigh', 0, colOf('thigh'), P.bandSlim);
+    else crystalAt(Sth, prismPlanes(P.thighN, P.thighR, P.thighR * P.thighDz, P.thighL + P.kneeOverlap, P.thighTop, P.thighBot, P.thighRot, P.thighBulge > 1.001 ? P.thighBulge : 0, 0.45, 'thigh'), colOf('thigh'));
     const kneeR = SthR.at(0, -P.thighL, 0);
     setPart(PART.shin);
     ringAt(Sth, new V(0, -P.thighL, 0), X, 12, P.kneeR, P.kneeR * 0.5, P.thighR * 1.5, colOf('joint'));
     const SshR = space(kneeR, [0, 0, P.legSpread]), Ssh = space(kneeR, [0, 0, P.legSpread], mir);
-    crystalAt(Ssh, prismPlanes(P.shinN, P.shinR, P.shinR * P.shinDz, P.shinL, P.shinTop, P.shinAnkle, P.shinRot, P.shinCalf > 0.001 ? P.shinCalf : 0, P.shinCalfAt, 'shin'), colOf('shin'));
-    if (P.shinHem > 0.005) crystalAt(Ssh, prismPlanes(P.shinN, P.shinR, P.shinR * P.shinDz, P.shinL * 0.3, P.shinAnkle * 0.98, P.shinAnkle + P.shinHem, P.shinRot, 0, 0.5, '', -P.shinL * 0.7), colOf('shin'));
+    if (P.shinTKind && P.shinTKind !== 'crystal' && drawTemplate(P.shinTKind, Ssh, PART.shin)) { /* 型 */ }
+    else if (P.shinBands > 1) bandedPrism(Ssh, P.shinBands, P.shinN, P.shinR, P.shinR * P.shinDz, P.shinL, P.shinTop, P.shinAnkle, P.shinRot, 'shin', 0, colOf('shin'), P.bandSlim);
+    else crystalAt(Ssh, prismPlanes(P.shinN, P.shinR, P.shinR * P.shinDz, P.shinL, P.shinTop, P.shinAnkle, P.shinRot, P.shinCalf > 0.001 ? P.shinCalf : 0, P.shinCalfAt, 'shin'), colOf('shin'));
+    if (P.shinHem > 0.005 && !(P.shinTKind && P.shinTKind !== 'crystal')) crystalAt(Ssh, prismPlanes(P.shinN, P.shinR, P.shinR * P.shinDz, P.shinL * 0.3, P.shinAnkle * 0.98, P.shinAnkle + P.shinHem, P.shinRot, 0, 0.5, '', -P.shinL * 0.7), colOf('shin'));
     if (P.knee) {
       setPart(PART.knee);
       if (!P.kneePts || P.kneePts.length !== P.kneeN) P.kneePts = defaultShape('kneePts', P.kneeN);
@@ -1163,7 +1279,8 @@ function body() {
     const ankleR = SshR.at(0, -P.shinL, 0);
     const Sft = space(ankleR, [0, 0, 0], mir);
     setPart(PART.foot);
-    {
+    if (P.footTKind && P.footTKind !== 'crystal' && drawTemplate(P.footTKind, Sft, PART.foot)) { /* 型 */ }
+    else {
       const fh = P.footH, fw = P.footW, fl = P.footFront, fb = P.footBack;
       const f = [{ n: new V(0, -1, 0), d: fh }, plane(0, 90, new V(0, 0.08, 0))];
       f.push(planeThru(new V(0, 0.08, -fb * 0.3), new V(0, -fh + P.footToeH, fl), X, new V(0, 1, 0.3)));
@@ -1185,40 +1302,76 @@ function body() {
   // 腕：肩の装甲、肩の軸、上腕（肘を覆う）、肘の軸、前腕と籠手、手
   for (const sgn of [1, -1]) {
     const mir = sgn < 0;
-    const shJ = new V(cw / 2 + P.shoulderOut, y0 - P.shoulderDown, 0);
+    const shJ = fig === 'ball' ? new V(P.ballR * 0.92, y0 - P.ballR * P.ballRy + P.ballArmY, P.ballArmZ) : new V(cw / 2 + P.shoulderOut, y0 - P.shoulderDown, 0);
     const Ssa = space(shJ, [P.shoulderPitch, 0, P.shoulderRoll], mir);
-    if (P.shoulderOn) {
+    const shKind = P.shoulderOn ? (P.shSame || sgn > 0 ? P.shRKind : P.shLKind) : 'none';
+    const shSc = P.shSame || sgn > 0 ? 1 : P.shLSize;
+    if (shKind !== 'none' && P.shoulderTKind && P.shoulderTKind !== 'crystal' && drawTemplate(P.shoulderTKind, Ssa, PART.shoulder)) { /* 型 */ }
+    else if (shKind !== 'none') {
       setPart(PART.shoulder);
-      const sw = P.shW, shh = P.shH, sd = P.shD, up = P.shUp;
-      const sTop = plane(90, P.shTopSlope, new V(sw * P.shTopFrom, shh * 0.5 + up, 0), 'sTop');
-      const f = [plane(0, 90, new V(0, shh * 0.5 + up, 0)), plane(0, -90, new V(0, -shh * 0.5 + up, 0)), plane(-90, 0, new V(-P.shIn, 0, 0)), sTop];
-      f.push(plane(90, -P.shOutTilt, new V(sw, up, 0), 'sOut'));
-      f.push(plane(0, 0, new V(0, 0, sd / 2), 'sF'), plane(180, 0, new V(0, 0, -sd / 2), 'sB'));
-      if (P.shFacets >= 1) f.push(plane(45, 0, new V(sw * 0.85, 0, sd / 2 * 0.85), 'sC1'), plane(135, 0, new V(sw * 0.85, 0, -sd / 2 * 0.85), 'sC2'));
-      if (P.shFacets >= 2) f.push(plane(0, 45, new V(0, shh * 0.3 + up, sd / 2 * 0.8), 'sC3'), plane(180, 45, new V(0, shh * 0.3 + up, -sd / 2 * 0.8), 'sC4'));
-      if (P.shFacets >= 3) f.push(plane(0, -45, new V(0, -shh * 0.3 + up, sd / 2 * 0.85), 'sC5'), plane(180, -45, new V(0, -shh * 0.3 + up, -sd / 2 * 0.85), 'sC6'));
-      const cutters = [];
-      for (let k = 0; k < P.shGrooveN; k++) {
-        const z = (k - (P.shGrooveN - 1) / 2) * P.shGrooveGap;
-        const c = onPl(sTop, new V(sw * 0.6, shh * 0.5 + up, z));
-        cutters.push(grooveAt(sTop, c, P.shGrooveW, P.shGrooveL, P.shGrooveDepth, 0.012));
+      const sw = P.shW * shSc, shh = P.shH * shSc, sd = P.shD * shSc, up = P.shUp, col = colOf('shoulder');
+      if (shKind === 'round') {
+        const f = ellipsoidPlanes(P.shRoundN, Math.max(3, P.shRoundN >> 1), sw * 0.62, shh * 0.55, sd * 0.55).map(pl => ({ n: pl.n, d: pl.d + pl.n.dot(new V(sw * 0.42, up, 0)) }));
+        f.push(plane(-90, 0, new V(-P.shIn, 0, 0)));
+        crystalAt(Ssa, f, col);
+      } else {
+        const sTop = plane(90, P.shTopSlope, new V(sw * P.shTopFrom, shh * 0.5 + up, 0), 'sTop');
+        const f = [plane(0, 90, new V(0, shh * 0.5 + up, 0)), plane(0, -90, new V(0, -shh * 0.5 + up, 0)), plane(-90, 0, new V(-P.shIn, 0, 0)), sTop];
+        f.push(plane(90, -P.shOutTilt, new V(sw, up, 0), 'sOut'));
+        f.push(plane(0, 0, new V(0, 0, sd / 2), 'sF'), plane(180, 0, new V(0, 0, -sd / 2), 'sB'));
+        if (P.shFacets >= 1) f.push(plane(45, 0, new V(sw * 0.85, 0, sd / 2 * 0.85), 'sC1'), plane(135, 0, new V(sw * 0.85, 0, -sd / 2 * 0.85), 'sC2'));
+        if (P.shFacets >= 2) f.push(plane(0, 45, new V(0, shh * 0.3 + up, sd / 2 * 0.8), 'sC3'), plane(180, 45, new V(0, shh * 0.3 + up, -sd / 2 * 0.8), 'sC4'));
+        if (P.shFacets >= 3) f.push(plane(0, -45, new V(0, -shh * 0.3 + up, sd / 2 * 0.85), 'sC5'), plane(180, -45, new V(0, -shh * 0.3 + up, -sd / 2 * 0.85), 'sC6'));
+        const cutters = [];
+        for (let k = 0; k < P.shGrooveN; k++) {
+          const z = (k - (P.shGrooveN - 1) / 2) * P.shGrooveGap;
+          cutters.push(grooveAt(sTop, onPl(sTop, new V(sw * 0.6, shh * 0.5 + up, z)), P.shGrooveW, P.shGrooveL, P.shGrooveDepth, 0.012));
+        }
+        crystalAt(Ssa, f, col, cutters);
+        if (shKind === 'spike') {   // 上の斜面に沿って並ぶ円錐。向きは斜面の法線
+          const n = sTop.n.clone(), N = P.shSpikeN;
+          for (let k = 0; k < N; k++) {
+            const z = N === 1 ? 0 : (k - (N - 1) / 2) * (sd * 0.7 / (N - 1));
+            const base = onPl(sTop, new V(sw * 0.62, shh * 0.5 + up, z)).addScaledVector(n, -0.03);
+            spikeAt(Ssa, base, n, P.shSpikeR * shSc, P.shSpikeL * shSc, col);
+          }
+        }
+        if (shKind === 'shield') {   // 外に立つ板：肩の上の縁を蝶番に、下へ長さ、外へ傾く
+          const hinge = new V(sw + 0.02, shh * 0.5 + up + P.shShieldUp, 0);
+          plateAt(Ssa, hinge, rotZ(new V(0, -1, 0), P.shShieldTilt), new V(0, 0, 1), rotZ(new V(1, 0, 0), P.shShieldTilt), P.shShieldW * shSc, P.shShieldT, P.shShieldH * shSc, 1.0, col);
+          // 上の縁の面取り（板の上を少し覆う）
+        }
       }
-      crystalAt(Ssa, f, colOf('shoulder'), cutters);
     }
     const SuaR = space(shJ, [0, 0, P.armOut]), Sua = space(shJ, [0, 0, P.armOut], mir);
     setPart(PART.upperarm);
     ringAt(Sua, new V(0.1, 0, 0), X, 12, P.uaR * 0.7, P.uaR * 0.3, 0.5, colOf('joint'));
-    crystalAt(Sua, prismPlanes(P.uaN, P.uaR, P.uaR * P.uaDz, P.uaL + P.elbowOverlap, P.uaTop, P.uaBot, P.uaRot, 0, 0.5, 'ua', -0.05), colOf('upperarm'));
+    if (P.uaBands > 1) bandedPrism(Sua, P.uaBands, P.uaN, P.uaR, P.uaR * P.uaDz, P.uaL + P.elbowOverlap, P.uaTop, P.uaBot, P.uaRot, 'ua', -0.05, colOf('upperarm'), P.bandSlim);
+    else crystalAt(Sua, prismPlanes(P.uaN, P.uaR, P.uaR * P.uaDz, P.uaL + P.elbowOverlap, P.uaTop, P.uaBot, P.uaRot, 0, 0.5, 'ua', -0.05), colOf('upperarm'));
     const elbowR = SuaR.at(0, -P.uaL, 0);
     setPart(PART.forearm);
     ringAt(Sua, new V(0, -P.uaL, 0), X, 12, P.elbowR, P.elbowR * 0.5, P.uaR * 1.5, colOf('joint'));
     const SfaR = space(elbowR, [-P.elbowBend, 0, P.armOut]), Sfa = space(elbowR, [-P.elbowBend, 0, P.armOut], mir);
-    crystalAt(Sfa, prismPlanes(P.faN, P.faR, P.faR * P.faDz, P.faL, P.faTop, P.faBot, P.faRot, 0, 0.5, 'fa', -0.02), colOf('forearm'));
+    if (P.faBands > 1) bandedPrism(Sfa, P.faBands, P.faN, P.faR, P.faR * P.faDz, P.faL, P.faTop, P.faBot, P.faRot, 'fa', -0.02, colOf('forearm'), P.bandSlim);
+    else crystalAt(Sfa, prismPlanes(P.faN, P.faR, P.faR * P.faDz, P.faL, P.faTop, P.faBot, P.faRot, 0, 0.5, 'fa', -0.02), colOf('forearm'));
     if (P.faGauntlet > 0.005) crystalAt(Sfa, prismPlanes(P.faN, P.faR * (1 + P.faGauntlet), P.faR * P.faDz * (1 + P.faGauntlet), P.faL * P.faGauntletL, 1, P.faGauntletTaper, P.faRot, 0, 0.5, '', -0.08), colOf('gauntlet'));
     const wristR = SfaR.at(0, -P.faL, 0);
     const Shd = space(wristR, [-P.elbowBend, 0, P.armOut], mir);
     setPart(PART.hand);
-    {
+    if (P.handKind === 'claw') {   // クロー：手首の太鼓から爪が下へ、少し開いて
+      const hr = P.handW * 0.55, N = P.handClawN, cc = colOf('claw');
+      crystalAt(Shd, prismPlanes(10, hr, hr, hr * 0.9, 1, 0.9, 0, 0, 0.5, '', 0.08), colOf('hand'));
+      for (let k = 0; k < N; k++) {
+        const a = (k + 0.5) / N * 2 * PI + P.handClawTurn * D2R, ox = Math.sin(a), oz = Math.cos(a);
+        const base = new V(ox * hr * 0.7, -hr * 0.8, oz * hr * 0.7), dir = new V(ox * P.handClawOpen, -1, oz * P.handClawOpen).normalize();
+        spikeAt(Shd, base, dir, P.handClawR, P.handClawL, cc);
+      }
+    } else if (P.handKind === 'cannon') {   // 腕砲：前腕の先が太い筒、先端に砲口
+      const r = P.faR * P.handCanR, L = P.handCanL, cc = colOf('cannon');
+      crystalAt(Shd, prismPlanes(12, r, r, L, 1, 1, 0, 0, 0.5, '', 0.1), cc);
+      const N = P.handBarrels, br = N === 1 ? r * 0.55 : r * 0.33;
+      for (let k = 0; k < N; k++) { const a = k / N * 2 * PI + PI / 4, ox = N === 1 ? 0 : Math.sin(a) * r * 0.5, oz = N === 1 ? 0 : Math.cos(a) * r * 0.5; ringBlock(M, Shd.at(ox, -L + 0.02, oz), Shd.v(DOWN), Shd.v(X), Shd.v(Z), 12, br, br * 0.6, 0.25, COL.dark); }
+    } else if (P.handKind === 'fist') {
       const hw = P.handW, hh = P.handH, hd = P.handD;
       const front = plane(0, -12, new V(0, -hh * 0.45, hd / 2), 'hFront');
       const f = [plane(0, 90, new V(0, 0.06, 0)), plane(0, -90, new V(0, -hh, 0)), plane(90, -8, new V(hw / 2, -hh / 2, 0), 'hOut'), plane(-90, -8, new V(-hw / 2, -hh / 2, 0), 'hIn'), front, plane(180, 0, new V(0, 0, -hd / 2 * 0.85), 'hBack')];
@@ -1233,7 +1386,7 @@ function body() {
   }
 
   // 背中：箱の結晶、噴射口の筒、タンク
-  if (P.pack) {
+  if (P.pack && fig !== 'ball') {
     setPart(PART.pack);
     const pwid = P.packW, phh = P.packH, pdd = P.packD, zc = -cd / 2 - pdd / 2 + 0.08, ycp = y0 - P.packY;
     const Sp = space(new V(0, ycp, zc));
@@ -1250,6 +1403,28 @@ function body() {
       crystalAt(Stk, prismPlanes(10, P.tankR, P.tankR, P.tankL, 1, 1, 18), col);
       crystalAt(Stk, prismPlanes(10, P.tankR, P.tankR, P.tankR * 0.6, 0.55, 1, 18, 0, 0.5, '', P.tankR * 0.6), col);
       crystalAt(Stk, prismPlanes(10, P.tankR, P.tankR, P.tankR * 0.6, 1, 0.55, 18, 0, 0.5, '', -P.tankL), col);
+    }
+  }
+  // 肩の上の砲（右・両方・中央）：基部の箱と砲身の筒。仰角で起こす
+  if (P.canKind !== 'none') {
+    setPart(PART.cannon);
+    const col = colOf('cannon'), sides = P.canKind === 'both' ? [1, -1] : P.canKind === 'right' ? [1] : [0];
+    for (const sg of sides) {
+      const Sc = fig === 'ball' ? space(new V(sg * P.canX, y0 - P.ballR * P.ballRy * 0.08 + P.canY - 0.35 + P.canR * 1.1, P.canZ), [-P.canPitch, 0, 0]) : space(new V(sg * P.canX, y0 + P.canY, -cd / 2 + P.canZ), [-P.canPitch, 0, 0]);
+      crystalAt(Sc, boxPlanes(P.canR * 2.2, P.canR * 2.2, P.canBase), col);
+      ringBlock(M, Sc.at(0, 0, -P.canBase * 0.4), Sc.v(Z), Sc.v(X), Sc.v(Y), 14, P.canR, P.canR * 0.6, P.canL + P.canBase * 0.4, col);
+      ringBlock(M, Sc.at(0, 0, -P.canBase * 0.4), Sc.v(Z), Sc.v(X), Sc.v(Y), 14, P.canR * 1.25, P.canR, P.canBase * 0.9, col);   // 砲身の根元の太い所
+    }
+  }
+  // 動力パイプ：頭（口から後頭部へ）、腰（前から後ろへ）、脚（膝から腿の後ろへ）。左右とも
+  if (fig === 'human' && (P.pipeHead || P.pipeWaist || P.pipeLeg)) {
+    setPart(PART.pipe);
+    const col = colOf('pipe'), r = P.pipeR, segs = P.pipeSegs, F = ANCHOR.face;
+    for (const sgn of [1, -1]) {
+      const S = space(new V(0, 0, 0), [0, 0, 0], sgn < 0);
+      if (P.pipeHead && F) pipeAt(S, new V(P.pipeHeadX, F.yBot + 0.06, F.zF * 0.75), new V(F.rx * 0.55, F.yw - 0.05, -F.rz * 0.75), new V(F.rx * (0.9 + P.pipeSag * 0.6), F.yBot - 0.05, F.zF * 0.2), r * 0.8, segs, col);
+      if (P.pipeWaist) pipeAt(S, new V(pw * 0.3, yA - 0.15 + P.pipeWaistY, pd / 2 * 0.9), new V(pw * 0.28, yA - 0.1 + P.pipeWaistY, -pd / 2 - 0.1), new V(pw / 2 + 0.25 + P.pipeSag * 0.6, yA - 0.35 + P.pipeWaistY, 0.1), r, segs, col);
+      if (P.pipeLeg) { const yK = yHip - P.thighL, kx = P.hipX + P.thighR * 0.9; pipeAt(S, new V(kx * 0.98, yK + 0.15 + P.pipeLegY, P.thighR * 0.6), new V(P.hipX + P.thighR * 0.3, yHip - 0.1 + P.pipeLegY, -P.thighR * 1.05), new V(kx + 0.25 + P.pipeSag * 0.5, yK + (yHip - yK) * 0.55 + P.pipeLegY, -0.1), r, segs, col); }
     }
   }
 }
@@ -1294,9 +1469,9 @@ const PAINT_CHOICES = {
   neck: ['dark', 'dark', 'sub', 'main'],
   chest: ['main', 'main', 'sub'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
   shoulder: ['main', 'main', 'sub', 'accent'], upperarm: ['sub', 'main', 'main'], forearm: ['main', 'main', 'sub'], gauntlet: ['main', 'sub', 'accent'], hand: ['dark', 'dark', 'sub'],
-  thigh: ['main', 'main', 'sub'], knee: ['sub', 'accent', 'main'], shin: ['main', 'main', 'sub'], foot: ['sub', 'main', 'dark'], pack: ['sub', 'main', 'dark'], thruster: ['dark'], tank: ['sub', 'main', 'accent'], joint: ['dark'],
+  thigh: ['main', 'main', 'sub'], knee: ['sub', 'accent', 'main'], shin: ['main', 'main', 'sub'], foot: ['sub', 'main', 'dark'], pack: ['sub', 'main', 'dark'], thruster: ['dark'], tank: ['sub', 'main', 'accent'], joint: ['dark'], pipe: ['dark', 'dark', 'accent'], cannon: ['sub', 'main', 'dark'], hatch: ['accent', 'sub', 'main'], tread: ['dark', 'sub'], hull: ['sub', 'main'], ball: ['main', 'sub'], chestFront: ['accent', 'sub', 'main'], claw: ['dark', 'accent', 'main'],
 };
-const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank'];
+const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw'];
 const colOf = part => P[part + 'Color'] ? new THREE.Color(P[part + 'Color']) : PC(part);
 function paintMap(paintSeed) {
   const m = {};
@@ -1306,7 +1481,7 @@ function paintMap(paintSeed) {
   rnd = keep; return m;
 }
 let PAINT = {};
-const PC = part => COL[PAINT[part]];
+const PC = part => P[part + 'Color'] ? new THREE.Color(P[part + 'Color']) : COL[PAINT[part]];
 
 // ---- 三次元 ----
 const canvas = document.getElementById('c');
@@ -1331,20 +1506,25 @@ function build() {
   rnd = rng(P.seed * 7919 + 17); JT = {};
   COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed);
   M = new Tris(); G = new Tris();
-  const nf = head();
+  let nf;
+  if (P.headOn) nf = head();
+  else { const km = M, kg = G; M = new Tris(); G = new Tris(); nf = head(); M = km; G = kg; }
   body();
   group = new THREE.Group();
   group.add(new THREE.Mesh(M.geom(), matMetal));
   group.add(new THREE.Mesh(G.geom(), matGlow));
   const lines = new THREE.LineSegments(M.lineGeom(), matLine); lines.name = 'edges'; lines.visible = P.edges; group.add(lines);
+  { const g0 = group.children[0].geometry; g0.computeBoundingBox(); const b = g0.boundingBox; if (b && isFinite(b.min.y)) { const c = b.getCenter(new V()), sz = b.getSize(new V()); BODY_FRAME = { t: new V(0, c.y, c.z * 0.3), d: Math.max(sz.y, sz.x * 0.9, sz.z * 0.9) * 2.05 + 1 }; } }
   scene.add(group); window.__head = () => ({ group, COL, camera, controls, eyes: EYE_CHECK });
+  if (typeof placeV2 === 'function') placeV2();
   if (EYE_CHECK.some(e => e.yaw < 15)) document.getElementById('err').textContent = '目が正面を向く平らな面に載っています（上から見て 八 の字になっていない）';
   for (const pre of COLOR_PRES) { const el = document.getElementById(pre + 'Color'); if (el && !P[pre + 'Color']) el.value = '#' + PC(pre).getHexString(); }
   document.getElementById('stat').textContent = `兜の面 ${nf}　三角形 ${M.pos.length / 9 | 0}　種 ${P.seed}`;
 }
 
 let curView = 'iso';
-const frameOf = () => mapMode === 'head' ? { t: new V(0, -0.05, 0), d: 4.6 } : { t: new V(0, ANCHOR.y - 3.6, 0), d: 19 };
+let BODY_FRAME = { t: new V(0, -4.2, 0), d: 19 };
+const frameOf = () => mapMode === 'head' ? { t: new V(0, -0.05, 0), d: 4.6 } : BODY_FRAME;
 function setView(v) {
   curView = v; const { t, d } = frameOf();
   if (v === 'iso') camera.position.set(t.x + d * 0.54, t.y + d * 0.28, t.z + d * 0.72);
@@ -1377,26 +1557,39 @@ canvas.addEventListener('pointerup', e => {
 const HEAD_KEYS = Object.keys(P).slice();
 const HEAD_SEC_IDS = new Set([...document.querySelectorAll('#ui h2[id^=sec-]')].map(h => h.id));
 const BODY_SECS = [
-  ['sec-fig', '全身', [['toggle', 'shoulderOn', '肩'], ['toggle', 'skirt', 'スカート'], ['toggle', 'knee', '膝当て'], ['toggle', 'pack', '背中'],
+  ['sec-fig', '全身', [['kinds', 'fig', [['human', '人型'], ['tread', 'キャタピラ'], ['ball', '球']], '型'], ['toggle', 'headOn', '頭'], ['toggle', 'shoulderOn', '肩'], ['toggle', 'skirt', 'スカート'], ['toggle', 'knee', '膝当て'], ['toggle', 'pack', '背中'],
+    ['r', 'headSink', '頭の沈み', 0, 1.5, 0.01, 0],
+    ['r', 'hullW', '車体の幅', 1, 4, 0.02, 2.4], ['r', 'hullH', '車体の高さ', 0.3, 2.5, 0.02, 1.1], ['r', 'hullD', '車体の長さ', 1, 5, 0.02, 3.0], ['r', 'treadL', '履帯の長さ', 1, 6, 0.02, 3.6], ['r', 'treadH', '履帯の高さ', 0.4, 2.5, 0.02, 1.3], ['r', 'treadW', '履帯の幅', 0.3, 1.6, 0.02, 0.9], ['r', 'treadDown', '履帯の下がり', -0.5, 1, 0.01, 0.2], ['r', 'treadWheels', '転輪の数', 0, 8, 1, 5], ['c', 'tread', '履帯の色'], ['c', 'hull', '車体の色'],
+    ['r', 'ballR', '球の半径', 0.6, 3, 0.02, 1.6], ['r', 'ballRy', '球の縦の比', 0.5, 1.5, 0.01, 1.0], ['r', 'ballRz', '球の前後の比', 0.5, 1.5, 0.01, 1.0], ['r', 'ballN', '球の面の数', 6, 20, 1, 12], ['r', 'ballArmY', '球の腕の上下', -1.5, 1.5, 0.01, -0.2], ['r', 'ballArmZ', '球の腕の前後', -1.5, 1.5, 0.01, 0.4], ['c', 'ball', '球の色'],
     ['r', 'hipX', '股の幅', 0.3, 1.2, 0.01, 0.6], ['r', 'legSpread', '脚の開き', -5, 20, 1, 5], ['r', 'armOut', '腕の開き', -5, 25, 1, 6], ['r', 'elbowBend', '肘の曲げ', 0, 90, 1, 8],
     ['r', 'shoulderOut', '肩の出', 0, 0.8, 0.01, 0.3], ['r', 'shoulderDown', '肩の高さ', 0, 0.8, 0.01, 0.35]]],
   ['sec-chest', '胴', [['c', 'chest'], ['r', 'chestW', '幅', 1.2, 4, 0.02, 2.4], ['r', 'chestD', '奥行', 0.8, 2.4, 0.02, 1.5], ['r', 'chestH', '高さ', 1, 3, 0.02, 1.9], ['r', 'chestFold', '正中の折れ', 0, 45, 1, 18], ['r', 'chestLean', '胸の張り', -10, 35, 1, 10], ['r', 'chestTopSlope', '上の傾き', 10, 80, 1, 45], ['r', 'chestTopIn', '上の引き', 0.2, 1, 0.01, 0.55], ['r', 'chestBotSlope', '下の絞り', 0, 70, 1, 35], ['r', 'chestTaper', '脇の絞り', -10, 30, 1, 12], ['r', 'chestShoulderSlope', '肩口の傾き', 20, 85, 1, 60], ['r', 'chestShoulderDrop', '肩口の落ち', 0, 1, 0.01, 0.3], ['r', 'chestFacets', '角の面', 0, 2, 1, 1], ['r', 'chestBackFold', '背の折れ', 0, 30, 1, 10],
     ['r', 'collarH', '襟の高さ', 0, 0.4, 0.01, 0.12], ['r', 'collarR', '襟の太さ', 0.2, 0.8, 0.01, 0.42], ['r', 'collarT', '襟の厚み', 0.03, 0.2, 0.01, 0.08], ['c', 'collar', '襟の色'],
+    ['toggle', 'chestFrontOn', '胸の前だけ別の色', false], ['c', 'chestFront', '胸の前の色'],
+    ['toggle', 'hatch', '腹のハッチ', false], ['r', 'hatchW', 'ハッチの幅', 0.1, 1.5, 0.01, 0.6], ['r', 'hatchH', 'ハッチの高さ', 0.1, 1.2, 0.01, 0.45], ['r', 'hatchD', 'ハッチの出', 0.05, 0.6, 0.01, 0.2], ['r', 'hatchY', 'ハッチの上下', -1, 1, 0.01, 0], ['c', 'hatch', 'ハッチの色'],
+    ['toggle', 'chestEye', '胴の目', false], ['toggle', 'chestEyeGlow', '胴の目が光る'], ['eyecolor', 'chestEyeColor', '胴の目の色'], ['r', 'chestEyeR', '胴の目の大きさ', 0.04, 0.5, 0.01, 0.14], ['r', 'chestEyeY', '胴の目の上下', -0.5, 2, 0.01, 0.35], ['r', 'chestEyeBand', '胴の目の帯の幅', 0.2, 3, 0.02, 1.2],
     ['r', 'chestDuctN', 'ダクトの数', 0, 3, 1, 0], ['r', 'chestDuctX', 'ダクトの左右', 0, 1.5, 0.01, 0.55], ['r', 'chestDuctY', 'ダクトの上下', -0.8, 0.8, 0.01, 0.15], ['r', 'chestDuctGap', 'ダクトの間隔', 0.05, 0.5, 0.01, 0.16], ['r', 'chestDuctW', 'ダクトの幅', 0.05, 0.8, 0.01, 0.3], ['r', 'chestDuctH', 'ダクトの高さ', 0.02, 0.4, 0.01, 0.08], ['r', 'chestDuctDepth', 'ダクトの深さ', 0.01, 0.2, 0.005, 0.05], ['r', 'chestDuctBevel', 'ダクトのベベル', 0, 0.08, 0.002, 0.02]]],
   ['sec-abd', '腹', [['c', 'abd'], ['r', 'abdW', '幅', 0.5, 2.5, 0.02, 1.4], ['r', 'abdD', '奥行', 0.4, 2, 0.02, 1.1], ['r', 'abdH', '高さ', 0.2, 1.5, 0.02, 0.7], ['r', 'abdTaper', '下の倍率', 0.5, 1.5, 0.01, 0.95], ['r', 'abdN', '面の数', 4, 16, 1, 8], ['r', 'abdRot', '向き', 0, 45, 1, 0], ['r', 'abdBands', '蛇腹の段', 1, 7, 1, 1], ['r', 'abdBellow', '蛇腹の細さ', 0.6, 1, 0.01, 0.86]]],
   ['sec-pelvis', '腰', [['c', 'pelvis'], ['r', 'pelW', '幅', 0.8, 3, 0.02, 2.0], ['r', 'pelD', '奥行', 0.6, 2.2, 0.02, 1.3], ['r', 'pelH', '高さ', 0.4, 1.6, 0.02, 0.9], ['r', 'pelFold', '正中の折れ', 0, 45, 1, 15], ['r', 'pelTaper', '下の絞り', -10, 35, 1, 8], ['r', 'pelFacets', '角の面', 0, 2, 1, 1], ['r', 'hipUp', '股の高さ', 0, 0.6, 0.01, 0.2]]],
-  ['sec-skirt', 'スカート', [['c', 'skirt'], ['r', 'skirtT', '厚み', 0.03, 0.25, 0.005, 0.09], ['r', 'apronW', '前掛けの幅', 0, 1.5, 0.01, 0.7], ['r', 'apronL', '前掛けの長さ', 0.2, 2, 0.01, 1.1], ['r', 'apronTilt', '前掛けの開き', -10, 40, 1, 8], ['r', 'apronTaper', '前掛けの先', 0.5, 1.5, 0.01, 0.9],
+  ['sec-skirt', 'スカート', [['c', 'skirt'], ['kinds', 'skirt', [['plates', '板'], ['wrap', '一体']], '型'], ['r', 'skirtWrapN', '一体の面の数', 6, 20, 1, 12], ['r', 'skirtWrapL', '一体の長さ', 0.3, 3, 0.01, 1.4], ['r', 'skirtWrapFlare', '一体の広がり', 0, 1.2, 0.01, 0.35], ['r', 'skirtWrapRot', '一体の向き', 0, 30, 1, 0], ['r', 'skirtT', '厚み', 0.03, 0.25, 0.005, 0.09], ['r', 'apronW', '前掛けの幅', 0, 1.5, 0.01, 0.7], ['r', 'apronL', '前掛けの長さ', 0.2, 2, 0.01, 1.1], ['r', 'apronTilt', '前掛けの開き', -10, 40, 1, 8], ['r', 'apronTaper', '前掛けの先', 0.5, 1.5, 0.01, 0.9],
     ['r', 'skirtFW', '前の幅', 0, 1.2, 0.01, 0.55], ['r', 'skirtFL', '前の長さ', 0.2, 2, 0.01, 1.0], ['r', 'skirtFTilt', '前の開き', -10, 45, 1, 10], ['r', 'skirtFOut', '前の外開き', -10, 45, 1, 8], ['r', 'skirtFTaper', '前の先', 0.5, 1.5, 0.01, 0.95],
     ['r', 'skirtSW', '横の幅', 0, 1.5, 0.01, 0.8], ['r', 'skirtSL', '横の長さ', 0.2, 2.2, 0.01, 1.2], ['r', 'skirtSOut', '横の開き', -10, 45, 1, 12], ['r', 'skirtSZ', '横の前後', -0.6, 0.6, 0.01, 0], ['r', 'skirtSTaper', '横の先', 0.5, 1.5, 0.01, 1.05],
     ['r', 'skirtBW', '後ろの幅', 0, 1.5, 0.01, 0.75], ['r', 'skirtBL', '後ろの長さ', 0.2, 2.2, 0.01, 1.0], ['r', 'skirtBTilt', '後ろの開き', -10, 45, 1, 12], ['r', 'skirtBOut', '後ろの外開き', -10, 45, 1, 5], ['r', 'skirtBTaper', '後ろの先', 0.5, 1.5, 0.01, 1.0]]],
   ['sec-shoulder', '肩', [['c', 'shoulder'], ['r', 'shW', '幅', 0.4, 2.2, 0.02, 1.25], ['r', 'shH', '高さ', 0.4, 2, 0.02, 1.1], ['r', 'shD', '奥行', 0.4, 2.2, 0.02, 1.3], ['r', 'shUp', '上下', -0.5, 0.8, 0.01, 0.2], ['r', 'shIn', '内の寄せ', -0.4, 0.4, 0.01, 0.15], ['r', 'shOutTilt', '外の傾き', -20, 45, 1, 12], ['r', 'shTopSlope', '上の傾き', 20, 85, 1, 60], ['r', 'shTopFrom', '上の傾きの始まり', 0, 1, 0.01, 0.35], ['r', 'shFacets', '角の面', 0, 3, 1, 1], ['r', 'shoulderPitch', '前後の傾き', -30, 30, 1, 0], ['r', 'shoulderRoll', '横の傾き', -30, 45, 1, 0],
-    ['r', 'shGrooveN', '溝の数', 0, 4, 1, 0], ['r', 'shGrooveW', '溝の幅', 0.02, 0.2, 0.005, 0.05], ['r', 'shGrooveL', '溝の長さ', 0.1, 1.2, 0.01, 0.5], ['r', 'shGrooveGap', '溝の間隔', 0.05, 0.5, 0.01, 0.18], ['r', 'shGrooveDepth', '溝の深さ', 0.01, 0.15, 0.005, 0.04]]],
-  ['sec-upperarm', '上腕', [['c', 'upperarm'], ['r', 'uaR', '太さ', 0.15, 0.9, 0.01, 0.42], ['r', 'uaDz', '前後の比', 0.6, 1.5, 0.01, 1.0], ['r', 'uaL', '長さ', 0.5, 2.5, 0.01, 1.5], ['r', 'uaTop', '上の倍率', 0.6, 1.4, 0.01, 1.0], ['r', 'uaBot', '下の倍率', 0.5, 1.3, 0.01, 0.9], ['r', 'uaN', '面の数', 4, 16, 1, 8], ['r', 'uaRot', '向き', 0, 45, 1, 0], ['r', 'elbowOverlap', '肘の覆い', 0, 0.6, 0.01, 0.3], ['r', 'elbowR', '肘の軸の太さ', 0.1, 0.5, 0.01, 0.26]]],
-  ['sec-forearm', '前腕', [['c', 'forearm'], ['r', 'faR', '太さ', 0.15, 0.9, 0.01, 0.38], ['r', 'faDz', '前後の比', 0.6, 1.5, 0.01, 1.05], ['r', 'faL', '長さ', 0.5, 2.5, 0.01, 1.5], ['r', 'faTop', '上の倍率', 0.6, 1.4, 0.01, 0.95], ['r', 'faBot', '下の倍率', 0.5, 1.3, 0.01, 0.85], ['r', 'faN', '面の数', 4, 16, 1, 8], ['r', 'faRot', '向き', 0, 45, 1, 0], ['r', 'faGauntlet', '籠手の張り', 0, 0.8, 0.01, 0.25], ['r', 'faGauntletL', '籠手の長さ', 0.2, 0.9, 0.01, 0.55], ['r', 'faGauntletTaper', '籠手の先', 0.5, 1.3, 0.01, 0.85], ['c', 'gauntlet', '籠手の色']]],
-  ['sec-hand', '手', [['c', 'hand'], ['r', 'handW', '幅', 0.2, 1, 0.01, 0.55], ['r', 'handH', '高さ', 0.3, 1.2, 0.01, 0.7], ['r', 'handD', '奥行', 0.3, 1.2, 0.01, 0.6], ['r', 'handFingers', '指の数', 1, 5, 1, 4]]],
-  ['sec-thigh', '腿', [['c', 'thigh'], ['r', 'thighR', '太さ', 0.2, 1.1, 0.01, 0.55], ['r', 'thighDz', '前後の比', 0.6, 1.5, 0.01, 1.05], ['r', 'thighL', '長さ', 0.8, 3.2, 0.01, 2.1], ['r', 'thighTop', '上の倍率', 0.6, 1.4, 0.01, 1.0], ['r', 'thighBot', '下の倍率', 0.5, 1.3, 0.01, 0.9], ['r', 'thighBulge', '膨らみ', 1, 1.4, 0.01, 1.0], ['r', 'thighN', '面の数', 4, 16, 1, 8], ['r', 'thighRot', '向き', 0, 45, 1, 0], ['r', 'kneeOverlap', '膝の覆い', 0, 0.6, 0.01, 0.3], ['r', 'kneeR', '膝の軸の太さ', 0.1, 0.6, 0.01, 0.3]]],
+    ['r', 'shGrooveN', '溝の数', 0, 4, 1, 0], ['r', 'shGrooveW', '溝の幅', 0.02, 0.2, 0.005, 0.05], ['r', 'shGrooveL', '溝の長さ', 0.1, 1.2, 0.01, 0.5], ['r', 'shGrooveGap', '溝の間隔', 0.05, 0.5, 0.01, 0.18], ['r', 'shGrooveDepth', '溝の深さ', 0.01, 0.15, 0.005, 0.04],
+    ['toggle', 'shSame', '左右同じ'], ['kinds', 'shR', [['box', '箱'], ['spike', 'スパイク'], ['shield', '盾'], ['round', '丸'], ['none', 'なし']], '右肩'], ['kinds', 'shL', [['box', '箱'], ['spike', 'スパイク'], ['shield', '盾'], ['round', '丸'], ['none', 'なし']], '左肩'], ['r', 'shLSize', '左の大きさ', 0.5, 1.6, 0.01, 1],
+    ['r', 'shSpikeN', 'スパイクの数', 1, 4, 1, 3], ['r', 'shSpikeL', 'スパイクの長さ', 0.1, 1.5, 0.01, 0.45], ['r', 'shSpikeR', 'スパイクの根元', 0.05, 0.4, 0.01, 0.14],
+    ['r', 'shShieldW', '盾の幅', 0.3, 2.2, 0.01, 1.1], ['r', 'shShieldH', '盾の高さ', 0.3, 3, 0.01, 1.7], ['r', 'shShieldT', '盾の厚み', 0.03, 0.3, 0.01, 0.12], ['r', 'shShieldTilt', '盾の傾き', -20, 30, 1, 4], ['r', 'shShieldUp', '盾の上下', -0.5, 1, 0.01, 0.35], ['r', 'shRoundN', '丸の面の数', 6, 16, 1, 10]]],
+  ['sec-pipe', 'パイプ', [['c', 'pipe'], ['toggle', 'pipeHead', '頭', false], ['toggle', 'pipeWaist', '腰', false], ['toggle', 'pipeLeg', '脚', false], ['r', 'pipeR', '太さ', 0.03, 0.25, 0.005, 0.09], ['r', 'pipeSegs', '節の数', 4, 24, 1, 12], ['r', 'pipeSag', 'たるみ', 0, 1, 0.01, 0.35], ['r', 'pipeHeadX', '頭の左右', 0, 0.5, 0.01, 0.12], ['r', 'pipeWaistY', '腰の上下', -0.6, 0.6, 0.01, 0], ['r', 'pipeLegY', '脚の上下', -0.6, 0.6, 0.01, 0]]],
+  ['sec-cannon', '砲', [['c', 'cannon'], ['kinds', 'can', [['none', 'なし'], ['right', '右'], ['both', '両方'], ['center', '中央']], 'どこに'], ['r', 'canR', '太さ', 0.06, 0.5, 0.01, 0.16], ['r', 'canL', '長さ', 0.3, 5, 0.02, 2.2], ['r', 'canBase', '基部の長さ', 0.1, 1.2, 0.01, 0.5], ['r', 'canX', '左右', 0, 2, 0.01, 0.9], ['r', 'canY', '上下', -1, 1.5, 0.01, 0.35], ['r', 'canZ', '前後', -1.5, 1, 0.01, -0.2], ['r', 'canPitch', '仰角', -20, 80, 1, 15]]],
+  ['sec-upperarm', '上腕', [['c', 'upperarm'], ['r', 'uaR', '太さ', 0.15, 0.9, 0.01, 0.42], ['r', 'uaDz', '前後の比', 0.6, 1.5, 0.01, 1.0], ['r', 'uaL', '長さ', 0.5, 2.5, 0.01, 1.5], ['r', 'uaTop', '上の倍率', 0.6, 1.4, 0.01, 1.0], ['r', 'uaBot', '下の倍率', 0.5, 1.3, 0.01, 0.9], ['r', 'uaN', '面の数', 4, 16, 1, 8], ['r', 'uaRot', '向き', 0, 45, 1, 0], ['r', 'elbowOverlap', '肘の覆い', 0, 0.6, 0.01, 0.3], ['r', 'elbowR', '肘の軸の太さ', 0.1, 0.5, 0.01, 0.26], ['r', 'uaBands', '蛇腹の段', 1, 9, 1, 1], ['r', 'bandSlim', '蛇腹の細さ', 0.6, 1, 0.01, 0.85]]],
+  ['sec-forearm', '前腕', [['c', 'forearm'], ['r', 'faR', '太さ', 0.15, 0.9, 0.01, 0.38], ['r', 'faDz', '前後の比', 0.6, 1.5, 0.01, 1.05], ['r', 'faL', '長さ', 0.5, 2.5, 0.01, 1.5], ['r', 'faTop', '上の倍率', 0.6, 1.4, 0.01, 0.95], ['r', 'faBot', '下の倍率', 0.5, 1.3, 0.01, 0.85], ['r', 'faN', '面の数', 4, 16, 1, 8], ['r', 'faRot', '向き', 0, 45, 1, 0], ['r', 'faGauntlet', '籠手の張り', 0, 0.8, 0.01, 0.25], ['r', 'faGauntletL', '籠手の長さ', 0.2, 0.9, 0.01, 0.55], ['r', 'faGauntletTaper', '籠手の先', 0.5, 1.3, 0.01, 0.85], ['c', 'gauntlet', '籠手の色'], ['r', 'faBands', '蛇腹の段', 1, 9, 1, 1]]],
+  ['sec-hand', '手', [['c', 'hand'], ['kinds', 'hand', [['fist', '握り拳'], ['claw', 'クロー'], ['cannon', '腕砲'], ['none', 'なし']], '型'], ['r', 'handW', '幅', 0.2, 1, 0.01, 0.55], ['r', 'handH', '高さ', 0.3, 1.2, 0.01, 0.7], ['r', 'handD', '奥行', 0.3, 1.2, 0.01, 0.6], ['r', 'handFingers', '指の数', 1, 5, 1, 4],
+    ['c', 'claw', '爪の色'], ['r', 'handClawN', '爪の数', 2, 5, 1, 3], ['r', 'handClawL', '爪の長さ', 0.1, 1.5, 0.01, 0.6], ['r', 'handClawR', '爪の根元', 0.03, 0.3, 0.01, 0.1], ['r', 'handClawOpen', '爪の開き', 0, 1, 0.01, 0.35], ['r', 'handClawTurn', '爪の向き', 0, 120, 1, 0],
+    ['r', 'handCanR', '腕砲の太さ', 0.6, 2, 0.01, 1.1], ['r', 'handCanL', '腕砲の長さ', 0.3, 2.5, 0.01, 0.9], ['r', 'handBarrels', '腕砲の砲身', 1, 4, 1, 1]]],
+  ['sec-thigh', '腿', [['c', 'thigh'], ['r', 'thighR', '太さ', 0.2, 1.1, 0.01, 0.55], ['r', 'thighDz', '前後の比', 0.6, 1.5, 0.01, 1.05], ['r', 'thighL', '長さ', 0.8, 3.2, 0.01, 2.1], ['r', 'thighTop', '上の倍率', 0.6, 1.4, 0.01, 1.0], ['r', 'thighBot', '下の倍率', 0.5, 1.3, 0.01, 0.9], ['r', 'thighBulge', '膨らみ', 1, 1.4, 0.01, 1.0], ['r', 'thighN', '面の数', 4, 16, 1, 8], ['r', 'thighRot', '向き', 0, 45, 1, 0], ['r', 'kneeOverlap', '膝の覆い', 0, 0.6, 0.01, 0.3], ['r', 'kneeR', '膝の軸の太さ', 0.1, 0.6, 0.01, 0.3], ['r', 'thighBands', '蛇腹の段', 1, 9, 1, 1]]],
   ['sec-knee', '膝当て', [['c', 'knee'], ['canvas', 'knee'], ['r', 'kneeN', '角の数', 3, 10, 1, 4], ['r', 'kneeS', '大きさ', 0.1, 1, 0.01, 0.42], ['r', 'kneeAspect', '縦横の比', 0.5, 2, 0.01, 1.2], ['r', 'kneeOut', '出', 0.03, 0.5, 0.01, 0.16], ['r', 'kneeTaper', '先細り', 0.3, 1.2, 0.01, 0.75], ['r', 'kneeTilt', '傾き', -30, 60, 1, 12], ['r', 'kneeY', '上下', -0.6, 0.6, 0.01, 0.1], ['r', 'kneeZ', '前後', -0.3, 0.3, 0.01, 0]]],
-  ['sec-shin', '脛', [['c', 'shin'], ['r', 'shinR', '太さ', 0.2, 1.1, 0.01, 0.48], ['r', 'shinDz', '前後の比', 0.6, 1.5, 0.01, 1.05], ['r', 'shinL', '長さ', 0.8, 3.2, 0.01, 2.1], ['r', 'shinTop', '上の倍率', 0.6, 1.4, 0.01, 0.95], ['r', 'shinCalf', 'ふくらはぎの張り', 0, 1.6, 0.01, 1.18], ['r', 'shinCalfAt', 'ふくらはぎの高さ', 0.1, 0.8, 0.01, 0.35], ['r', 'shinAnkle', '足首の絞り', 0.4, 1.2, 0.01, 0.72], ['r', 'shinHem', '裾の広がり', 0, 0.8, 0.01, 0.3], ['r', 'shinN', '面の数', 4, 16, 1, 8], ['r', 'shinRot', '向き', 0, 45, 1, 0]]],
+  ['sec-shin', '脛', [['c', 'shin'], ['r', 'shinR', '太さ', 0.2, 1.1, 0.01, 0.48], ['r', 'shinDz', '前後の比', 0.6, 1.5, 0.01, 1.05], ['r', 'shinL', '長さ', 0.8, 3.2, 0.01, 2.1], ['r', 'shinTop', '上の倍率', 0.6, 1.4, 0.01, 0.95], ['r', 'shinCalf', 'ふくらはぎの張り', 0, 1.6, 0.01, 1.18], ['r', 'shinCalfAt', 'ふくらはぎの高さ', 0.1, 0.8, 0.01, 0.35], ['r', 'shinAnkle', '足首の絞り', 0.4, 1.2, 0.01, 0.72], ['r', 'shinHem', '裾の広がり', 0, 0.8, 0.01, 0.3], ['r', 'shinN', '面の数', 4, 16, 1, 8], ['r', 'shinRot', '向き', 0, 45, 1, 0], ['r', 'shinBands', '蛇腹の段', 1, 9, 1, 1]]],
   ['sec-foot', '足', [['c', 'foot'], ['r', 'footW', '幅', 0.3, 1.6, 0.01, 0.8], ['r', 'footH', '高さ', 0.15, 0.9, 0.01, 0.45], ['r', 'footFront', 'つま先の長さ', 0.3, 1.8, 0.01, 1.0], ['r', 'footBack', 'かかとの長さ', 0.1, 1, 0.01, 0.45], ['r', 'footToeH', 'つま先の高さ', 0.05, 0.5, 0.01, 0.18], ['r', 'footToeIn', 'つま先の引き', 0, 0.5, 0.01, 0.15], ['r', 'footSideSlope', '側の開き', -15, 30, 1, 8], ['r', 'footFacets', '角の面', 0, 3, 1, 1], ['r', 'footGuard', '甲の装甲', 0, 0.4, 0.01, 0.1]]],
   ['sec-pack', '背中', [['c', 'pack'], ['r', 'packW', '幅', 0.4, 3, 0.02, 1.5], ['r', 'packH', '高さ', 0.3, 2.5, 0.02, 1.3], ['r', 'packD', '奥行', 0.2, 1.5, 0.02, 0.6], ['r', 'packY', '上下', 0, 2, 0.01, 0.9], ['r', 'packTaper', '下の絞り', -10, 30, 1, 6], ['r', 'packBackTilt', '背の傾き', -20, 30, 1, 5], ['r', 'packFacets', '角の面', 0, 2, 1, 1],
     ['r', 'thrN', '噴射口の数', 0, 3, 1, 2], ['r', 'thrR', '噴射口の太さ', 0.08, 0.6, 0.01, 0.26], ['r', 'thrL', '噴射口の長さ', 0.1, 1.2, 0.01, 0.45], ['r', 'thrTilt', '噴射口の傾き', 0, 80, 1, 25], ['c', 'thruster', '噴射口の色'],
@@ -1412,6 +1605,8 @@ const BODY_SECS = [
     for (const r of rows) {
       if (r[0] === 'toggle') { toggles += `<button data-t="${r[1]}">${r[2]}</button>`; if (!(r[1] in P)) P[r[1]] = r[3] !== false; continue; }
       flush();
+      if (r[0] === 'eyecolor') { html += `<div class="row"><label>${r[2]}</label><input type="color" id="${r[1]}" value="#ff5a4a" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"></div>`; continue; }
+      if (r[0] === 'kinds') { html += `<div class="btns"><span style="color:#aaa;align-self:center">${r[3]}</span>${r[2].map(([k, l]) => `<button data-kind="${k}" data-pre="${r[1]}">${l}</button>`).join('')}</div>`; if (!((r[1] + 'Kind') in P)) P[r[1] + 'Kind'] = r[4] || r[2][0][0]; continue; }
       if (r[0] === 'r') { html += `<div class="row"><label>${r[2]}</label><input type="range" id="${r[1]}" min="${r[3]}" max="${r[4]}" step="${r[5]}" value="${r[6]}"><span class="val"></span></div>`; if (!(r[1] in P)) P[r[1]] = r[6]; }
       else if (r[0] === 'c') { html += colorRow(r[1], r[2]); if (!((r[1] + 'Color') in P)) P[r[1] + 'Color'] = ''; }
       else if (r[0] === 'canvas') { html += `<div class="btns"><button id="kneeTrap">台形に戻す</button><button id="kneeReset">正多角形に戻す</button></div><canvas id="kneeCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas><div style="color:#777;margin:-2px 0 4px">正面から見た膝当ての形。左右は常に対称</div>`; if (!('kneePts' in P)) P.kneePts = null; }
@@ -1420,6 +1615,7 @@ const BODY_SECS = [
   }
   document.getElementById('toggles').insertAdjacentHTML('beforebegin', html);
 }
+if (!('chestEyeColor' in P)) P.chestEyeColor = '#ff5a4a';
 const BODY_KEYS = Object.keys(P).filter(k => !HEAD_KEYS.includes(k));
 // 欄は部位ごとに包んで、模型（か 3D）で押した部位の欄だけを出す
 const UI_KEY = 'crystal-head-ui';
@@ -1483,6 +1679,197 @@ for (const g of document.querySelectorAll('#map .pt')) {
   g.addEventListener('mouseleave', () => mapLabel(openId ? document.getElementById(openId).textContent : HINT));
 }
 for (const h of document.querySelectorAll('#ui .sec h2')) h.addEventListener('click', () => openSec(null));   // 題名を押すと閉じる
+// ---- 見本の機体：家系の土台（BASES）と、それに重ねる差分（SAMPLES）。名前は本作のもの ----
+// [SAMPLES-BEGIN]
+// 見本の機体：決め打ちの値は入れない（依頼主、2026-10-20）。家系の土台と差分の仕組みだけ残す
+const BASES = {};
+const SAMPLES = [];
+// [SAMPLES-END]
+function sampleValues(sm) { const b = sm.base ? BASES[sm.base] || {} : {}; return { ...b, ...(sm.v || {}) }; }
+function openSample(i) {
+  const sm = SAMPLES[i]; if (!sm) return;
+  const vals = sampleValues(sm);
+  for (const k of Object.keys(P)) if (!(k in vals)) P[k] = JSON.parse(JSON.stringify(DEFAULTS[k]));   // 見本に無い値は初期値
+  Object.assign(P, JSON.parse(JSON.stringify(vals)));
+  syncUI(); save(); build();
+}
+{
+  const sel = document.getElementById('sampleSel');
+  const fill = () => { sel.textContent = ''; let grp = null, g = null; for (let i = 0; i < SAMPLES.length; i++) { const sm = SAMPLES[i]; if (sm.group !== grp) { grp = sm.group; g = document.createElement('optgroup'); g.label = grp; sel.append(g); } const o = document.createElement('option'); o.value = i; o.textContent = sm.name; (g || sel).append(o); } if (!SAMPLES.length) { const o = document.createElement('option'); o.textContent = '（まだありません）'; sel.append(o); } };
+  fill(); window.__fillSamples = fill;
+  if (!SAMPLES.length) document.getElementById('samples').style.display = 'none';
+  document.getElementById('sampleOpen').onclick = () => openSample(+sel.value);
+  sel.addEventListener('dblclick', () => openSample(+sel.value));
+}
+window.__openSample = openSample; window.__SAMPLES = SAMPLES; window.__BASES = BASES;
+// ---- 型：Ver2 の部品（平面で囲った塊の集まり）を、組ごとのつまみ（大きさ・位置・面の出し入れ・数）で動かす部品にしたもの ----
+// 元データは tools/v3import.mjs が xs-editor/v3/parts/<id>.json に書く。部位の欄の「型」で選ぶ
+const TPL = {}, TPL_LOADING = new Set(); let TPL_INDEX = null;
+const TPL_CATS = ['chest', 'abd', 'shoulder', 'shin', 'foot', 'pelvis', 'upperarm', 'forearm', 'hand', 'thigh', 'knee', 'pack'];
+const DIRS = [['f', '前', [0, 0, 1]], ['b', '後ろ', [0, 0, -1]], ['u', '上', [0, 1, 0]], ['d', '下', [0, -1, 0]], ['o', '外', [1, 0, 0]], ['i', '内', [-1, 0, 0]]];
+const dirOf = ([a, b, c]) => { for (const [k, , v] of DIRS) if (a * v[0] + b * v[1] + c * v[2] > 0.7) return k; return ''; };
+const savedKnobs = (() => { try { return JSON.parse(localStorage.getItem('crystal-head-knobs') || '{}'); } catch (e) { return {}; } })();
+function regKnob(key, def) { if (!(key in P)) P[key] = key in savedKnobs ? savedKnobs[key] : def; if (typeof DEFAULTS === 'object' && !(key in DEFAULTS)) DEFAULTS[key] = def; }
+// 塊の外接（軸に沿う面の距離から）と中心
+function extentsOf(planes) {
+  const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+  for (const [a, b, c, d] of planes) { const n = [a, b, c]; for (let i = 0; i < 3; i++) { if (n[i] > 0.8) mx[i] = Math.max(mx[i], d / n[i]); else if (n[i] < -0.8) mn[i] = Math.min(mn[i], d / n[i]); } }
+  for (let i = 0; i < 3; i++) { if (!isFinite(mn[i])) mn[i] = isFinite(mx[i]) ? mx[i] : 0; if (!isFinite(mx[i])) mx[i] = mn[i]; }
+  return { mn, mx, c: [0, 1, 2].map(i => (mn[i] + mx[i]) / 2) };
+}
+function prepTpl(t) {
+  const groups = [];
+  for (const pc of t.pieces) {
+    pc.ext = extentsOf(pc.planes);
+    let g = groups.find(x => x.name === pc.group); if (!g) { g = { name: pc.group, pieces: [], dirs: new Set() }; groups.push(g); }
+    g.pieces.push(pc); for (const pl of pc.planes) { const k = dirOf(pl); if (k) g.dirs.add(k); }
+  }
+  for (const g of groups) { const cs = g.pieces.map(pc => pc.ext.c); g.center = [0, 1, 2].map(i => cs.reduce((a, c) => a + c[i], 0) / cs.length); g.numbered = g.pieces.length > 1 && g.pieces.every(pc => /\d+$/.test(pc.name.replace(/（.*）$/, '').trim()) || /（鏡）$/.test(pc.name)); }
+  t.groups = groups;
+  // 部位の座標の原点：軸のある塊（pivot）があればその中心、無ければ外接の上の真ん中
+  const piv = t.pieces.find(pc => pc.center); const all = extentsOf(t.pieces.flatMap(pc => pc.planes));
+  t.origin = piv ? piv.center.slice() : [all.c[0], all.mx[1], all.c[2]];
+  if (t.cat === 'shoulder') t.origin = [0, 0, 0];
+  t.all = all;
+  // つまみを登録
+  const pre = 't_' + t.id + '_';
+  regKnob(pre + 'k', 3.0); regKnob(pre + 'ox', 0); regKnob(pre + 'oy', 0); regKnob(pre + 'oz', 0); regKnob(pre + 'own', false);
+  t.groups.forEach((g, gi) => { const gp = pre + 'g' + gi + '_'; regKnob(gp + 'on', true); regKnob(gp + 's', 1); for (const a of ['x', 'y', 'z']) regKnob(gp + a, 0); for (const [k] of DIRS) if (g.dirs.has(k)) regKnob(gp + k, 0); if (g.numbered) regKnob(gp + 'n', g.pieces.length); });
+}
+async function ensureTpl(id) {
+  if (TPL[id] || TPL_LOADING.has(id)) return;
+  TPL_LOADING.add(id);
+  try { const t = await (await fetch('./v3/parts/' + id + '.json', { cache: 'reload' })).json(); prepTpl(t); TPL[id] = t; build(); for (const cat of TPL_CATS) if (P[cat + 'TKind'] === id) renderTplKnobs(cat); }
+  catch (e) { document.getElementById('err').textContent = '型を読めませんでした：' + id + '（' + (e.message || e) + '）'; }
+  TPL_LOADING.delete(id);
+}
+// 型を描く：S は部位の座標、部位の原点に型の原点を合わせ、倍率 k で大きくする。平面 n·p <= d は、原点を o へ移して k 倍すると d' = k(d − n·o)
+function drawTemplate(id, S, part) {
+  const t = TPL[id]; if (!t) { ensureTpl(id); return false; }
+  const pre = 't_' + id + '_', k = P[pre + 'k'], off = [P[pre + 'ox'], P[pre + 'oy'], P[pre + 'oz']], o = t.origin, own = P[pre + 'own'];
+  setPart(part);
+  const partCol = colOf(TPL_PART_COLOR[part] || 'chest');
+  t.groups.forEach((g, gi) => {
+    const gp = pre + 'g' + gi + '_'; if (!P[gp + 'on']) return;
+    const n = g.numbered ? P[gp + 'n'] : g.pieces.length, sc = P[gp + 's'], tv = [P[gp + 'x'], P[gp + 'y'], P[gp + 'z']], c = g.center;
+    const shown = g.numbered ? g.pieces.filter(pc => { const m = pc.name.replace(/（鏡）$/, '').match(/(\d+)$/); return !m || +m[1] <= n; }) : g.pieces;
+    for (const pc of shown) {
+      const planes = pc.planes.map(([a, b, cc, d]) => {
+        const nc = a * c[0] + b * c[1] + cc * c[2];
+        let dd = sc * (d - nc) + nc + (a * tv[0] + b * tv[1] + cc * tv[2]);
+        const dk = dirOf([a, b, cc]); if (dk && gp + dk in P) dd += P[gp + dk];
+        const nn = new V(a, b, cc);
+        return { n: nn, d: k * (dd - (a * o[0] + b * o[1] + cc * o[2])) + (a * off[0] + b * off[1] + cc * off[2]) };
+      });
+      const col = own ? (pc.glow ? new THREE.Color(pc.color) : partCol) : new THREE.Color(pc.color);
+      if (pc.glow) { const km = M; M = G; crystalAt(S, planes, col); M = km; } else crystalAt(S, planes, col);
+    }
+  });
+  return true;
+}
+const TPL_PART_COLOR = {};
+Object.assign(TPL_PART_COLOR, { 18: 'chest', 19: 'abd', 22: 'shoulder', 28: 'shin', 29: 'foot', 20: 'pelvis', 23: 'upperarm', 24: 'forearm', 25: 'hand', 26: 'thigh', 27: 'knee', 30: 'pack' });
+// 欄：型のボタンと、選んだ型のつまみ
+function tplSecOf(cat) { return document.querySelector('#ui .sec[data-sec="sec-' + cat + '"]'); }
+function addTplKinds(cat) {
+  const sec = tplSecOf(cat); if (!sec || !TPL_INDEX[cat]) return;
+  regKnob(cat + 'TKind', 'crystal');
+  let row = sec.querySelector('.tplrow');
+  if (!row) {
+    row = document.createElement('div'); row.className = 'btns tplrow';
+    const lab = document.createElement('span'); lab.style.cssText = 'color:#aaa;align-self:center'; lab.textContent = '型'; row.append(lab);
+    const b0 = document.createElement('button'); b0.dataset.kind = 'crystal'; b0.dataset.pre = cat + 'T'; b0.textContent = '結晶'; row.append(b0);
+    sec.querySelector('h2').after(row);
+    const kn = document.createElement('div'); kn.className = 'tplknobs'; row.after(kn);
+  }
+  for (const e of TPL_INDEX[cat]) { if (row.querySelector(`button[data-kind="${e.id}"]`)) continue; const b = document.createElement('button'); b.dataset.kind = e.id; b.dataset.pre = cat + 'T'; b.textContent = e.name; row.append(b); }
+  for (const b of row.querySelectorAll('button[data-kind]')) b.onclick = () => { P[cat + 'TKind'] = b.dataset.kind; syncUI(); save(); build(); renderTplKnobs(cat); };
+  renderTplKnobs(cat);
+}
+function wireRange(el) { el.addEventListener('input', () => { P[el.id] = +el.value; syncUI(); HIST.co = true; save(); HIST.co = false; build(); }); }
+function rangeRow(id, label, min, max, step) {
+  const row = document.createElement('div'); row.className = 'row';
+  const lab = document.createElement('label'); lab.textContent = label;
+  const inp = document.createElement('input'); inp.type = 'range'; inp.id = id; inp.min = min; inp.max = max; inp.step = step; inp.value = P[id];
+  const val = document.createElement('span'); val.className = 'val';
+  row.append(lab, inp, val); wireRange(inp); return row;
+}
+function toggleBtn(key, label) { const b = document.createElement('button'); b.dataset.t = key; b.textContent = label; b.classList.toggle('on', !!P[key]); b.onclick = () => { P[key] = !P[key]; syncUI(); save(); build(); }; return b; }
+function renderTplKnobs(cat) {
+  const sec = tplSecOf(cat); if (!sec) return; const box = sec.querySelector('.tplknobs'); if (!box) return;
+  box.textContent = '';
+  const id = P[cat + 'TKind']; if (!id || id === 'crystal') return;
+  const t = TPL[id]; if (!t) { box.textContent = '型を読んでいます…'; ensureTpl(id); return; }
+  const pre = 't_' + id + '_';
+  const top = document.createElement('div'); top.className = 'btns'; top.append(toggleBtn(pre + 'own', '部位の色で塗る')); box.append(top);
+  box.append(rangeRow(pre + 'k', '倍率', 1, 6, 0.01), rangeRow(pre + 'ox', '左右', -1.5, 1.5, 0.01), rangeRow(pre + 'oy', '上下', -1.5, 1.5, 0.01), rangeRow(pre + 'oz', '前後', -1.5, 1.5, 0.01));
+  t.groups.forEach((g, gi) => {
+    const gp = pre + 'g' + gi + '_';
+    const det = document.createElement('details'); const sum = document.createElement('summary'); sum.textContent = g.name + (g.pieces.length > 1 ? `（${g.pieces.length}）` : ''); det.append(sum);
+    const bt = document.createElement('div'); bt.className = 'btns'; bt.append(toggleBtn(gp + 'on', '出す')); det.append(bt);
+    det.append(rangeRow(gp + 's', '大きさ', 0.3, 2.5, 0.01), rangeRow(gp + 'x', '左右', -0.3, 0.3, 0.002), rangeRow(gp + 'y', '上下', -0.3, 0.3, 0.002), rangeRow(gp + 'z', '前後', -0.3, 0.3, 0.002));
+    for (const [k, lab] of DIRS) if (g.dirs.has(k)) det.append(rangeRow(gp + k, lab + 'の面', -0.15, 0.15, 0.001));
+    if (g.numbered) det.append(rangeRow(gp + 'n', '数', 0, g.pieces.length, 1));
+    box.append(det);
+  });
+  syncUI();
+}
+async function loadTplIndex() {
+  try { TPL_INDEX = await (await fetch('./v3/parts/index.json', { cache: 'reload' })).json(); } catch (e) { TPL_INDEX = {}; }
+  for (const cat of TPL_CATS) if (TPL_INDEX[cat]) addTplKinds(cat);
+  for (const cat of TPL_CATS) if (P[cat + 'TKind'] && P[cat + 'TKind'] !== 'crystal') ensureTpl(P[cat + 'TKind']);
+}
+window.__TPL = TPL; window.__ensureTpl = ensureTpl;
+// ---- Ver2 の機体を読む：Ver2 の仕組み（unitparts.js / xsengine.js。同じフォルダに要る）で部品を置き、形にして横に並べる ----
+let V2 = null, v2Group = null, v2Doc = null;
+const V2_LIST = [['../F1型.json', 'F1 型（友人の機体）'], ...['a_raid', 'a_raid_hover', 'b_raid', 'b_raid_hover', 'a_heavy', 'b_heavy', 'b_heavy_hover', 'a_aqua', 'b_aqua', 'a_aqua_heavy', 'b_aqua_heavy', 'b_aqua_heavy_hover', 'a_artillery_leg', 'b_artillery_leg', 'b_artillery_leg_hover', 'a_sniper', 'b_sniper', 'a_support', 'b_support'].map(id => ['../tools/xs-models/units/' + id + '.json', id])];
+{ const sel = document.getElementById('v2Sel'); for (const [u, n] of V2_LIST) { const o = document.createElement('option'); o.value = u; o.textContent = n; sel.append(o); } }
+async function loadV2(doc, label) {
+  const st = document.getElementById('v2stat'); st.textContent = '読んでいます…';
+  try {
+    if (!V2) { const [eng, up] = await Promise.all([import('./xsengine.js'), import('./unitparts.js')]); V2 = { XS: eng.XS, up }; }
+    V2.XS.load({ parts: [], ai: '', role: '' });
+    await V2.XS.applyUnit(doc);
+    const pieces = V2.XS.view('待機', 0);
+    clearV2(false);
+    v2Group = new THREE.Group(); v2Group.name = 'v2';
+    for (const pc of pieces) {
+      const mat = pc.glow ? new THREE.MeshBasicMaterial({ color: pc.color }) : new THREE.MeshStandardMaterial({ color: pc.color, metalness: pc.metal ?? 0.3, roughness: pc.rough ?? 0.6, transparent: pc.opacity < 1, opacity: pc.opacity ?? 1 });
+      const m = new THREE.Mesh(pc.geo, mat); if (pc.matrix) m.applyMatrix4(pc.matrix); v2Group.add(m);
+    }
+    v2Doc = doc; scene.add(v2Group); placeV2();
+    st.textContent = `${label || doc.name || 'Ver2'}：部品 ${pieces.length}`;
+  } catch (e) { st.textContent = '読めませんでした：' + (e.message || e); console.error(e); }
+}
+// 置き方：Ver3 の体と同じ高さに縮めて、足の裏をそろえる。横に並べるか、重ねるか
+function placeV2() {
+  if (!v2Group) return;
+  v2Group.scale.set(1, 1, 1); v2Group.position.set(0, 0, 0); v2Group.updateMatrixWorld(true);
+  const b2 = new THREE.Box3().setFromObject(v2Group), h2 = b2.max.y - b2.min.y;
+  const g0 = group && group.children[0].geometry; let b3 = null; if (g0) { g0.computeBoundingBox(); b3 = g0.boundingBox; }
+  const h3 = b3 ? b3.max.y - b3.min.y : 9.6, k = h3 / (h2 || 1);
+  v2Group.scale.setScalar(k);
+  const cx = (b2.min.x + b2.max.x) / 2 * k, cz = (b2.min.z + b2.max.z) / 2 * k, bottom = b2.min.y * k;
+  const w3 = b3 ? b3.max.x - b3.min.x : 6, w2 = (b2.max.x - b2.min.x) * k;
+  v2Group.position.set(P.v2Side && !P.v2Only ? w3 / 2 + w2 / 2 + 0.8 - cx : -cx, (b3 ? b3.min.y : -8.4) - bottom, -cz);
+  if (group) group.visible = !P.v2Only;
+  // 枠：両方が入る大きさに
+  v2Group.updateMatrixWorld(true);
+  const u = new THREE.Box3().setFromObject(v2Group); if (b3 && !P.v2Only) u.union(b3);
+  const c = u.getCenter(new V()), sz = u.getSize(new V());
+  BODY_FRAME = { t: new V(c.x, c.y, c.z * 0.3), d: Math.max(sz.y, sz.x * 0.9, sz.z * 0.9) * 2.05 + 1 };
+  if (mapMode !== 'head') setView(curView);
+}
+function clearV2(resetStat = true) { if (v2Group && resetStat) { setTimeout(() => build(), 0); } if (v2Group) { scene.remove(v2Group); v2Group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); v2Group = null; } if (group) group.visible = true; if (resetStat) document.getElementById('v2stat').textContent = ''; }
+document.getElementById('v2Open').onclick = async () => {
+  const u = document.getElementById('v2Sel').value;
+  if (!u) { document.getElementById('v2File').click(); return; }
+  try { const r = await fetch(u, { cache: 'reload' }); if (!r.ok) throw new Error(String(r.status)); await loadV2(await r.json(), document.getElementById('v2Sel').selectedOptions[0].textContent); }
+  catch (e) { document.getElementById('v2stat').textContent = '読めませんでした：' + (e.message || e); }
+};
+document.getElementById('v2File').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { try { loadV2(JSON.parse(rd.result), f.name); } catch (err) { document.getElementById('v2stat').textContent = '読めませんでした：' + err.message; } }; rd.readAsText(f); e.target.value = ''; });
+document.getElementById('v2Clear').onclick = () => clearV2();
+window.__loadV2 = loadV2; window.__v2 = () => v2Group;
 const LIB_KEY = 'v3-library';
 const readLib = () => { try { return JSON.parse(localStorage.getItem(LIB_KEY) || '{}'); } catch (e) { return {}; } };
 const writeLib = o => { try { localStorage.setItem(LIB_KEY, JSON.stringify(o)); } catch (e) {} };
@@ -1515,6 +1902,7 @@ document.getElementById('libName').addEventListener('keydown', e => { if (e.key 
 showMap((() => { try { return localStorage.getItem(UI_KEY + '-map') === 'head' ? 'head' : 'body'; } catch (e) { return 'body'; } })());
 openSec((() => { try { return localStorage.getItem(UI_KEY) || null; } catch (e) { return null; } })());
 setView('iso');
+loadTplIndex();
 window.__openSec = openSec; window.__flashPart = flashPart;
 function flashPart(targetId) {
   const el = document.getElementById(targetId);
@@ -1575,6 +1963,17 @@ addEventListener('keydown', e => {
   if (k === 'y' || e.shiftKey) redo(); else undo();
 });
 window.__hist = HIST; window.__undo = undo; window.__redo = redo;
+// 確かめる道具：決まった大きさで描いて PNG にする（view: iso/front/side/top/back、置き場所へ送る）
+window.__shot = async (view, w = 900, h = 1200, post = '') => {
+  const keepW = canvas.width, keepH = canvas.height, keepPos = camera.position.clone(), keepT = controls.target.clone();
+  renderer.setPixelRatio(1); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  if (view === 'back') { const { t, d } = frameOf(); camera.position.set(t.x, t.y + 0.1, t.z - d); controls.target.copy(t); controls.update(); } else setView(view);
+  controls.update(); renderer.render(scene, camera);
+  const url = canvas.toDataURL('image/png');
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio)); resize(); camera.position.copy(keepPos); controls.target.copy(keepT); controls.update();
+  if (post) { const r = await fetch(post, { method: 'POST', body: url }); return await r.text(); }
+  return url;
+};
 const seedEl = document.getElementById('seed');
 function syncUI() {
   for (const el of document.querySelectorAll('input[type=range]')) { el.value = P[el.id]; const val = el.parentElement.querySelector('.val'); val.textContent = Number.isInteger(+el.step) && +el.step >= 1 ? String(P[el.id]) : (+P[el.id]).toFixed(2); }
@@ -1582,6 +1981,7 @@ function syncUI() {
   for (const el of document.querySelectorAll('input.seedin')) el.value = P[el.id];
   document.getElementById('monoColor').value = P.monoColor;
   document.getElementById('twinColor').value = P.twinColor; document.getElementById('twinFrameColor').value = P.twinFrameColor;
+  if (document.getElementById('chestEyeColor')) document.getElementById('chestEyeColor').value = P.chestEyeColor;
   if (typeof drawTwin === 'function') { drawTwin(); drawEar(); drawChin(); drawFace(); drawSec(); drawNeck(); drawKnee(); }
   for (const pre of COLOR_PRES) { const el = document.getElementById(pre + 'Color'); if (el && (P[pre + 'Color'] || (COL && PAINT[pre]))) el.value = P[pre + 'Color'] || '#' + PC(pre).getHexString(); }
   for (const b of document.querySelectorAll('button[data-t]')) b.classList.toggle('on', !!P[b.dataset.t]);
@@ -1706,6 +2106,7 @@ document.getElementById('kneeReset').onclick = () => { P.kneePts = regularEye(P.
 document.getElementById('kneeTrap').onclick = () => { P.kneeN = 4; P.kneePts = TRAPEZOID.map(q => q.slice()); syncUI(); save(); build(); };
 document.getElementById('kneeN').addEventListener('input', () => { P.kneePts = defaultShape('kneePts', P.kneeN); save(); build(); drawKnee(); });
 for (const pre of COLOR_PRES.slice(6)) document.getElementById(pre + 'Color').addEventListener('input', e => { P[pre + 'Color'] = e.target.value; save(); build(); if (pre === 'knee') drawKnee(); });
+document.getElementById('chestEyeColor').addEventListener('input', e => { P.chestEyeColor = e.target.value; save(); build(); });
 // ガチャ：その欄のつまみを乱数で引き直す。戻すで 1 つ前へ
 const GACHA_HIST = { crest: [], horn: [] };
 const CREST_KEYS = ['Kind', 'Size', 'T', 'Y', 'Z', 'Fold', 'Split', 'RotX', 'RotY', 'VOpen'];
