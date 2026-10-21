@@ -5,24 +5,38 @@
 <title>機体エディタ Ver3</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  html,body{margin:0;height:100%;background:#1b1d22;color:#ddd;font:12px/1.4 system-ui,"Segoe UI","Yu Gothic UI",sans-serif;overflow:hidden}
-  canvas{display:block;width:100%;height:100%}
-  #ui{position:fixed;left:12px;top:12px;width:250px;max-height:calc(100% - 24px);overflow:auto;background:rgba(20,22,27,.9);border:1px solid #333;border-radius:8px;padding:8px 12px;backdrop-filter:blur(6px)}
-  #ui h1{font-size:14px;margin:0 0 6px;font-weight:600}
-  #ui h2{font-size:11px;margin:8px 0 2px;color:#8a9;font-weight:600;letter-spacing:.05em}
-  .row{display:flex;align-items:center;gap:6px;margin:2px 0}
-  .row label{width:86px;flex:none;color:#aaa}
-  .row input[type=range]{flex:1;min-width:0;height:14px}
-  .row .val{width:34px;text-align:right;color:#8fb;font-variant-numeric:tabular-nums}
-  .btns{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0}
-  .btns button{background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:3px 8px;cursor:pointer}
-  .btns button.on{background:#4a7;color:#fff;border-color:#4a7}
-  .btns button:disabled{opacity:.4;cursor:default}
+  :root{--pw:380px;--bh:44px}
+  html,body{margin:0;height:100%;background:#1b1d22;color:#ddd;font:14px/1.45 system-ui,"Segoe UI","Yu Gothic UI",sans-serif;overflow:hidden}
+  canvas{display:block}
+  #c{position:fixed;left:0;top:0;width:calc(100% - var(--pw));height:100%}
+  /* 上の帯：道具 */
+  #bar{position:fixed;left:0;top:0;right:var(--pw);min-height:var(--bh);display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 10px;background:rgba(20,22,27,.85);border-bottom:1px solid #2c3038;backdrop-filter:blur(6px);white-space:nowrap;z-index:5;box-sizing:border-box}
+  #bar h1{font-size:14px;margin:0 6px 0 0;font-weight:600;color:#9bd;flex:none}
+  #bar .grp{display:flex;align-items:center;gap:4px;padding-right:10px;border-right:1px solid #333;flex:none}
+  #bar .grp.last{border-right:0}
+  #bar .cap{color:#889;margin-right:2px}
+  #bar button,.btns button,.pop button,#toc button,.seedrow button{background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:6px;padding:4px 10px;cursor:pointer;font:inherit;line-height:1.2}
+  button.on{background:#4a7;color:#fff;border-color:#4a7}
+  button:disabled{opacity:.4;cursor:default}
+  #stat{margin-left:auto;color:#889;font-size:12px;flex:none}
+  .pop{position:fixed;top:calc(var(--bh) + 4px);display:none;width:380px;max-height:70vh;overflow:auto;background:rgba(20,22,27,.97);border:1px solid #3a3f47;border-radius:8px;padding:8px 10px;z-index:6;box-shadow:0 8px 24px rgba(0,0,0,.5);box-sizing:border-box}
+  /* 右の欄 */
+  #ui{position:fixed;right:0;top:0;bottom:0;width:var(--pw);box-sizing:border-box;overflow:auto;background:#15171b;border-left:1px solid #2c3038;padding:8px 12px 24px}
+  #ui h2{font-size:15px;margin:10px 0 4px;color:#8a9;font-weight:600;padding-bottom:4px;border-bottom:1px solid #2c3038}
+  .row{display:flex;align-items:center;gap:8px;margin:0;padding:3px 4px;border-radius:5px}
+  #ui .row:hover{background:rgba(255,255,255,.06)}
+  .row label{width:118px;flex:none;color:#bbb}
+  .row input[type=range]{flex:1;min-width:0;height:18px;accent-color:#4a7}
+  .row input.val{width:66px;flex:none;box-sizing:border-box;background:#1b1d22;color:#8fb;border:1px solid #3a3f47;border-radius:5px;padding:3px 4px;text-align:right;font:inherit;font-variant-numeric:tabular-nums}
+  .row input.val:focus{outline:1px solid #4a7}
+  .btns{display:flex;gap:4px;flex-wrap:wrap;margin:5px 0;align-items:center}
   #ui .sec{display:none}
   #ui .sec.open{display:block}
   #ui .sec h2{cursor:pointer}
-  #ui .sec h2::after{content:"　×";color:#667}
-  #map,#mapBody{display:block;width:100%;height:auto;margin:4px 0 0;user-select:none}
+  #ui .sec h2::after{content:"×";float:right;color:#667;font-weight:400}
+  #toc{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 2px}
+  #toc button{padding:3px 8px;font-size:13px}
+  #map,#mapBody{display:block;width:88%;height:auto;margin:4px auto 0;user-select:none}
   #mapBody .pt{fill:#2b2f37;stroke:#5a6068;stroke-width:1;cursor:pointer}
   #mapBody .pt:hover{fill:#3b4553}
   #mapBody .pt.todo{fill:#22252b;stroke-dasharray:3 2}
@@ -34,26 +48,26 @@
   #map .pt{fill:#2b2f37;stroke:#5a6068;stroke-width:1;cursor:pointer}
   #map .pt:hover{fill:#3b4553}
   #map .pt.on{fill:#4a7;stroke:#8fd}
-  #map .pt.flash{animation:flpt 1.2s ease-out}
-  @keyframes flpt{0%{fill:#fff}100%{fill:#4a7}}
   #map text{fill:#aab;font-size:9px;text-anchor:middle;pointer-events:none}
   #map text.cap{fill:#667;font-size:8px}
-  #crumbs{color:#8fb;margin:-2px 0 6px;font-size:12px}
+  #crumbs{color:#8fb;margin:2px 0 6px;font-size:14px}
   #crumbs a{color:#9bd;text-decoration:none}
   #crumbs a:hover{text-decoration:underline}
   #crumbs .here{color:#fff}
-  .txt{background:#15171b;color:#eee;border:1px solid #444;border-radius:5px;padding:2px 6px}
+  .txt{background:#1b1d22;color:#eee;border:1px solid #3a3f47;border-radius:5px;padding:3px 6px;font:inherit}
   #libList .btns button{padding:2px 6px}
   .tplknobs details{margin:2px 0;border-left:2px solid #333;padding-left:6px}
   .tplknobs summary{cursor:pointer;color:#9bd;font-size:11px}
-  #maplabel{color:#8fb;min-height:16px;margin:0 0 4px;text-align:center}
-  #seedrow,div[id=seedrow]{display:flex;gap:4px;align-items:center;margin:4px 0}
-  #seedrow input,.seedin{width:60px;background:#15171b;color:#eee;border:1px solid #444;border-radius:5px;padding:2px 6px}
-  #stat{margin-top:6px;color:#888}
+  #maplabel{color:#8fb;min-height:18px;margin:0 0 2px;text-align:center;font-size:13px}
+  .seedrow{display:flex;gap:4px;align-items:center;margin:3px 0;padding:0 4px}
+  .seedrow span{color:#bbb;width:118px;flex:none}
+  .seedrow input,.seedin{width:66px;box-sizing:border-box;background:#1b1d22;color:#eee;border:1px solid #3a3f47;border-radius:5px;padding:3px 6px;font:inherit}
+  #ui canvas{width:100%;height:auto}
+  .hint{color:#778;margin:-2px 0 6px}
   .flash{animation:fl 1.4s ease-out}
   @keyframes fl{0%{background:#4a7;color:#fff}100%{background:transparent}}
   #ui h2.flash{border-radius:4px;padding:0 4px}
-  #err{position:fixed;left:12px;bottom:12px;color:#f88;white-space:pre-wrap;max-width:60%}
+  #err{position:fixed;left:12px;bottom:12px;color:#f88;white-space:pre-wrap;max-width:calc(100% - var(--pw) - 24px)}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -63,14 +77,24 @@
 </script>
 </head>
 <body>
-<div id="ui">
+<div id="bar">
   <h1>機体エディタ Ver3</h1>
+  <div class="grp"><button id="undoBtn" disabled title="Ctrl+Z">元に戻す</button><button id="redoBtn" disabled title="Ctrl+Y">やり直す</button></div>
+  <div class="grp"><span class="cap">見る</span><button data-v="iso">斜め</button><button data-v="front">正面</button><button data-v="top">上から</button><button data-v="side">横</button><button data-t="edges">稜</button></div>
+  <div class="grp"><button id="libBtn">保存した頭／体</button><button id="exportBtn">書き出し</button><button id="importBtn">読み込み</button><input id="importFile" type="file" accept=".json,application/json" style="display:none"></div>
+  <div class="grp"><button id="v2Btn">Ver2 の機体</button></div>
+  <div class="grp last"><button id="reset">初期値に戻す</button></div>
+  <span id="stat"></span>
+</div>
+<div id="pop-lib" class="pop">
+  <div id="lib"><div class="btns"><span id="libTitle" style="color:#aaa;align-self:center"></span><input id="libName" class="txt" placeholder="名前" style="width:84px"><button id="libSave">保存</button></div><div id="libList" style="margin:0 0 4px"></div></div>
+</div>
+<div id="pop-v2" class="pop">
+  <div class="btns" id="v2row"><span style="color:#aaa;align-self:center">Ver2 の機体</span><select id="v2Sel" class="txt" style="flex:1;min-width:0"><option value="">（ファイルから）</option></select><button id="v2Open">読む</button><button id="v2Clear">消す</button><input id="v2File" type="file" accept=".json,application/json" style="display:none"></div>
+  <div class="btns" id="v2row2"><button data-t="v2Side">横に並べる</button><button data-t="v2Only">Ver2 だけ</button><span id="v2stat" style="color:#777;align-self:center"></span></div>
+</div>
+<div id="ui">
   <div id="crumbs"></div>
-  <div class="btns"><button id="undoBtn" disabled>元に戻す</button><button id="redoBtn" disabled>やり直す</button><span style="color:#777;align-self:center">Ctrl+Z／Ctrl+Y</span></div>
-  <div id="seedrow"><span style="color:#aaa;width:52px">形状種</span><button id="prev" class="b">前</button><input id="seed" type="number" value="1" min="0"><button id="next" class="b">次</button></div>
-  <div id="seedrow"><span style="color:#aaa;width:52px">色種</span><button class="b sd" data-s="colorSeed" data-d="-1">前</button><input id="colorSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="colorSeed" data-d="1">次</button></div>
-  <div id="seedrow"><span style="color:#aaa;width:52px">塗り分け</span><button class="b sd" data-s="paintSeed" data-d="-1">前</button><input id="paintSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="paintSeed" data-d="1">次</button></div>
-  <div class="row"><label>揺らぎ</label><input type="range" id="jitter" min="0" max="1" step="0.01" value="0.3"><span class="val"></span></div>
   <svg id="mapBody" viewBox="0 0 226 150" xmlns="http://www.w3.org/2000/svg">
     <g class="pt" data-sec="sec-fig" data-name="全身"><rect x="2" y="2" width="34" height="16" rx="3"/><text x="19" y="14">全身</text></g>
     <polygon class="pt" data-part="head" data-name="頭" points="113,4 101,10 99,20 103,30 123,30 127,20 125,10"/>
@@ -119,199 +143,195 @@
     <text x="150" y="50">兜</text><text x="182" y="50">後ろ</text><text x="189" y="97">後頭部</text>
   </svg>
   <div id="maplabel"></div>
+  <div id="toc"></div>
   <div id="samples" class="btns"><span style="color:#aaa;align-self:center">見本</span><select id="sampleSel" class="txt" style="flex:1;min-width:0"></select><button id="sampleOpen">開く</button></div>
-  <div class="btns" id="v2row"><span style="color:#aaa;align-self:center">Ver2 の機体</span><select id="v2Sel" class="txt" style="flex:1;min-width:0"><option value="">（ファイルから）</option></select><button id="v2Open">読む</button><button id="v2Clear">消す</button><input id="v2File" type="file" accept=".json,application/json" style="display:none"></div>
-  <div class="btns" id="v2row2"><button data-t="v2Side">横に並べる</button><button data-t="v2Only">Ver2 だけ</button><span id="v2stat" style="color:#777;align-self:center"></span></div>
-  <div id="lib"><div class="btns"><span id="libTitle" style="color:#aaa;align-self:center"></span><input id="libName" class="txt" placeholder="名前" style="width:84px"><button id="libSave">保存</button></div><div id="libList" style="margin:0 0 4px"></div></div>
+  <div class="seedrow" data-home="sec-body"><span>形状種</span><button id="prev" class="b">前</button><input id="seed" type="number" value="1" min="0"><button id="next" class="b">次</button></div>
+  <div class="row seedrow-r" data-home="sec-body"><label>揺らぎ</label><input type="range" id="jitter" min="0" max="1" step="0.01" value="0.3"><input class="val" type="number"></div>
+  <div class="seedrow" data-home="sec-fig"><span>色種</span><button class="b sd" data-s="colorSeed" data-d="-1">前</button><input id="colorSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="colorSeed" data-d="1">次</button></div>
+  <div class="seedrow" data-home="sec-fig"><span>塗り分け</span><button class="b sd" data-s="paintSeed" data-d="-1">前</button><input id="paintSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="paintSeed" data-d="1">次</button></div>
   <h2 id="sec-body">全体</h2>
-  <div class="row"><label>幅</label><input type="range" id="W" min="0.7" max="1.4" step="0.01" value="1.0"><span class="val"></span></div>
-  <div class="row"><label>奥行</label><input type="range" id="D" min="0.8" max="1.4" step="0.01" value="1.1"><span class="val"></span></div>
-  <div class="row"><label>高さ</label><input type="range" id="H" min="0.6" max="1.7" step="0.01" value="1.3"><span class="val"></span></div>
-  <div class="row"><label>広い所の高さ</label><input type="range" id="yw" min="-0.4" max="0.35" step="0.01" value="-0.05"><span class="val"></span></div>
+  <div class="row"><label>幅</label><input type="range" id="W" min="0.7" max="1.4" step="0.01" value="1.0"><input class="val" type="number"></div>
+  <div class="row"><label>奥行</label><input type="range" id="D" min="0.8" max="1.4" step="0.01" value="1.1"><input class="val" type="number"></div>
+  <div class="row"><label>高さ</label><input type="range" id="H" min="0.6" max="1.7" step="0.01" value="1.3"><input class="val" type="number"></div>
+  <div class="row"><label>広い所の高さ</label><input type="range" id="yw" min="-0.4" max="0.35" step="0.01" value="-0.05"><input class="val" type="number"></div>
   <h2 id="sec-helmet">兜</h2>
   <div class="row"><label>色</label><input type="color" id="helmetColor" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="helmet" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
-  <div class="row"><label>上のすぼまり</label><input type="range" id="eU" min="10" max="55" step="1" value="30"><span class="val"></span></div>
-  <div class="row"><label>頭頂の尖り</label><input type="range" id="eC" min="40" max="85" step="1" value="62"><span class="val"></span></div>
-  <div class="row"><label>頭頂の長さ</label><input type="range" id="apexL" min="0" max="0.6" step="0.01" value="0.25"><span class="val"></span></div>
-  <div class="row"><label>正中の折れ</label><input type="range" id="aF" min="0" max="35" step="1" value="14"><span class="val"></span></div>
-  <div class="row"><label>縁の下がり</label><input type="range" id="beltH" min="0.02" max="0.2" step="0.01" value="0.08"><span class="val"></span></div>
-  <div class="row"><label>縁の裏の傾き</label><input type="range" id="rimSlope" min="0" max="70" step="1" value="35"><span class="val"></span></div>
+  <div class="row"><label>上のすぼまり</label><input type="range" id="eU" min="10" max="55" step="1" value="30"><input class="val" type="number"></div>
+  <div class="row"><label>頭頂の尖り</label><input type="range" id="eC" min="40" max="85" step="1" value="62"><input class="val" type="number"></div>
+  <div class="row"><label>頭頂の長さ</label><input type="range" id="apexL" min="0" max="0.6" step="0.01" value="0.25"><input class="val" type="number"></div>
+  <div class="row"><label>正中の折れ</label><input type="range" id="aF" min="0" max="35" step="1" value="14"><input class="val" type="number"></div>
+  <div class="row"><label>縁の下がり</label><input type="range" id="beltH" min="0.02" max="0.2" step="0.01" value="0.08"><input class="val" type="number"></div>
+  <div class="row"><label>縁の裏の傾き</label><input type="range" id="rimSlope" min="0" max="70" step="1" value="35"><input class="val" type="number"></div>
   <h2 id="sec-occ">兜の後ろ</h2>
-  <div class="row"><label>張り出し</label><input type="range" id="occBulge" min="0.7" max="1.6" step="0.01" value="1.0"><span class="val"></span></div>
-  <div class="row"><label>下がり</label><input type="range" id="occDown" min="0" max="0.4" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>後ろのすぼまり</label><input type="range" id="occEU" min="5" max="60" step="1" value="30"><span class="val"></span></div>
-  <div class="row"><label>面の数</label><input type="range" id="occFacets" min="1" max="3" step="1" value="1"><span class="val"></span></div>
+  <div class="row"><label>張り出し</label><input type="range" id="occBulge" min="0.7" max="1.6" step="0.01" value="1.0"><input class="val" type="number"></div>
+  <div class="row"><label>下がり</label><input type="range" id="occDown" min="0" max="0.4" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>後ろのすぼまり</label><input type="range" id="occEU" min="5" max="60" step="1" value="30"><input class="val" type="number"></div>
+  <div class="row"><label>面の数</label><input type="range" id="occFacets" min="1" max="3" step="1" value="1"><input class="val" type="number"></div>
   <h2 id="sec-brim">ひさし</h2>
   <div class="row"><label>色</label><input type="color" id="brimColor" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="brim" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
-  <div class="row"><label>前出</label><input type="range" id="brimOut" min="0.9" max="1.5" step="0.01" value="1.15"><span class="val"></span></div>
-  <div class="row"><label>奥行</label><input type="range" id="brimBack" min="0.1" max="1.3" step="0.01" value="0.3"><span class="val"></span></div>
-  <div class="row"><label>幅</label><input type="range" id="brimW" min="0.3" max="1.5" step="0.01" value="1.0"><span class="val"></span></div>
-  <div class="row"><label>上下</label><input type="range" id="brimY" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>傾き</label><input type="range" id="brimTilt" min="-30" max="30" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>厚み</label><input type="range" id="brimT" min="0.01" max="0.2" step="0.01" value="0.06"><span class="val"></span></div>
-  <div class="row"><label>真ん中の割れ</label><input type="range" id="brimCut" min="0" max="0.5" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>割れの角度</label><input type="range" id="brimCutAngle" min="-45" max="45" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>上の傾き</label><input type="range" id="brimTopSlope" min="0" max="60" step="1" value="28"><span class="val"></span></div>
-  <div class="row"><label>裏の傾き</label><input type="range" id="brimSlope" min="0" max="75" step="1" value="35"><span class="val"></span></div>
+  <div class="row"><label>前出</label><input type="range" id="brimOut" min="0.9" max="1.5" step="0.01" value="1.15"><input class="val" type="number"></div>
+  <div class="row"><label>奥行</label><input type="range" id="brimBack" min="0.1" max="1.3" step="0.01" value="0.3"><input class="val" type="number"></div>
+  <div class="row"><label>幅</label><input type="range" id="brimW" min="0.3" max="1.5" step="0.01" value="1.0"><input class="val" type="number"></div>
+  <div class="row"><label>上下</label><input type="range" id="brimY" min="-0.3" max="0.3" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>傾き</label><input type="range" id="brimTilt" min="-30" max="30" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>厚み</label><input type="range" id="brimT" min="0.01" max="0.2" step="0.01" value="0.06"><input class="val" type="number"></div>
+  <div class="row"><label>真ん中の割れ</label><input type="range" id="brimCut" min="0" max="0.5" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>割れの角度</label><input type="range" id="brimCutAngle" min="-45" max="45" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>上の傾き</label><input type="range" id="brimTopSlope" min="0" max="60" step="1" value="28"><input class="val" type="number"></div>
+  <div class="row"><label>裏の傾き</label><input type="range" id="brimSlope" min="0" max="75" step="1" value="35"><input class="val" type="number"></div>
   <h2 id="sec-muff">首当て（後頭部を包む帯）</h2>
   <div class="btns"><button data-t="muffOn">首当て</button></div>
   <div class="row"><label>色</label><input type="color" id="muffColor" value="#e4e4e4" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="muff" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
-  <div class="row"><label>回り込み</label><input type="range" id="muffFrom" min="40" max="175" step="1" value="80"><span class="val"></span></div>
-  <div class="row"><label>高さ</label><input type="range" id="muffH" min="0.05" max="0.8" step="0.01" value="0.35"><span class="val"></span></div>
-  <div class="row"><label>上下</label><input type="range" id="muffY" min="-0.5" max="0.3" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>前後の傾き</label><input type="range" id="muffPitch" min="-45" max="45" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>横の傾き</label><input type="range" id="muffRoll" min="-45" max="45" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>広がり</label><input type="range" id="muffFlare" min="-30" max="60" step="1" value="15"><span class="val"></span></div>
-  <div class="row"><label>厚み</label><input type="range" id="muffT" min="0.01" max="0.15" step="0.005" value="0.04"><span class="val"></span></div>
-  <div class="row"><label>浮き</label><input type="range" id="muffGap" min="0" max="0.3" step="0.01" value="0.04"><span class="val"></span></div>
-  <div class="row"><label>真ん中の分割</label><input type="range" id="muffCut" min="0" max="90" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>段</label><input type="range" id="muffBands" min="1" max="5" step="1" value="1"><span class="val"></span></div>
-  <div class="row"><label>面の数</label><input type="range" id="muffFacets" min="3" max="24" step="1" value="8"><span class="val"></span></div>
+  <div class="row"><label>回り込み</label><input type="range" id="muffFrom" min="40" max="175" step="1" value="80"><input class="val" type="number"></div>
+  <div class="row"><label>高さ</label><input type="range" id="muffH" min="0.05" max="0.8" step="0.01" value="0.35"><input class="val" type="number"></div>
+  <div class="row"><label>上下</label><input type="range" id="muffY" min="-0.5" max="0.3" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>前後の傾き</label><input type="range" id="muffPitch" min="-45" max="45" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>横の傾き</label><input type="range" id="muffRoll" min="-45" max="45" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>広がり</label><input type="range" id="muffFlare" min="-30" max="60" step="1" value="15"><input class="val" type="number"></div>
+  <div class="row"><label>厚み</label><input type="range" id="muffT" min="0.01" max="0.15" step="0.005" value="0.04"><input class="val" type="number"></div>
+  <div class="row"><label>浮き</label><input type="range" id="muffGap" min="0" max="0.3" step="0.01" value="0.04"><input class="val" type="number"></div>
+  <div class="row"><label>真ん中の分割</label><input type="range" id="muffCut" min="0" max="90" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>段</label><input type="range" id="muffBands" min="1" max="5" step="1" value="1"><input class="val" type="number"></div>
+  <div class="row"><label>面の数</label><input type="range" id="muffFacets" min="3" max="24" step="1" value="8"><input class="val" type="number"></div>
   <h2 id="sec-guard">側頭</h2>
   <div class="row"><label>色</label><input type="color" id="guardColor" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="guard" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
-  <div class="row"><label>長さ</label><input type="range" id="drop" min="0.2" max="0.8" step="0.01" value="0.5"><span class="val"></span></div>
-  <div class="row"><label>前出</label><input type="range" id="reach" min="0.5" max="1.1" step="0.01" value="0.85"><span class="val"></span></div>
+  <div class="row"><label>長さ</label><input type="range" id="drop" min="0.2" max="0.8" step="0.01" value="0.5"><input class="val" type="number"></div>
+  <div class="row"><label>前出</label><input type="range" id="reach" min="0.5" max="1.1" step="0.01" value="0.85"><input class="val" type="number"></div>
   <h2 id="sec-back">後頭部</h2>
   <div class="btns"><button data-t="back" class="on" id="btn-back">後頭部</button></div>
   <div class="row"><label>色</label><input type="color" id="backColor" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="back" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
-  <div class="row"><label>上下</label><input type="range" id="backY" min="-0.4" max="0.3" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>長さ</label><input type="range" id="backDrop" min="0" max="0.8" step="0.01" value="0.2"><span class="val"></span></div>
-  <div class="row"><label>幅</label><input type="range" id="backW" min="0.3" max="1.05" step="0.01" value="0.68"><span class="val"></span></div>
-  <div class="row"><label>出</label><input type="range" id="backOut" min="0.6" max="1.3" step="0.01" value="0.96"><span class="val"></span></div>
-  <div class="row"><label>角の落とし</label><input type="range" id="backCham" min="0" max="0.6" step="0.01" value="0.3"><span class="val"></span></div>
-  <div class="row"><label>角の角度</label><input type="range" id="backSideAz" min="100" max="170" step="1" value="135"><span class="val"></span></div>
-  <div class="row"><label>後ろの傾き</label><input type="range" id="backTilt" min="-40" max="20" step="1" value="-10"><span class="val"></span></div>
-  <div class="row"><label>裏の傾き</label><input type="range" id="backSlope" min="0" max="75" step="1" value="30"><span class="val"></span></div>
+  <div class="row"><label>上下</label><input type="range" id="backY" min="-0.4" max="0.3" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>長さ</label><input type="range" id="backDrop" min="0" max="0.8" step="0.01" value="0.2"><input class="val" type="number"></div>
+  <div class="row"><label>幅</label><input type="range" id="backW" min="0.3" max="1.05" step="0.01" value="0.68"><input class="val" type="number"></div>
+  <div class="row"><label>出</label><input type="range" id="backOut" min="0.6" max="1.3" step="0.01" value="0.96"><input class="val" type="number"></div>
+  <div class="row"><label>角の落とし</label><input type="range" id="backCham" min="0" max="0.6" step="0.01" value="0.3"><input class="val" type="number"></div>
+  <div class="row"><label>角の角度</label><input type="range" id="backSideAz" min="100" max="170" step="1" value="135"><input class="val" type="number"></div>
+  <div class="row"><label>後ろの傾き</label><input type="range" id="backTilt" min="-40" max="20" step="1" value="-10"><input class="val" type="number"></div>
+  <div class="row"><label>裏の傾き</label><input type="range" id="backSlope" min="0" max="75" step="1" value="30"><input class="val" type="number"></div>
   <h2 id="sec-face">顔</h2>
   <div class="btns"><button data-t="vents" class="on" id="btn-vents">頬の口</button></div>
   <div class="row"><label>色</label><input type="color" id="faceColor" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="face" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
-  <div class="row"><label>幅</label><input type="range" id="faceW" min="0.3" max="0.8" step="0.01" value="0.5"><span class="val"></span></div>
-  <div class="row"><label>高さ</label><input type="range" id="faceH" min="0.05" max="0.4" step="0.01" value="0.3"><span class="val"></span></div>
-  <div class="row"><label>出</label><input type="range" id="faceOut" min="0.5" max="1.1" step="0.01" value="0.8"><span class="val"></span></div>
+  <div class="row"><label>幅</label><input type="range" id="faceW" min="0.3" max="0.8" step="0.01" value="0.5"><input class="val" type="number"></div>
+  <div class="row"><label>高さ</label><input type="range" id="faceH" min="0.05" max="0.4" step="0.01" value="0.3"><input class="val" type="number"></div>
+  <div class="row"><label>出</label><input type="range" id="faceOut" min="0.5" max="1.1" step="0.01" value="0.8"><input class="val" type="number"></div>
   <div class="btns"><span style="color:#aaa">底面</span><button id="secPent">五角形に戻す</button><button id="secReset">正多角形に戻す</button></div>
   <canvas id="secCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
-  <div style="color:#777;margin:-2px 0 4px">上から見た顔の断面（上が前）。左右は常に対称。上の尖りが鼻すじ、平らなら平らな顔</div>
-  <div class="row"><label>底面の角の数</label><input type="range" id="secN" min="3" max="10" step="1" value="5"><span class="val"></span></div>
+  <div class="hint">上から見た顔の断面（上が前）。左右は常に対称。上の尖りが鼻すじ、平らなら平らな顔</div>
+  <div class="row"><label>底面の角の数</label><input type="range" id="secN" min="3" max="10" step="1" value="5"><input class="val" type="number"></div>
   <div class="btns"><span style="color:#aaa">正面</span><button id="facePent">五角形に戻す</button><button id="faceReset">正多角形に戻す</button></div>
   <canvas id="faceCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
-  <div style="color:#777;margin:-2px 0 4px">正面から見た顔の形。左右は常に対称。幅と高さはつまみで</div>
-  <div class="row"><label>正面の角の数</label><input type="range" id="faceN" min="4" max="10" step="1" value="5"><span class="val"></span></div>
-  <div class="row"><label>縁の傾き</label><input type="range" id="faceSlant" min="0" max="70" step="1" value="35"><span class="val"></span></div>
-  <div class="row"><label>縁の奥行</label><input type="range" id="faceShoulder" min="0.02" max="0.3" step="0.01" value="0.08"><span class="val"></span></div>
-  <div class="row"><label>裏の傾き</label><input type="range" id="faceUnder" min="-60" max="60" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>バイザーの高さ</label><input type="range" id="visorH" min="0" max="0.3" step="0.01" value="0.12"><span class="val"></span></div>
-  <div class="row"><label>バイザーの奥</label><input type="range" id="visorOut" min="0.4" max="1.0" step="0.01" value="0.65"><span class="val"></span></div>
+  <div class="hint">正面から見た顔の形。左右は常に対称。幅と高さはつまみで</div>
+  <div class="row"><label>正面の角の数</label><input type="range" id="faceN" min="4" max="10" step="1" value="5"><input class="val" type="number"></div>
+  <div class="row"><label>縁の傾き</label><input type="range" id="faceSlant" min="0" max="70" step="1" value="35"><input class="val" type="number"></div>
+  <div class="row"><label>縁の奥行</label><input type="range" id="faceShoulder" min="0.02" max="0.3" step="0.01" value="0.08"><input class="val" type="number"></div>
+  <div class="row"><label>裏の傾き</label><input type="range" id="faceUnder" min="-60" max="60" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>バイザーの高さ</label><input type="range" id="visorH" min="0" max="0.3" step="0.01" value="0.12"><input class="val" type="number"></div>
+  <div class="row"><label>バイザーの奥</label><input type="range" id="visorOut" min="0.4" max="1.0" step="0.01" value="0.65"><input class="val" type="number"></div>
   <h2 id="sec-deco">顔飾り（溝）</h2>
   <div class="btns"><span style="color:#aaa">配置</span><button data-place="center">中央</button><button data-place="sides">左右</button></div>
-  <div class="row"><label>縦の本数</label><input type="range" id="decoNV" min="0" max="6" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>横の本数</label><input type="range" id="decoNH" min="0" max="6" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>縦の間隔</label><input type="range" id="decoDV" min="0.02" max="0.3" step="0.005" value="0.08"><span class="val"></span></div>
-  <div class="row"><label>横の間隔</label><input type="range" id="decoDH" min="0.02" max="0.3" step="0.005" value="0.08"><span class="val"></span></div>
-  <div class="row"><label>縦の長さ</label><input type="range" id="decoLV" min="0.03" max="0.6" step="0.01" value="0.2"><span class="val"></span></div>
-  <div class="row"><label>横の長さ</label><input type="range" id="decoLH" min="0.03" max="0.6" step="0.01" value="0.2"><span class="val"></span></div>
-  <div class="row"><label>幅</label><input type="range" id="decoW" min="0.004" max="0.08" step="0.002" value="0.02"><span class="val"></span></div>
-  <div class="row"><label>深さ</label><input type="range" id="decoDepth" min="0.002" max="0.06" step="0.002" value="0.01"><span class="val"></span></div>
-  <div class="row"><label>ベベル</label><input type="range" id="decoBevel" min="0" max="0.05" step="0.002" value="0.01"><span class="val"></span></div>
-  <div class="row"><label>上下</label><input type="range" id="decoY" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>左右（左右の時）</label><input type="range" id="decoX" min="0" max="0.4" step="0.01" value="0.15"><span class="val"></span></div>
+  <div class="row"><label>縦の本数</label><input type="range" id="decoNV" min="0" max="6" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>横の本数</label><input type="range" id="decoNH" min="0" max="6" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>縦の間隔</label><input type="range" id="decoDV" min="0.02" max="0.3" step="0.005" value="0.08"><input class="val" type="number"></div>
+  <div class="row"><label>横の間隔</label><input type="range" id="decoDH" min="0.02" max="0.3" step="0.005" value="0.08"><input class="val" type="number"></div>
+  <div class="row"><label>縦の長さ</label><input type="range" id="decoLV" min="0.03" max="0.6" step="0.01" value="0.2"><input class="val" type="number"></div>
+  <div class="row"><label>横の長さ</label><input type="range" id="decoLH" min="0.03" max="0.6" step="0.01" value="0.2"><input class="val" type="number"></div>
+  <div class="row"><label>幅</label><input type="range" id="decoW" min="0.004" max="0.08" step="0.002" value="0.02"><input class="val" type="number"></div>
+  <div class="row"><label>深さ</label><input type="range" id="decoDepth" min="0.002" max="0.06" step="0.002" value="0.01"><input class="val" type="number"></div>
+  <div class="row"><label>ベベル</label><input type="range" id="decoBevel" min="0" max="0.05" step="0.002" value="0.01"><input class="val" type="number"></div>
+  <div class="row"><label>上下</label><input type="range" id="decoY" min="-0.3" max="0.3" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>左右（左右の時）</label><input type="range" id="decoX" min="0" max="0.4" step="0.01" value="0.15"><input class="val" type="number"></div>
   <h2 id="sec-twin">ツインアイ</h2>
   <div class="btns"><button data-t="twin">ツインアイ</button><button data-t="twinGlow">光る</button><button id="twinReset">正多角形に戻す</button></div>
   <div class="row"><label>目の色</label><input type="color" id="twinColor" value="#66ff66" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><label style="width:auto;margin-left:8px">枠の色</label><input type="color" id="twinFrameColor" value="#15181c" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"></div>
   <canvas id="twinCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
-  <div style="color:#777;margin:-2px 0 4px">右目の形。点をつまんで動かす。左目は鏡</div>
-  <div class="row"><label>角の数</label><input type="range" id="twinN" min="3" max="8" step="1" value="4"><span class="val"></span></div>
-  <div class="row"><label>角度</label><input type="range" id="twinAngle" min="-90" max="90" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>大きさ</label><input type="range" id="twinS" min="0.02" max="0.15" step="0.005" value="0.06"><span class="val"></span></div>
-  <div class="row"><label>枠の幅</label><input type="range" id="twinBorder" min="0" max="0.05" step="0.001" value="0.012"><span class="val"></span></div>
-  <div class="row"><label>厚み</label><input type="range" id="twinT" min="0.002" max="0.04" step="0.001" value="0.012"><span class="val"></span></div>
-  <div class="row"><label>左右の間隔</label><input type="range" id="twinX" min="0.04" max="0.35" step="0.005" value="0.16"><span class="val"></span></div>
-  <div class="row"><label>上下</label><input type="range" id="twinY" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>前後</label><input type="range" id="twinZ" min="-0.2" max="0.3" step="0.005" value="0"><span class="val"></span></div>
-  <div class="row"><label>窪み</label><input type="range" id="twinDepth" min="0" max="0.12" step="0.002" value="0"><span class="val"></span></div>
-  <div class="row"><label>ベベル（窪み用）</label><input type="range" id="twinBevel" min="0" max="0.08" step="0.002" value="0.015"><span class="val"></span></div>
+  <div class="hint">右目の形。点をつまんで動かす。左目は鏡</div>
+  <div class="row"><label>角の数</label><input type="range" id="twinN" min="3" max="8" step="1" value="4"><input class="val" type="number"></div>
+  <div class="row"><label>角度</label><input type="range" id="twinAngle" min="-90" max="90" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>大きさ</label><input type="range" id="twinS" min="0.02" max="0.15" step="0.005" value="0.06"><input class="val" type="number"></div>
+  <div class="row"><label>枠の幅</label><input type="range" id="twinBorder" min="0" max="0.05" step="0.001" value="0.012"><input class="val" type="number"></div>
+  <div class="row"><label>厚み</label><input type="range" id="twinT" min="0.002" max="0.04" step="0.001" value="0.012"><input class="val" type="number"></div>
+  <div class="row"><label>左右の間隔</label><input type="range" id="twinX" min="0.04" max="0.35" step="0.005" value="0.16"><input class="val" type="number"></div>
+  <div class="row"><label>上下</label><input type="range" id="twinY" min="-0.3" max="0.3" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>前後</label><input type="range" id="twinZ" min="-0.2" max="0.3" step="0.005" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>窪み</label><input type="range" id="twinDepth" min="0" max="0.12" step="0.002" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>ベベル（窪み用）</label><input type="range" id="twinBevel" min="0" max="0.08" step="0.002" value="0.015"><input class="val" type="number"></div>
   <h2 id="sec-mono">モノアイ</h2>
   <div class="btns"><button data-t="mono">モノアイ</button><button data-t="monoGlow">光る</button></div>
   <div class="row"><label>レンズ色</label><input type="color" id="monoColor" value="#a8203c" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"></div>
-  <div class="row"><label>大きさ</label><input type="range" id="monoR" min="0.03" max="0.22" step="0.005" value="0.08"><span class="val"></span></div>
-  <div class="row"><label>奥行</label><input type="range" id="monoD" min="0.02" max="0.2" step="0.005" value="0.07"><span class="val"></span></div>
-  <div class="row"><label>縁の太さ</label><input type="range" id="monoRim" min="0.05" max="0.5" step="0.01" value="0.22"><span class="val"></span></div>
-  <div class="row"><label>左右</label><input type="range" id="monoX" min="-0.35" max="0.35" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>上下</label><input type="range" id="monoY" min="-0.5" max="0.3" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>前後</label><input type="range" id="monoZ" min="-0.3" max="0.5" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>向き上下</label><input type="range" id="monoPitch" min="-60" max="60" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>向き左右</label><input type="range" id="monoYaw" min="-60" max="60" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>面の数</label><input type="range" id="monoSides" min="6" max="24" step="1" value="12"><span class="val"></span></div>
+  <div class="row"><label>大きさ</label><input type="range" id="monoR" min="0.03" max="0.22" step="0.005" value="0.08"><input class="val" type="number"></div>
+  <div class="row"><label>奥行</label><input type="range" id="monoD" min="0.02" max="0.2" step="0.005" value="0.07"><input class="val" type="number"></div>
+  <div class="row"><label>縁の太さ</label><input type="range" id="monoRim" min="0.05" max="0.5" step="0.01" value="0.22"><input class="val" type="number"></div>
+  <div class="row"><label>左右</label><input type="range" id="monoX" min="-0.35" max="0.35" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>上下</label><input type="range" id="monoY" min="-0.5" max="0.3" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>前後</label><input type="range" id="monoZ" min="-0.3" max="0.5" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>向き上下</label><input type="range" id="monoPitch" min="-60" max="60" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>向き左右</label><input type="range" id="monoYaw" min="-60" max="60" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>面の数</label><input type="range" id="monoSides" min="6" max="24" step="1" value="12"><input class="val" type="number"></div>
   <h2 id="sec-ear">耳</h2>
   <div class="btns"><button data-t="ears" class="on">耳</button><button id="earReset">正多角形に戻す</button></div>
   <div class="row"><label>色</label><input type="color" id="earColor" value="#c0392b" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="ear" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <canvas id="earCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
-  <div style="color:#777;margin:-2px 0 4px">右耳の形（横から見て前が右）。左は鏡</div>
-  <div class="row"><label>角の数</label><input type="range" id="earN" min="3" max="12" step="1" value="4"><span class="val"></span></div>
-  <div class="row"><label>角度</label><input type="range" id="earAngle" min="-90" max="90" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>大きさ</label><input type="range" id="earS" min="0.03" max="0.25" step="0.005" value="0.09"><span class="val"></span></div>
-  <div class="row"><label>高さ</label><input type="range" id="earH" min="0.01" max="0.15" step="0.005" value="0.05"><span class="val"></span></div>
-  <div class="row"><label>中の窪み</label><input type="range" id="earInset" min="0" max="0.06" step="0.002" value="0.02"><span class="val"></span></div>
-  <div class="row"><label>前後</label><input type="range" id="earZ" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>上下</label><input type="range" id="earY" min="-0.3" max="0.2" step="0.01" value="0"><span class="val"></span></div>
+  <div class="hint">右耳の形（横から見て前が右）。左は鏡</div>
+  <div class="row"><label>角の数</label><input type="range" id="earN" min="3" max="12" step="1" value="4"><input class="val" type="number"></div>
+  <div class="row"><label>角度</label><input type="range" id="earAngle" min="-90" max="90" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>大きさ</label><input type="range" id="earS" min="0.03" max="0.25" step="0.005" value="0.09"><input class="val" type="number"></div>
+  <div class="row"><label>高さ</label><input type="range" id="earH" min="0.01" max="0.15" step="0.005" value="0.05"><input class="val" type="number"></div>
+  <div class="row"><label>中の窪み</label><input type="range" id="earInset" min="0" max="0.06" step="0.002" value="0.02"><input class="val" type="number"></div>
+  <div class="row"><label>前後</label><input type="range" id="earZ" min="-0.3" max="0.3" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>上下</label><input type="range" id="earY" min="-0.3" max="0.2" step="0.01" value="0"><input class="val" type="number"></div>
   <h2 id="sec-chin">顎</h2>
   <div class="btns"><button data-t="chin" id="btn-chin">顎</button><button id="chinTrap">台形に戻す</button><button id="chinReset">正多角形に戻す</button></div>
   <div class="row"><label>色</label><input type="color" id="chinColor" value="#c0392b" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="chin" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <canvas id="chinCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
-  <div style="color:#777;margin:-2px 0 4px">正面から見た顎の形。左右は常に対称（片方を動かすと反対も動く）</div>
-  <div class="row"><label>角の数</label><input type="range" id="chinN" min="3" max="12" step="1" value="4"><span class="val"></span></div>
-  <div class="row"><label>大きさ</label><input type="range" id="chinS" min="0.02" max="0.25" step="0.005" value="0.08"><span class="val"></span></div>
-  <div class="row"><label>出</label><input type="range" id="chinL" min="0.01" max="0.25" step="0.005" value="0.04"><span class="val"></span></div>
-  <div class="row"><label>先細り</label><input type="range" id="chinTaper" min="0.2" max="1.3" step="0.01" value="0.7"><span class="val"></span></div>
-  <div class="row"><label>上下</label><input type="range" id="chinY" min="-0.2" max="0.2" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>前後</label><input type="range" id="chinZ" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>傾き</label><input type="range" id="chinTilt" min="-60" max="60" step="1" value="0"><span class="val"></span></div>
+  <div class="hint">正面から見た顎の形。左右は常に対称（片方を動かすと反対も動く）</div>
+  <div class="row"><label>角の数</label><input type="range" id="chinN" min="3" max="12" step="1" value="4"><input class="val" type="number"></div>
+  <div class="row"><label>大きさ</label><input type="range" id="chinS" min="0.02" max="0.25" step="0.005" value="0.08"><input class="val" type="number"></div>
+  <div class="row"><label>出</label><input type="range" id="chinL" min="0.01" max="0.25" step="0.005" value="0.04"><input class="val" type="number"></div>
+  <div class="row"><label>先細り</label><input type="range" id="chinTaper" min="0.2" max="1.3" step="0.01" value="0.7"><input class="val" type="number"></div>
+  <div class="row"><label>上下</label><input type="range" id="chinY" min="-0.2" max="0.2" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>前後</label><input type="range" id="chinZ" min="-0.3" max="0.3" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>傾き</label><input type="range" id="chinTilt" min="-60" max="60" step="1" value="0"><input class="val" type="number"></div>
   <h2 id="sec-neck">首</h2>
   <div class="btns"><button data-t="neck">首</button><button id="neckReset">正多角形に戻す</button></div>
   <div class="row"><label>色</label><input type="color" id="neckColor" value="#262a30" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="neck" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
   <canvas id="neckCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas>
-  <div style="color:#777;margin:-2px 0 4px">上から見た首の断面（上が前）。左右は常に対称</div>
-  <div class="row"><label>角の数</label><input type="range" id="neckN" min="3" max="16" step="1" value="8"><span class="val"></span></div>
-  <div class="row"><label>太さ</label><input type="range" id="neckR" min="0.05" max="0.5" step="0.005" value="0.2"><span class="val"></span></div>
-  <div class="row"><label>長さ</label><input type="range" id="neckL" min="0.05" max="1.0" step="0.01" value="0.4"><span class="val"></span></div>
-  <div class="row"><label>先細り</label><input type="range" id="neckTaper" min="0.3" max="1.5" step="0.01" value="1.0"><span class="val"></span></div>
-  <div class="row"><label>上下</label><input type="range" id="neckY" min="-0.3" max="0.3" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>前後</label><input type="range" id="neckZ" min="-0.4" max="0.4" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>傾き</label><input type="range" id="neckTilt" min="-40" max="40" step="1" value="0"><span class="val"></span></div>
+  <div class="hint">上から見た首の断面（上が前）。左右は常に対称</div>
+  <div class="row"><label>角の数</label><input type="range" id="neckN" min="3" max="16" step="1" value="8"><input class="val" type="number"></div>
+  <div class="row"><label>太さ</label><input type="range" id="neckR" min="0.05" max="0.5" step="0.005" value="0.2"><input class="val" type="number"></div>
+  <div class="row"><label>長さ</label><input type="range" id="neckL" min="0.05" max="1.0" step="0.01" value="0.4"><input class="val" type="number"></div>
+  <div class="row"><label>先細り</label><input type="range" id="neckTaper" min="0.3" max="1.5" step="0.01" value="1.0"><input class="val" type="number"></div>
+  <div class="row"><label>上下</label><input type="range" id="neckY" min="-0.3" max="0.3" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>前後</label><input type="range" id="neckZ" min="-0.4" max="0.4" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>傾き</label><input type="range" id="neckTilt" min="-40" max="40" step="1" value="0"><input class="val" type="number"></div>
   <h2 id="sec-crest">前立</h2>
   <div class="btns"><button data-kind="none" data-pre="crest">なし</button><button data-kind="v" data-pre="crest">V字</button><button data-kind="kuwagata" data-pre="crest">鍬形</button><button data-kind="moon" data-pre="crest">三日月</button><button data-kind="sun" data-pre="crest">日輪</button><button data-kind="horn" data-pre="crest">角</button><button data-kind="fan" data-pre="crest">扇</button><button data-kind="ram" data-pre="crest">巻き角</button><button data-kind="plate" data-pre="crest">板</button><button data-kind="tubes" data-pre="crest">筒</button></div>
   <div class="btns"><button class="gacha" data-pre="crest">ガチャ</button><button class="ungacha" data-pre="crest">戻す</button><span style="color:#aaa;margin-left:6px">出す側</span><button data-side="both" data-pre="crest">両方</button><button data-side="left" data-pre="crest">左</button><button data-side="right" data-pre="crest">右</button></div>
   <div class="row"><label>色</label><input type="color" id="crestColor" value="#d9b43a" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="crest" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
-  <div class="row"><label>大きさ</label><input type="range" id="crestSize" min="0.1" max="1.2" step="0.01" value="0.5"><span class="val"></span></div>
-  <div class="row"><label>厚み</label><input type="range" id="crestT" min="0.01" max="0.15" step="0.005" value="0.04"><span class="val"></span></div>
-  <div class="row"><label>上下</label><input type="range" id="crestY" min="-0.6" max="0.6" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>前後</label><input type="range" id="crestZ" min="-0.9" max="0.4" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>真ん中の折れ</label><input type="range" id="crestFold" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>左右の離れ</label><input type="range" id="crestSplit" min="0" max="0.9" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>傾き X</label><input type="range" id="crestRotX" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>傾き Y</label><input type="range" id="crestRotY" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>傾き Z</label><input type="range" id="crestRotZ" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>V字の開き</label><input type="range" id="crestVOpen" min="20" max="80" step="1" value="55"><span class="val"></span></div>
+  <div class="row"><label>大きさ</label><input type="range" id="crestSize" min="0.1" max="1.2" step="0.01" value="0.5"><input class="val" type="number"></div>
+  <div class="row"><label>厚み</label><input type="range" id="crestT" min="0.01" max="0.15" step="0.005" value="0.04"><input class="val" type="number"></div>
+  <div class="row"><label>上下</label><input type="range" id="crestY" min="-0.6" max="0.6" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>前後</label><input type="range" id="crestZ" min="-0.9" max="0.4" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>真ん中の折れ</label><input type="range" id="crestFold" min="-180" max="180" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>左右の離れ</label><input type="range" id="crestSplit" min="0" max="0.9" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>傾き X</label><input type="range" id="crestRotX" min="-180" max="180" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>傾き Y</label><input type="range" id="crestRotY" min="-180" max="180" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>傾き Z</label><input type="range" id="crestRotZ" min="-180" max="180" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>V字の開き</label><input type="range" id="crestVOpen" min="20" max="80" step="1" value="55"><input class="val" type="number"></div>
   <h2 id="sec-horn">角</h2>
   <div class="btns"><button data-kind="none" data-pre="horn">なし</button><button data-kind="v" data-pre="horn">V字</button><button data-kind="kuwagata" data-pre="horn">鍬形</button><button data-kind="moon" data-pre="horn">三日月</button><button data-kind="sun" data-pre="horn">日輪</button><button data-kind="horn" data-pre="horn">角</button><button data-kind="fan" data-pre="horn">扇</button><button data-kind="ram" data-pre="horn">巻き角</button><button data-kind="plate" data-pre="horn">板</button><button data-kind="tubes" data-pre="horn">筒</button></div>
   <div class="btns"><button class="gacha" data-pre="horn">ガチャ</button><button class="ungacha" data-pre="horn">戻す</button><span style="color:#aaa;margin-left:6px">出す側</span><button data-side="both" data-pre="horn">両方</button><button data-side="left" data-pre="horn">左</button><button data-side="right" data-pre="horn">右</button></div>
   <div class="row"><label>色</label><input type="color" id="hornColor" value="#d9b43a" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="horn" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>
-  <div class="row"><label>大きさ</label><input type="range" id="hornSize" min="0.1" max="1.2" step="0.01" value="0.6"><span class="val"></span></div>
-  <div class="row"><label>厚み</label><input type="range" id="hornT" min="0.01" max="0.15" step="0.005" value="0.05"><span class="val"></span></div>
-  <div class="row"><label>上下</label><input type="range" id="hornY" min="-0.6" max="0.6" step="0.01" value="0"><span class="val"></span></div>
-  <div class="row"><label>前後</label><input type="range" id="hornZ" min="-0.9" max="0.4" step="0.01" value="-0.2"><span class="val"></span></div>
-  <div class="row"><label>真ん中の折れ</label><input type="range" id="hornFold" min="-180" max="180" step="1" value="90"><span class="val"></span></div>
-  <div class="row"><label>左右の離れ</label><input type="range" id="hornSplit" min="0" max="0.9" step="0.01" value="0.3"><span class="val"></span></div>
-  <div class="row"><label>傾き X</label><input type="range" id="hornRotX" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>傾き Y</label><input type="range" id="hornRotY" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>傾き Z</label><input type="range" id="hornRotZ" min="-180" max="180" step="1" value="0"><span class="val"></span></div>
-  <div class="row"><label>V字の開き</label><input type="range" id="hornVOpen" min="20" max="80" step="1" value="55"><span class="val"></span></div>
+  <div class="row"><label>大きさ</label><input type="range" id="hornSize" min="0.1" max="1.2" step="0.01" value="0.6"><input class="val" type="number"></div>
+  <div class="row"><label>厚み</label><input type="range" id="hornT" min="0.01" max="0.15" step="0.005" value="0.05"><input class="val" type="number"></div>
+  <div class="row"><label>上下</label><input type="range" id="hornY" min="-0.6" max="0.6" step="0.01" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>前後</label><input type="range" id="hornZ" min="-0.9" max="0.4" step="0.01" value="-0.2"><input class="val" type="number"></div>
+  <div class="row"><label>真ん中の折れ</label><input type="range" id="hornFold" min="-180" max="180" step="1" value="90"><input class="val" type="number"></div>
+  <div class="row"><label>左右の離れ</label><input type="range" id="hornSplit" min="0" max="0.9" step="0.01" value="0.3"><input class="val" type="number"></div>
+  <div class="row"><label>傾き X</label><input type="range" id="hornRotX" min="-180" max="180" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>傾き Y</label><input type="range" id="hornRotY" min="-180" max="180" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>傾き Z</label><input type="range" id="hornRotZ" min="-180" max="180" step="1" value="0"><input class="val" type="number"></div>
+  <div class="row"><label>V字の開き</label><input type="range" id="hornVOpen" min="20" max="80" step="1" value="55"><input class="val" type="number"></div>
   <div id="toggles" style="display:none"></div>
-  <h2>見る</h2>
-  <div class="btns views">
-    <button data-v="iso">斜め</button><button data-v="front">正面</button><button data-v="top">上から</button><button data-v="side">横</button><button data-t="edges">稜</button>
-  </div>
-  <div class="btns" style="margin-top:8px"><button id="undoBtn2" disabled>元に戻す</button><button id="redoBtn2" disabled>やり直す</button><button id="reset">初期値に戻す</button><button id="exportBtn">書き出し</button><button id="importBtn">読み込み</button><input id="importFile" type="file" accept=".json,application/json" style="display:none"></div>
-  <div id="stat"></div>
 </div>
 <canvas id="c"></canvas>
 <div id="err"></div>
@@ -1205,6 +1225,7 @@ const matLine = new THREE.LineBasicMaterial({ color: 0x0e1013, transparent: true
 let group = null;
 
 function build() {
+  clearHL();
   if (group) { scene.remove(group); group.traverse(o => o.geometry && o.geometry.dispose()); }
   rnd = rng(P.seed * 7919 + 17); JT = {};
   COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed);
@@ -1223,6 +1244,7 @@ function build() {
   if (EYE_CHECK.some(e => e.yaw < 15)) document.getElementById('err').textContent = '目が正面を向く平らな面に載っています（上から見て 八 の字になっていない）';
   for (const pre of COLOR_PRES) { const el = document.getElementById(pre + 'Color'); if (el && !P[pre + 'Color']) el.value = '#' + PC(pre).getHexString(); }
   document.getElementById('stat').textContent = `兜の面 ${nf}　三角形 ${M.pos.length / 9 | 0}　種 ${P.seed}`;
+  if (hlEl) hlSchedule();
 }
 
 let curView = 'iso';
@@ -1236,7 +1258,8 @@ function setView(v) {
   if (v === 'side') camera.position.set(t.x + d, t.y + 0.1, t.z);
   controls.target.copy(t); controls.update();
 }
-function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+const PANEL_W = 380;
+function resize() { const w = Math.max(200, innerWidth - PANEL_W), h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 (function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
 
@@ -1276,9 +1299,9 @@ const BODY_SECS = [
       flush();
       if (r[0] === 'eyecolor') { html += `<div class="row"><label>${r[2]}</label><input type="color" id="${r[1]}" value="#ff5a4a" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"></div>`; continue; }
       if (r[0] === 'kinds') { html += `<div class="btns"><span style="color:#aaa;align-self:center">${r[3]}</span>${r[2].map(([k, l]) => `<button data-kind="${k}" data-pre="${r[1]}">${l}</button>`).join('')}</div>`; if (!((r[1] + 'Kind') in P)) P[r[1] + 'Kind'] = r[4] || r[2][0][0]; continue; }
-      if (r[0] === 'r') { html += `<div class="row"><label>${r[2]}</label><input type="range" id="${r[1]}" min="${r[3]}" max="${r[4]}" step="${r[5]}" value="${r[6]}"><span class="val"></span></div>`; if (!(r[1] in P)) P[r[1]] = r[6]; }
+      if (r[0] === 'r') { html += `<div class="row"><label>${r[2]}</label><input type="range" id="${r[1]}" min="${r[3]}" max="${r[4]}" step="${r[5]}" value="${r[6]}"><input class="val" type="number"></div>`; if (!(r[1] in P)) P[r[1]] = r[6]; }
       else if (r[0] === 'c') { html += colorRow(r[1], r[2]); if (!((r[1] + 'Color') in P)) P[r[1] + 'Color'] = ''; }
-      else if (r[0] === 'canvas') { html += `<div class="btns"><button id="kneeTrap">台形に戻す</button><button id="kneeReset">正多角形に戻す</button></div><canvas id="kneeCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas><div style="color:#777;margin:-2px 0 4px">正面から見た膝当ての形。左右は常に対称</div>`; if (!('kneePts' in P)) P.kneePts = null; }
+      else if (r[0] === 'canvas') { html += `<div class="btns"><button id="kneeTrap">台形に戻す</button><button id="kneeReset">正多角形に戻す</button></div><canvas id="kneeCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas><div class="hint">正面から見た膝当ての形。左右は常に対称</div>`; if (!('kneePts' in P)) P.kneePts = null; }
     }
     flush();
   }
@@ -1319,7 +1342,7 @@ function showMap(mode) {
   try { localStorage.setItem(UI_KEY + '-map', mode); } catch (e) {}
   if (changed) setView(curView);
   libRender();
-  crumbs();
+  crumbs(); renderToc();
 }
 const BODY_HINT = '全身。部位を押すとその欄が開きます（頭を押すと頭の図に）';
 for (const g of document.querySelectorAll('#mapBody .pt')) {
@@ -1340,7 +1363,7 @@ function openSec(id) {
   if (id) showMap(HEAD_SEC_IDS.has(id) ? 'head' : 'body');
   mapLabel(id ? document.getElementById(id).textContent : (mapMode === 'head' ? HINT : BODY_HINT));
   try { localStorage.setItem(UI_KEY, id || ''); } catch (e) {}
-  crumbs();
+  crumbs(); renderToc();
 }
 for (const g of document.querySelectorAll('#map .pt')) {
   g.addEventListener('click', () => openSec(openId === g.dataset.sec ? null : g.dataset.sec));
@@ -1348,6 +1371,92 @@ for (const g of document.querySelectorAll('#map .pt')) {
   g.addEventListener('mouseleave', () => mapLabel(openId ? document.getElementById(openId).textContent : HINT));
 }
 for (const h of document.querySelectorAll('#ui .sec h2')) h.addEventListener('click', () => openSec(null));   // 題名を押すと閉じる
+
+// ---- 画面：種の行はそれぞれの欄へ、目次、上の帯の吹き出し ----
+{
+  const homes = new Map();
+  for (const el of document.querySelectorAll('[data-home]')) { const k = el.dataset.home; if (!homes.has(k)) homes.set(k, []); homes.get(k).push(el); }
+  for (const [k, els] of homes) { const w = document.querySelector('#ui .sec[data-sec="' + k + '"]'); if (w) w.querySelector('h2').after(...els); }
+}
+function renderToc() {
+  const box = document.getElementById('toc'); if (!box) return; box.textContent = '';
+  const ids = mapMode === 'head' ? [...HEAD_SEC_IDS] : BODY_SECS.map(sc => sc[0]);
+  for (const id of ids) {
+    const h = document.getElementById(id); if (!h) continue;
+    const b = document.createElement('button'); b.textContent = h.textContent.replace(/（.*）/, ''); b.classList.toggle('on', openId === id);
+    b.onclick = () => openSec(openId === id ? null : id); box.append(b);
+  }
+  if (mapMode !== 'head') { const b = document.createElement('button'); b.textContent = '頭 ＞'; b.onclick = () => { if (openId && !HEAD_SEC_IDS.has(openId)) openSec(null); showMap('head'); }; box.append(b); }
+}
+function closePops() { for (const p of document.querySelectorAll('.pop')) p.style.display = 'none'; for (const id of ['libBtn', 'v2Btn']) document.getElementById(id).classList.remove('on'); }
+for (const [btnId, popId] of [['libBtn', 'pop-lib'], ['v2Btn', 'pop-v2']]) {
+  const b = document.getElementById(btnId), p = document.getElementById(popId);
+  b.onclick = e => {
+    e.stopPropagation(); const open = p.style.display !== 'block'; closePops();
+    if (open) { p.style.display = 'block'; p.style.left = Math.max(4, Math.min(b.getBoundingClientRect().left, innerWidth - PANEL_W - p.offsetWidth - 8)) + 'px'; b.classList.add('on'); }
+  };
+}
+addEventListener('pointerdown', e => { if (!e.target.closest('.pop, #libBtn, #v2Btn')) closePops(); });
+
+// ---- つまみに触れると、そのつまみで動く面が 3D で光る（値を少し変えて組み直し、変わった三角形を重ねて描く）----
+const matHL = new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.6, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, toneMapped: false });
+let hlMesh = null, hlTimer = 0, hlEl = null;
+function clearHL() { if (hlMesh) { scene.remove(hlMesh); hlMesh.geometry.dispose(); hlMesh = null; } }
+function showHL(tris) { clearHL(); if (!tris || !tris.length) return; const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(tris, 3)); hlMesh = new THREE.Mesh(g, matHL); hlMesh.renderOrder = 5; scene.add(hlMesh); }
+function probeTris(mut) {   // 値を一時に変えて組み、三角形だけ返す。画面と P は元に戻す
+  const keep = JSON.stringify(P), kM = M, kG = G, kCOL = COL, kPAINT = PAINT, kEYE = EYE_CHECK, kA = { ...ANCHOR }, kRnd = rnd, kJT = JT;
+  let out = null;
+  try {
+    mut();
+    rnd = rng(P.seed * 7919 + 17); JT = {}; COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed);
+    M = new Tris(); G = new Tris();
+    if (P.headOn) head(); else { const km = M, kg = G; M = new Tris(); G = new Tris(); head(); M = km; G = kg; }
+    body();
+    out = { m: { pos: M.pos, pid: M.pid }, g: { pos: G.pos, pid: G.pid } };
+  } catch (e) { out = null; }
+  const o = JSON.parse(keep); for (const k of Object.keys(P)) delete P[k]; Object.assign(P, o);
+  M = kM; G = kG; COL = kCOL; PAINT = kPAINT; EYE_CHECK = kEYE; Object.assign(ANCHOR, kA); rnd = kRnd; JT = kJT;
+  return out;
+}
+function diffTris(cur, nxt) {   // 変わった三角形。部位ごとに比べ、三角形の数が変わった部位は丸ごと、新しく出た部位は新しい方を
+  const out = [];
+  const byPart = (pid) => { const m = new Map(); for (let i = 0; i < pid.length; i += 3) { const p = pid[i]; if (!m.has(p)) m.set(p, []); m.get(p).push(i * 3); } return m; };
+  const A = byPart(cur.pid), B = byPart(nxt.pid);
+  const push = (pos, o) => { for (let k = 0; k < 9; k++) out.push(pos[o + k]); };
+  for (const [p, ia] of A) {
+    const ib = B.get(p);
+    if (!ib || ib.length !== ia.length) { for (const o of ia) push(cur.pos, o); if (ib) for (const o of ib) push(nxt.pos, o); continue; }
+    for (let t = 0; t < ia.length; t++) { const oa = ia[t], ob = ib[t]; let d = false; for (let k = 0; k < 9; k++) if (Math.abs(cur.pos[oa + k] - nxt.pos[ob + k]) > 1e-6) { d = true; break; } if (d) push(cur.pos, oa); }
+  }
+  for (const [p, ib] of B) if (!A.has(p)) for (const o of ib) push(nxt.pos, o);
+  return out;
+}
+const HL_SEL = '.row, button[data-t], button[data-kind], button[data-side], button[data-place]';
+function hlMutFor(el) {
+  const rg = el.matches('.row') ? el.querySelector('input[type=range]') : null;
+  if (rg) { const id = rg.id; return () => { const lo = +rg.min, hi = +rg.max, st = +rg.step || 0.01; let d = Math.max(st, (hi - lo) * 0.08); if (+P[id] + d > hi) d = -d; P[id] = +P[id] + d; }; }
+  if (el.dataset.t) { const k = el.dataset.t; if (k === 'edges' || k === 'v2Side' || k === 'v2Only') return null; return () => { P[k] = !P[k]; }; }
+  if (el.dataset.kind) { const k = el.dataset.pre + 'Kind', v = el.dataset.kind; return () => { P[k] = v; }; }
+  if (el.dataset.side) { const k = el.dataset.pre + 'Side', v = el.dataset.side; return () => { P[k] = v; }; }
+  if (el.dataset.place) { const v = el.dataset.place; return () => { P.decoPlace = v; }; }
+  return null;
+}
+function hlSchedule() {
+  clearTimeout(hlTimer);
+  hlTimer = setTimeout(() => {
+    if (!hlEl || !group || !M) return;
+    const mut = hlMutFor(hlEl); if (!mut) return;
+    const cur = { m: { pos: M.pos, pid: M.pid }, g: { pos: G.pos, pid: G.pid } };
+    const nx = probeTris(mut); if (!nx) return;
+    showHL(diffTris(cur.m, nx.m).concat(diffTris(cur.g, nx.g)));
+  }, 80);
+}
+{
+  const ui = document.getElementById('ui');
+  ui.addEventListener('mouseover', e => { const el = e.target.closest(HL_SEL); if (el === hlEl) return; hlEl = el; clearHL(); if (el) hlSchedule(); });
+  ui.addEventListener('mouseleave', () => { hlEl = null; clearTimeout(hlTimer); clearHL(); });
+}
+window.__hl = { probeTris, diffTris, hlMutFor, show: showHL, clear: clearHL, mesh: () => hlMesh, el: () => hlEl };
 // ---- 見本の機体：家系の土台（BASES）と、それに重ねる差分（SAMPLES）。名前は本作のもの ----
 // [SAMPLES-BEGIN]
 // 見本の機体：決め打ちの値は入れない（依頼主、2026-10-20）。家系の土台と差分の仕組みだけ残す
@@ -1455,12 +1564,18 @@ function addTplKinds(cat) {
   for (const b of row.querySelectorAll('button[data-kind]')) b.onclick = () => { P[cat + 'TKind'] = b.dataset.kind; syncUI(); save(); build(); renderTplKnobs(cat); };
   renderTplKnobs(cat);
 }
+function wireNum(num, rng) {   // つまみの横の数字の欄：打ち込み、矢印キーで 1 刻み
+  num.min = rng.min; num.max = rng.max; num.step = rng.step;
+  num.addEventListener('input', () => { const v = +num.value; if (num.value === '' || !isFinite(v)) return; P[rng.id] = Math.min(+rng.max, Math.max(+rng.min, v)); rng.value = P[rng.id]; HIST.co = true; save(); HIST.co = false; build(); syncUI(); });
+  num.addEventListener('change', () => { num.blur(); syncUI(); });
+  num.addEventListener('keydown', e => { if (e.key === 'Enter') num.blur(); e.stopPropagation(); });
+}
 function wireRange(el) { el.addEventListener('input', () => { P[el.id] = +el.value; syncUI(); HIST.co = true; save(); HIST.co = false; build(); }); }
 function rangeRow(id, label, min, max, step) {
   const row = document.createElement('div'); row.className = 'row';
   const lab = document.createElement('label'); lab.textContent = label;
   const inp = document.createElement('input'); inp.type = 'range'; inp.id = id; inp.min = min; inp.max = max; inp.step = step; inp.value = P[id];
-  const val = document.createElement('span'); val.className = 'val';
+  const val = document.createElement('input'); val.type = 'number'; val.className = 'val'; wireNum(val, inp);
   row.append(lab, inp, val); wireRange(inp); return row;
 }
 function toggleBtn(key, label) { const b = document.createElement('button'); b.dataset.t = key; b.textContent = label; b.classList.toggle('on', !!P[key]); b.onclick = () => { P[key] = !P[key]; syncUI(); save(); build(); }; return b; }
@@ -1548,6 +1663,7 @@ const pickKeys = kind => { const o = {}; for (const k of KEYS_OF[kind]()) o[k] =
 function libRender() {
   const kind = libKind(), lib = readLib(), arr = lib[kind] || [];
   document.getElementById('libTitle').textContent = kind === 'head' ? '保存した頭' : '保存した体';
+  document.getElementById('libBtn').textContent = kind === 'head' ? '保存した頭' : '保存した体';
   const list = document.getElementById('libList'); list.textContent = '';
   if (!arr.length) { list.textContent = kind === 'head' ? '（まだありません。名前を入れて「保存」で、今の頭を残せます）' : '（まだありません。名前を入れて「保存」で、今の体を残せます）'; list.style.color = '#666'; return; }
   list.style.color = '';
@@ -1601,7 +1717,7 @@ try {
 // 元に戻す／やり直す：値が変わるたび（save）に 1 つ前の全体を積む。同じつまみを 0.8 秒以内に続けて動かした分は 1 歩にまとめる
 const HIST = { undo: [], redo: [], last: JSON.stringify(P), key: null, t: 0, MAX: 300 };
 const changedKeys = (a, b) => { const A = JSON.parse(a), B = JSON.parse(b); return [...new Set([...Object.keys(A), ...Object.keys(B)])].filter(k => JSON.stringify(A[k]) !== JSON.stringify(B[k])).sort().join(','); };
-const undoBtns = () => { for (const id of ['undoBtn', 'undoBtn2']) document.getElementById(id).disabled = !HIST.undo.length; for (const id of ['redoBtn', 'redoBtn2']) document.getElementById(id).disabled = !HIST.redo.length; };
+const undoBtns = () => { for (const id of ['undoBtn']) document.getElementById(id).disabled = !HIST.undo.length; for (const id of ['redoBtn']) document.getElementById(id).disabled = !HIST.redo.length; };
 const save = () => {
   const cur = JSON.stringify(P);
   if (cur !== HIST.last) {
@@ -1622,8 +1738,8 @@ function restoreState(json) {
 }
 function undo() { if (!HIST.undo.length) return; HIST.redo.push(HIST.last); restoreState(HIST.undo.pop()); }
 function redo() { if (!HIST.redo.length) return; HIST.undo.push(HIST.last); restoreState(HIST.redo.pop()); }
-for (const id of ['undoBtn', 'undoBtn2']) document.getElementById(id).onclick = undo;
-for (const id of ['redoBtn', 'redoBtn2']) document.getElementById(id).onclick = redo;
+for (const id of ['undoBtn']) document.getElementById(id).onclick = undo;
+for (const id of ['redoBtn']) document.getElementById(id).onclick = redo;
 addEventListener('keydown', e => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
   const k = e.key.toLowerCase(); if (k !== 'z' && k !== 'y') return;
@@ -1655,7 +1771,7 @@ window.__shot = async (view, w = 900, h = 1200, post = '') => {
 };
 const seedEl = document.getElementById('seed');
 function syncUI() {
-  for (const el of document.querySelectorAll('input[type=range]')) { el.value = P[el.id]; const val = el.parentElement.querySelector('.val'); val.textContent = Number.isInteger(+el.step) && +el.step >= 1 ? String(P[el.id]) : (+P[el.id]).toFixed(2); }
+  for (const el of document.querySelectorAll('input[type=range]')) { el.value = P[el.id]; const val = el.parentElement.querySelector('.val'); if (val && document.activeElement !== val) val.value = Number.isInteger(+el.step) && +el.step >= 1 ? String(P[el.id]) : (+P[el.id]).toFixed(2); }
   seedEl.value = P.seed;
   for (const el of document.querySelectorAll('input.seedin')) el.value = P[el.id];
   document.getElementById('monoColor').value = P.monoColor;
@@ -1669,6 +1785,7 @@ function syncUI() {
   for (const b of document.querySelectorAll('button[data-place]')) b.classList.toggle('on', P.decoPlace === b.dataset.place);
 }
 for (const el of document.querySelectorAll('input[type=range]')) {
+  const num = el.parentElement.querySelector('input.val'); if (num) wireNum(num, el);
   el.addEventListener('input', () => { P[el.id] = +el.value; syncUI(); HIST.co = true; save(); HIST.co = false; build(); });
 }
 seedEl.addEventListener('change', () => { P.seed = Math.max(0, +seedEl.value | 0); save(); build(); });
