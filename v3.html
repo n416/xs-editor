@@ -1197,6 +1197,19 @@ function body() {
       cut.push([{ n: nU.clone().negate(), d: -(dU - nt) }, plane(0, -90, new V(0, top - nd, 0)), plane(90, 0, new V(nw / 2, 0, 0)), plane(-90, 0, new V(-nw / 2, 0, 0))]);
     }
     crystal(M, f, col, cut.length ? cut : undefined);
+    // 正面の板：正面の上下 2 面の上の台形の範囲を、縁を斜めにして前へ押し出す。板の上の面は範囲の上の縁と出た尖りを通る面、下の面は底の縁と尖りを通る面
+    if (P.col1Ex | 0) {
+      const d = [0.15, 0.3, 0.45][P.col1ExOut | 0], bev = [30, 45, 70][P.col1ExBev | 0] * D2R;
+      const yT = top - H * P.col1ExTop / 10, yB = bot, wT = W / 2 * P.col1ExWT / 10 * 2 / 2, wB = W / 2 * P.col1ExWB / 10 * 2 / 2;
+      const zAt = y => y >= yp ? zf - (y - yp) * (zf - zt) / (top - yp) : zf - (yp - y) * (zf - zfb) / (yp - bot);   // 正面の面の上の z
+      const TL = new V(-wT, yT, zAt(yT)), TR = new V(wT, yT, zAt(yT)), BL = new V(-wB, yB, zAt(yB)), BR = new V(wB, yB, zAt(yB)), Pt = new V(0, yp, zf + d);
+      const planeOf = (a, b, c, want) => { const n = new V().crossVectors(b.clone().sub(a), c.clone().sub(a)).normalize(); if (n.dot(want) < 0) n.negate(); return { n, d: n.dot(a) }; };
+      const g = [planeOf(TL, TR, Pt, new V(0, 1, 1)), planeOf(BL, BR, Pt, new V(0, -1, 1))];
+      for (const sg of [1, -1]) { const T = sg > 0 ? TR : TL, B = sg > 0 ? BR : BL; const T3 = new V(T.x - sg * d / Math.tan(bev), T.y, T.z + d); g.push(planeOf(T, B, T3, new V(sg, 0, 0))); }
+      // 柱の中に少し入れて止める（柱の面と同じ平面に面を持たないよう、上・底・背・横は 0.02 内側）
+      g.push(plane(0, 90, new V(0, top - 0.02, 0)), plane(0, -90, new V(0, bot + 0.02, 0)), plane(180, 0, new V(0, 0, zb + 0.05)), plane(90, 0, new V(W / 2 - 0.02, 0, 0)), plane(-90, 0, new V(-W / 2 + 0.02, 0, 0)));
+      crystal(M, g, col);
+    }
   }
   // 襟：箱か、首を囲む円筒の輪
   if (P.collarOn) {
@@ -1561,7 +1574,13 @@ const BODY_SECS = [
     ['w', 'col1Notch', '上の正中の欠き', 0, 1, 1, 0, v => ['無し', 'あり'][v]],
     ['w', 'col1NotchW', '欠きの幅', 0, 2, 1, 1, v => ['狭い', '中くらい', '広い'][v]],
     ['w', 'col1NotchD', '欠きの下がり', 0, 2, 1, 1, v => ['浅い', '中くらい', '深い'][v]],
-    ['w', 'col1NotchT', '欠きの奥行', 0, 2, 1, 1, v => ['薄い', '中くらい', '厚い'][v]]]],
+    ['w', 'col1NotchT', '欠きの奥行', 0, 2, 1, 1, v => ['薄い', '中くらい', '厚い'][v]],
+    ['w', 'col1Ex', '正面の板を押し出す', 0, 1, 1, 0, v => ['無し', 'あり'][v]],
+    ['w', 'col1ExTop', '板の上端', 1, 5, 1, 3, v => `上から ${v} 割（下端は底まで）`],
+    ['w', 'col1ExWT', '板の上の幅', 2, 6, 1, 4, v => `幅の ${v} 割`],
+    ['w', 'col1ExWB', '板の下の幅', 1, 5, 1, 3, v => `幅の ${v} 割`],
+    ['w', 'col1ExOut', '板の出', 0, 2, 1, 1, v => ['少し（0.15）', '中くらい（0.3）', '大きく（0.45）'][v]],
+    ['w', 'col1ExBev', '板の縁の傾き', 0, 2, 1, 1, v => ['緩い（30°）', '中くらい（45°）', '急（70°）'][v]]]],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
