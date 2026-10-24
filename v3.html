@@ -1255,7 +1255,7 @@ function body() {
 
 // ---- 検査：浮き と 突き抜け（送る前に 0 にする。数で合否を決める物ではなく、明らかな作りの誤りを見せないための物）----
 const BODY_SELF = new Set([PART.chest, PART.plate, PART.abd, PART.band]);   // 胴そのものの塊：「後ろまで貫通」の決まりの対象なので突き抜ける側からは除く
-function checkBody(eps = 0.02, deep = 0.1) {   // deep：突き抜けと見なす食い込みの深さ。設計上の重なり（0.05 程度の埋め込み）は数えない
+function checkBody(eps = 0.02, allow = []) {   // allow：設計どおりの重なりを「A→B」の名前で外す（条件を緩めて 0 にはしない）
   // 凸のかけらごとに頂点を持つ（左右一対や輪のように 1 つの部位が離れた複数のかけらでできていても、かけら単位で見る）
   // 頂点だけでなく、頂点どうしの中点と重心も「中の点」の候補にする（貫く棒は中に頂点を持たない）
   const pcs = REG.filter(pc => pc.part > 16).map(pc => { const o = []; for (const f of clipFaces(pc.planes)) for (const q of f.pts) if (!o.some(r => r.distanceToSquared(q) < 1e-8)) o.push(q);
@@ -1264,8 +1264,23 @@ function checkBody(eps = 0.02, deep = 0.1) {   // deep：突き抜けと見な�
   const byPart = {}; for (const pc of pcs) (byPart[pc.part] = byPart[pc.part] || []).push(pc);
   const inside = (pc, p, m) => pc.planes.every(pl => pl.n.dot(p) - pl.d <= -m);
   const near = (pc, p, m) => pc.planes.every(pl => pl.n.dot(p) - pl.d <= m);
-  const name = id => { const sec = PART_TARGET[id]; const h = sec && document.getElementById(sec); return (h ? h.textContent.replace(/（.*）/, '') : String(id)) + '(' + id + ')'; };
-  const floating = [], pierce = [];
+  const bare = id => { const sec = PART_TARGET[id]; const h = sec && document.getElementById(sec); return h ? h.textContent.replace(/（.*）/, '') : String(id); };
+  const name = id => bare(id) + '(' + id + ')';
+  const floating = [], pierce = [], coplanar = [];
+  // 面の重なり：別の部位のかけらが同じ平面に面を持ち、その面どうしが重なる（描くとちらつき、下の色が抜ける）
+  const faceBox = (pc, pl) => { const f = clipFaces(pc.planes).find(f => f.pl === pl); if (!f) return null; const b = new THREE.Box3(); for (const q of f.pts) b.expandByPoint(q); return b; };
+  for (let i = 0; i < pcs.length; i++) for (let j = i + 1; j < pcs.length; j++) {
+    const A = pcs[i], B = pcs[j]; if (A.part === B.part) continue;
+    const key = bare(A.part) + '≡' + bare(B.part), key2 = bare(B.part) + '≡' + bare(A.part); if (coplanar.includes(key) || coplanar.includes(key2)) continue;
+    let found = false;
+    for (const pa of A.planes) { for (const pb of B.planes) {
+      if (pa.n.dot(pb.n) < 0.999 || Math.abs(pa.d - pb.d) > 0.002) continue;
+      const ba = faceBox(A, pa), bb = faceBox(B, pb); if (!ba || !bb) continue;
+      const ov = ba.clone().intersect(bb); if (ov.isEmpty()) continue; const sz = ov.getSize(new V()); const dims = [sz.x, sz.y, sz.z].sort((u, v) => v - u);
+      if (dims[1] > 0.02) { found = true; break; }
+    } if (found) break; }
+    if (found) coplanar.push(key);
+  }
   for (const idS in byPart) {
     const id = +idS, mine = byPart[id];
     // 浮き：自分の頂点がよその部位に触れず、よその頂点も自分に触れない
@@ -1277,22 +1292,21 @@ function checkBody(eps = 0.02, deep = 0.1) {   // deep：突き抜けと見な�
     // 突き抜け：自分のかけら 1 つが、よその部位の中に入り、かつその部位の外へ反対向きに 2 方向で出ている
     const hit = new Set();
     for (const oid in byPart) { if (+oid === id || hit.has(+oid)) continue; const theirs = byPart[oid];
-      // 相手の大半が自分の中に埋まっている（埋め込まれた小さい塊）なら、自分がそれを突き抜けたとは数えない
-      const tp = theirs.flatMap(b => b.probe); if (tp.length && tp.filter(p => mine.some(a => near(a, p, eps))).length / tp.length >= 0.6) continue;
+      if (allow.includes(name(id) + '→' + name(+oid)) || allow.includes(bare(id) + '→' + bare(+oid))) continue;   // 設計どおりの重なり
       for (const a of mine) {
-        const ins = a.probe.filter(p => theirs.some(b => inside(b, p, deep))); if (!ins.length) continue;
+        const ins = a.probe.filter(p => theirs.some(b => inside(b, p, eps))); if (!ins.length) continue;
         const outs = a.pts.filter(p => !theirs.some(b => near(b, p, eps))); if (outs.length < 2) continue;
         // 外の 2 点を結ぶ線分がその部位の中を通るなら、反対側へ抜けている（面の上に横たわる板は、線分が外を通るので当たらない）
         let through = false;
         for (let i = 0; i < outs.length && !through; i++) for (let j = i + 1; j < outs.length && !through; j++) {
-          for (const t of [0.25, 0.5, 0.75]) { const q = outs[i].clone().lerp(outs[j], t); if (theirs.some(b => inside(b, q, deep))) { through = true; break; } }
+          for (const t of [0.25, 0.5, 0.75]) { const q = outs[i].clone().lerp(outs[j], t); if (theirs.some(b => inside(b, q, eps))) { through = true; break; } }
         }
         if (through) { hit.add(+oid); break; }
       }
     }
     for (const b of hit) pierce.push(name(id) + ' → ' + name(b));
   }
-  return { floating, pierce };
+  return { floating, pierce, coplanar };
 }
 window.__check = checkBody; window.__REG = () => REG; window.__clipFaces = clipFaces;
 
