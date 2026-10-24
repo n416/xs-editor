@@ -1223,27 +1223,38 @@ function body() {
     crystal(M, [back, plane(0, 90, new V(0, yk, 0)), plane(0, -90, new V(0, yB, 0)), { n: nL, d: nL.dot(new V(0, yk, zk)) }, side(1, wK, yk, wB, yB), side(-1, wK, yk, wB, yB)], col);
   }
   // 腹の上・腹の下：柱やカバーとは別の塊（依頼主：「これも別パーツにして」）。前から背中まで通る台の形。
-  // 上の端と下の端で幅と奥行を別に決め（上が広い・下が広いのどちらも）、縦の 4 つの角を落とす
-  const tai = (pre, part) => {
+  // 上の端と下の端で幅と奥行を別に決め（上が広い・下が広いのどちらも）、縦の 4 つの角を落とす。
+  // 「そろえる」の時は上の端（高さ・幅・前と背）を上の部品の下の端にぴったり合わせる。少しだけずれた段は失敗に見える（依頼主：「この微妙なガタガタはただのミスに見える」）
+  // 中心線：下の端は上の端と同じ前後の中心に置く
+  const tai = (pre, part, fit) => {
     setPart(part);
-    const yT = y0 - P[pre + 'Y'], H = Math.max(0.02, P[pre + 'H']), yB = yT - H, zc = P[pre + 'Z'];
-    const wT = P[pre + 'WT'] / 2, wB = P[pre + 'WB'] / 2, dT = P[pre + 'DT'] / 2, dB = P[pre + 'DB'] / 2, c = P[pre + 'Ch'];
+    const ownZ = P[pre + 'Z'], ownDT = P[pre + 'DT'] / 2;
+    const yT = fit ? fit.y : y0 - P[pre + 'Y'], H = Math.max(0.02, P[pre + 'H']), yB = yT - H;
+    const wT = fit ? fit.w / 2 : P[pre + 'WT'] / 2, zTf = fit ? fit.zf : ownZ + ownDT, zTb = fit ? fit.zb : ownZ - ownDT, zc = (zTf + zTb) / 2;
+    const wB = P[pre + 'WB'] / 2, dB = P[pre + 'DB'] / 2, c = P[pre + 'Ch'];
     const f = [plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yB, 0))];
     const sides = [], fronts = [];
     for (const sg of [1, -1]) {
-      const ns = new V(sg * H, wB - wT, 0).normalize(), nf = new V(0, dB - dT, sg * H).normalize();   // 横の面・前後の面の向き（縁の向きに直交）
-      sides.push([sg, ns]); fronts.push([sg, nf]);
-      f.push({ n: ns, d: ns.dot(new V(sg * wT, yT, 0)) }, { n: nf, d: nf.dot(new V(0, yT, zc + sg * dT)) });
+      const ns = new V(sg * H, wB - wT, 0).normalize();   // 横の面の向き（縁の向きに直交）
+      const zt = sg > 0 ? zTf : zTb, zb = zc + sg * dB, nf = new V(0, sg * (zb - zt), sg * H).normalize();   // 前・背の面
+      sides.push([sg, ns]); fronts.push([sg, nf, zt, zb]);
+      f.push({ n: ns, d: ns.dot(new V(sg * wT, yT, 0)) }, { n: nf, d: nf.dot(new V(0, yT, zt)) });
     }
     // 縦の角の落とし：横の面と前後の面の間を等しく落とす（落とした面の幅がおよそ c）
-    if (c > 0) for (const [sx, ns] of sides) for (const [sz, nf] of fronts) {
-      const n = ns.clone().add(nf).normalize(), pm = new V(sx * (wT + wB) / 2, yT - H / 2, zc + sz * (dT + dB) / 2);
+    if (c > 0) for (const [sx, ns] of sides) for (const [, nf, zt, zb] of fronts) {
+      const n = ns.clone().add(nf).normalize(), pm = new V(sx * (wT + wB) / 2, yT - H / 2, (zt + zb) / 2);
       f.push({ n, d: n.dot(pm) - c * 0.7071 });
     }
     crystal(M, f, colOf(pre));
+    return { y: yB, w: 2 * wB, zf: zc + dB, zb: zc - dB };
   };
-  if (P.abuOn) tai('abu', PART.abu);
-  if (P.ablOn) tai('abl', PART.abl);
+  // 柱の底の面（高さ・幅・前の縁・背）
+  const colBot = () => {
+    const H = P.col1H, D = P.col1D, top = y0 - P.col1Y, bot = top - H, zf = D / 2, yp = top - H * P.col1PtR;
+    return { y: bot, w: P.col1W * Math.min(1, P.col1TaperR), zf: zf - (yp - bot) * Math.tan(P.col1ALd * D2R), zb: -D / 2 };
+  };
+  const abuBot = P.abuOn ? tai('abu', PART.abu, P.abuFit && P.col1On ? colBot() : null) : null;
+  if (P.ablOn) tai('abl', PART.abl, P.ablFit && abuBot ? abuBot : null);
   // 襟：箱か、首を囲む円筒の輪
   if (P.collarOn) {
     if (P.collarKind === 'ring') {
@@ -1613,7 +1624,7 @@ const BODY_SECS = [
     ['r', 'col1NotchTm', '欠きの奥行', 0.02, 0.5, 0.01, 0.15]]],
   ['sec-cov1', 'コクピットカバー', [['c', 'cov1'], ['on', 'cov1On', false],
     ['r', 'cov1Y', '上端の下がり', -1, 4, 0.01, 0.42],
-    ['r', 'cov1H', '高さ', 0.1, 4, 0.01, 1.7],
+    ['r', 'cov1H', '高さ', 0.1, 4, 0.01, 1.765],
     ['r', 'cov1D', '奥行（尖りから背まで）', 0.05, 4, 0.01, 1.0],
     ['r', 'cov1Z', '前への出（体の中心から尖りまで）', -1, 3, 0.01, 1.04],
     ['r', 'cov1Pt', '尖りの高さ（上からの割合）', 0.02, 0.98, 0.01, 0.47],
@@ -1624,15 +1635,17 @@ const BODY_SECS = [
     ['r', 'cov1WB', '下の端の幅', 0.05, 4, 0.01, 0.56],
     ['r', 'cov1BevD', '横の縁の傾き（°）', 30, 90, 0.5, 75]]],
   ['sec-abu', '腹の上', [['c', 'abu'], ['on', 'abuOn', false],
+    ['toggle', 'abuFit', '上の端を柱の底にそろえる', true],
     ['r', 'abuY', '上端の下がり', -1, 5, 0.01, 1.32], ['r', 'abuH', '高さ', 0.05, 3, 0.01, 0.47], ['r', 'abuZ', '前後の位置', -2, 2, 0.01, -0.15],
     ['r', 'abuWT', '上の端の幅', 0.1, 4, 0.01, 1.64], ['r', 'abuWB', '下の端の幅', 0.1, 4, 0.01, 1.36],
     ['r', 'abuDT', '上の端の奥行', 0.1, 4, 0.01, 1.17], ['r', 'abuDB', '下の端の奥行', 0.1, 4, 0.01, 1.01],
     ['r', 'abuCh', '縦の角の落とし', 0, 0.6, 0.01, 0.1]]],
   ['sec-abl', '腹の下', [['c', 'abl'], ['on', 'ablOn', false],
+    ['toggle', 'ablFit', '上の端を腹の上の下の端にそろえる', true],
     ['r', 'ablY', '上端の下がり', -1, 5, 0.01, 1.79], ['r', 'ablH', '高さ', 0.05, 3, 0.01, 0.4], ['r', 'ablZ', '前後の位置', -2, 2, 0.01, -0.15],
     ['r', 'ablWT', '上の端の幅', 0.1, 4, 0.01, 1.3], ['r', 'ablWB', '下の端の幅', 0.1, 4, 0.01, 1.48],
     ['r', 'ablDT', '上の端の奥行', 0.1, 4, 0.01, 1.01], ['r', 'ablDB', '下の端の奥行', 0.1, 4, 0.01, 1.01],
-    ['r', 'ablCh', '縦の角の落とし', 0, 0.6, 0.01, 0.12]]],
+    ['r', 'ablCh', '縦の角の落とし', 0, 0.6, 0.01, 0.1]]],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
@@ -2091,7 +2104,7 @@ function flashPart(targetId) {
 
 // ---- 配線 ----
 // 開いた時の形：柱 1 本＋コクピットカバー 1 つ（依頼主が「なにこのゴミ」と言った胸板・胸の中央・腹・腰の帯の箱積みは出さない）
-const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: true, cov1On: true, abuOn: true, ablOn: true, layoutV: 5 };
+const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: true, cov1On: true, abuOn: true, ablOn: true, layoutV: 6 };
 Object.assign(P, START);
 const DEFAULTS = JSON.parse(JSON.stringify(P));
 const KEY = 'crystal-head-knobs';
@@ -2187,6 +2200,7 @@ function syncUI() {
   for (const el of document.querySelectorAll('input[type=color][id^=g_]')) el.value = P[el.id] || '#888888';
   for (const el of document.querySelectorAll('.wv')) { const w = WORD[el.dataset.w]; if (w) el.textContent = w.fmt(P[el.dataset.w]); }
   for (const b of document.querySelectorAll('button[data-t]')) b.classList.toggle('on', !!P[b.dataset.t]);
+  for (const [t, keys] of [['abuFit', ['abuY', 'abuZ', 'abuWT', 'abuDT']], ['ablFit', ['ablY', 'ablZ', 'ablWT', 'ablDT']]]) for (const k of keys) { const el = document.getElementById(k); if (el) { const row = el.closest('.row'); row.style.opacity = P[t] ? 0.35 : ''; for (const x of row.querySelectorAll('input')) x.disabled = !!P[t]; } }
   if (typeof renderTree === 'function') renderTree();
   for (const b of document.querySelectorAll('button[data-kind]')) b.classList.toggle('on', P[b.dataset.pre + 'Kind'] === b.dataset.kind);
   for (const b of document.querySelectorAll('button[data-side]')) b.classList.toggle('on', P[b.dataset.pre + 'Side'] === b.dataset.side);
