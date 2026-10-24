@@ -1624,14 +1624,14 @@ const BODY_SECS = [
     ['r', 'cov1WB', '下の端の幅', 0.05, 4, 0.01, 0.56],
     ['r', 'cov1BevD', '横の縁の傾き（°）', 30, 90, 0.5, 75]]],
   ['sec-abu', '腹の上', [['c', 'abu'], ['on', 'abuOn', false],
-    ['r', 'abuY', '上端の下がり', -1, 5, 0.01, 1.32], ['r', 'abuH', '高さ', 0.05, 3, 0.01, 0.47], ['r', 'abuZ', '前後の位置', -2, 2, 0.01, 0],
+    ['r', 'abuY', '上端の下がり', -1, 5, 0.01, 1.32], ['r', 'abuH', '高さ', 0.05, 3, 0.01, 0.47], ['r', 'abuZ', '前後の位置', -2, 2, 0.01, -0.15],
     ['r', 'abuWT', '上の端の幅', 0.1, 4, 0.01, 1.64], ['r', 'abuWB', '下の端の幅', 0.1, 4, 0.01, 1.36],
-    ['r', 'abuDT', '上の端の奥行', 0.1, 4, 0.01, 1.09], ['r', 'abuDB', '下の端の奥行', 0.1, 4, 0.01, 0.94],
+    ['r', 'abuDT', '上の端の奥行', 0.1, 4, 0.01, 1.17], ['r', 'abuDB', '下の端の奥行', 0.1, 4, 0.01, 1.01],
     ['r', 'abuCh', '縦の角の落とし', 0, 0.6, 0.01, 0.1]]],
   ['sec-abl', '腹の下', [['c', 'abl'], ['on', 'ablOn', false],
-    ['r', 'ablY', '上端の下がり', -1, 5, 0.01, 1.79], ['r', 'ablH', '高さ', 0.05, 3, 0.01, 0.4], ['r', 'ablZ', '前後の位置', -2, 2, 0.01, 0],
+    ['r', 'ablY', '上端の下がり', -1, 5, 0.01, 1.79], ['r', 'ablH', '高さ', 0.05, 3, 0.01, 0.4], ['r', 'ablZ', '前後の位置', -2, 2, 0.01, -0.15],
     ['r', 'ablWT', '上の端の幅', 0.1, 4, 0.01, 1.3], ['r', 'ablWB', '下の端の幅', 0.1, 4, 0.01, 1.48],
-    ['r', 'ablDT', '上の端の奥行', 0.1, 4, 0.01, 0.94], ['r', 'ablDB', '下の端の奥行', 0.1, 4, 0.01, 0.94],
+    ['r', 'ablDT', '上の端の奥行', 0.1, 4, 0.01, 1.01], ['r', 'ablDB', '下の端の奥行', 0.1, 4, 0.01, 1.01],
     ['r', 'ablCh', '縦の角の落とし', 0, 0.6, 0.01, 0.12]]],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
@@ -2091,7 +2091,7 @@ function flashPart(targetId) {
 
 // ---- 配線 ----
 // 開いた時の形：柱 1 本＋コクピットカバー 1 つ（依頼主が「なにこのゴミ」と言った胸板・胸の中央・腹・腰の帯の箱積みは出さない）
-const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: true, cov1On: true, abuOn: true, ablOn: true, layoutV: 4 };
+const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: true, cov1On: true, abuOn: true, ablOn: true, layoutV: 5 };
 Object.assign(P, START);
 const DEFAULTS = JSON.parse(JSON.stringify(P));
 const KEY = 'crystal-head-knobs';
