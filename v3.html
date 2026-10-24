@@ -638,6 +638,12 @@ function chestFace(W, k, n, z0, Hf, kv, nv, yc0) {
   };
   return { N, NV, sw, hh, at, facet, xEnd: Math.abs(xs[N]), ys };
 }
+// 胸の本体の左右の横の面：正面から見て、上の端は胸面の端、下の端は下の幅の半分（柱の内側の辺に沿って傾けられる）
+function chestSides(xTop, xBot, yT, yB) {
+  const out = [];
+  for (const sg of [1, -1]) { const n = new THREE.Vector3(sg * (yT - yB), xBot - xTop, 0).normalize(); out.push({ n, d: n.dot(new THREE.Vector3(sg * xTop, yT, 0)) }); }   // 外向き（下が広い時は少し上向き：辺の向き (dx, dy) に直交する (−dy, dx)）
+  return out;
+}
 // 横の形を高さ y で切った時の背と前の z
 function profSpanAt(q, y) { let lo = 1e9, hi = -1e9; for (let i = 0; i < q.length; i++) { const [z1, y1] = q[i], [z2, y2] = q[(i + 1) % q.length]; if ((y1 - y) * (y2 - y) > 0 || y1 === y2) continue; const z = z1 + (z2 - z1) * (y - y1) / (y2 - y1); lo = Math.min(lo, z); hi = Math.max(hi, z); } return lo <= hi ? [lo, hi] : null; }
 // 2 つの面の間の縁を半径 r で丸める：両方の面から r 内の線を中心に、接する nf 枚の面
@@ -1376,7 +1382,7 @@ function body() {
     setPart(PART.chb);
     const col = colOf('chb'), Wf = P.chbW, yT = y0 - P.chbY, yB = yT - P.chbH, Z0 = P.chbZ, bev = P.chbBev;
     const face = chestFace(Wf, Math.min(P.chbBend, Wf * 0.49), P.chbFacets, Z0, P.chbH, Math.min(P.chbBendV, P.chbH * 0.49), P.chbFacetsV, yT - P.chbH / 2), xE = face.xEnd;
-    const top = plane(0, 90, new V(0, yT, 0)), bot = plane(0, -90, new V(0, yB, 0)), sides = [plane(90, 0, new V(xE, 0, 0)), plane(-90, 0, new V(-xE, 0, 0))];
+    const top = plane(0, 90, new V(0, yT, 0)), bot = plane(0, -90, new V(0, yB, 0)), sides = chestSides(Wf / 2, P.chbWB / 2, yT, yB);   // 横の面は幅の半分の所（曲げた正面の端は少し内なので、正面の端の面がそこまで伸びる）
     const fronts = []; for (let g = 0; g < face.N; g++) for (let h = 0; h < face.NV; h++) { const fc = face.facet(g, h); fronts.push({ n: fc.n, d: fc.d }); }
     const f = [top, bot, ...sides, plane(180, 0, new V(0, 0, Z0 - P.chbD)), ...fronts];
     if (bev > 0) for (const a of fronts) for (const b of [top, bot, ...sides]) { const c = bevelEdge(a, b, bev, bev); if (c) f.push(c); }
@@ -1393,6 +1399,7 @@ function body() {
     const fit = P.ltrFit && P.chbOn, Wf = fit ? P.chbW : W, Hf = fit ? P.chbH : H, yf = fit ? y0 - P.chbY - P.chbH / 2 : yc;
     const face = chestFace(Wf, Math.min(fit ? P.chbBend : P.ltrBend, Wf * 0.49), fit ? P.chbFacets : P.ltrFacets, fit ? P.chbZ : P.ltrZ,
       Hf, Math.min(fit ? P.chbBendV : P.ltrBendV, Hf * 0.49), fit ? P.chbFacetsV : P.ltrFacetsV, yf);
+    const chbSides = fit ? chestSides(Wf / 2, P.chbWB / 2, y0 - P.chbY, y0 - P.chbY - P.chbH) : [];
     // 字の形：(s, y) の凸の多角形の集まり。縁は half-plane a·s + b·y ≤ c と、その縁の種類（out＝外の縁、in＝棒どうしの切り分け）
     const H2 = H / 2, W2 = W / 2, box = [[1, 0, W2, 'out'], [-1, 0, W2, 'out'], [0, 1, H2, 'out'], [0, -1, H2, 'out']];
     const bar = (dx, dy, bw) => { const L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L; return { d: [dx / L, dy / L], n: [nx, ny], hp: [[nx, ny, bw / 2, 'out'], [-nx, -ny, bw / 2, 'out']], bw }; };
@@ -1461,6 +1468,7 @@ function body() {
         const B = q.map(map), C = B.reduce((m, v) => m.add(v), new V()).multiplyScalar(1 / B.length);
         const back = { n: N.clone().negate(), d: -fc.d + e }, front = { n: N.clone(), d: fc.d + t };
         const f = [back, front];
+        if (fit) f.push(...chbSides.map(q => ({ n: q.n, d: q.d - 0.004 })));   // 胸の本体に合わせる時は、胸の本体の横の面のわずかに内で切りそろえる（板の端がはみ出さない。同じ面に重ねると縞が出る）
         // 縁の種類は、縁がどの線の上にあるかで決める：折れ目（区切りの境）、棒どうしの切り分け（in）、ほかは外の縁
         const onLine = (A, Bv, a, b, c) => Math.abs(a * A.s + b * A.y - c) < 1e-6 && Math.abs(a * Bv.s + b * Bv.y - c) < 1e-6;
         for (let i = 0; i < q.length; i++) {
@@ -1884,13 +1892,13 @@ const BODY_SECS = [
     ['r', 'splEBs', '外の下の縁：横の面に沿った幅', 0, 1, 0.01, 0.1], ['r', 'splEBo', '外の下の縁：下の面に沿った幅', 0, 1, 0.01, 0.1],
     ['r', 'splEI', '内の横の面の縁', 0, 1, 0.01, 0.05], ['r', 'splEU', '正面の上の辺の縁（前と背中）', 0, 1, 0.01, 0.05], ['r', 'splED', '正面の底の辺の縁（前と背中）', 0, 1, 0.01, 0.05]]],
   ['sec-chb', '胸の本体', [['c', 'chb'], ['on', 'chbOn', false],
-    ['r', 'chbW', '幅', 0.1, 4, 0.01, 1.17], ['r', 'chbH', '高さ', 0.1, 4, 0.01, 1.4], ['r', 'chbD', '奥行（正面の真ん中から背まで）', 0.1, 4, 0.01, 1.4],
+    ['r', 'chbW', '幅（上の端）', 0.1, 4, 0.01, 1.19], ['r', 'chbWB', '下の端の幅', 0.1, 4, 0.01, 1.33], ['r', 'chbH', '高さ', 0.1, 4, 0.01, 1.4], ['r', 'chbD', '奥行（正面の真ん中から背まで）', 0.1, 4, 0.01, 1.4],
     ['r', 'chbY', '上端の下がり', -1, 4, 0.01, 0.31], ['r', 'chbZ', '前後の位置（正面の真ん中）', -2, 3, 0.01, 0.78],
     ['r', 'chbBend', '正面の丸みの強さ（幅の端が真ん中より奥へ下がる長さ、0 で平ら）', 0, 1.5, 0.01, 0.15], ['r', 'chbFacets', '正面の面の数（2 で真ん中の折れ）', 1, 12, 1, 3],
     ['r', 'chbBendV', '正面の上下の丸みの強さ（上と下の端が真ん中より奥へ下がる長さ、0 で平ら）', 0, 1.5, 0.01, 0.1], ['r', 'chbFacetsV', '正面の上下の面の数', 1, 12, 1, 2],
     ['r', 'chbBev', '縁の落とし', 0, 0.3, 0.01, 0.02]]],
   ['sec-ltr', '字の形の板', [['c', 'ltr'], ['on', 'ltrOn', false], ['toggle', 'ltrFit', '胸の本体に合わせる', true], ['kinds', 'ltr', [['T', 'T 字'], ['X', 'X 字'], ['A', '＊字']], '形', 'T'],
-    ['r', 'ltrW', '幅', 0.1, 4, 0.01, 1.17], ['r', 'ltrH', '高さ', 0.1, 4, 0.01, 1.08], ['r', 'ltrT', '厚み', 0.01, 0.6, 0.01, 0.08],
+    ['r', 'ltrW', '幅', 0.1, 4, 0.01, 1.19], ['r', 'ltrH', '高さ', 0.1, 4, 0.01, 1.08], ['r', 'ltrT', '厚み', 0.01, 0.6, 0.01, 0.08],
     ['r', 'ltrY', '上端の下がり', -1, 4, 0.01, 0.45], ['r', 'ltrZ', '前後の位置（胸面の真ん中）', -2, 3, 0.01, 0.8],
     ['r', 'ltrBend', '胸面の丸みの強さ（幅の端が真ん中より奥へ下がる長さ、0 で平ら）', 0, 1.5, 0.01, 0.15], ['r', 'ltrFacets', '胸面の面の数（2 で真ん中の折れ）', 1, 12, 1, 3],
     ['r', 'ltrBendV', '胸面の上下の丸みの強さ（上と下の端が真ん中より奥へ下がる長さ、0 で平ら）', 0, 1.5, 0.01, 0], ['r', 'ltrFacetsV', '胸面の上下の面の数', 1, 12, 1, 2],
