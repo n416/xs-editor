@@ -1201,34 +1201,26 @@ function body() {
     }
     crystal(M, f, col, cut.length ? cut : undefined);
   }
-  // コクピットカバー（依頼主の印 2）：柱の正面の中央に入れる楔の塊。柱とは別の立体で、柱の前の面のうち範囲の所はこれに置き換わる。
-  // 正面＝上が広く下へ細る台形、横＝前へ尖る楔（上の面は柱の上の前の縁から尖りへ、下の面は尖りから腰まで、垂直から後ろへ倒して下の端にも厚みを残す）、奥は胸の奥行の中ほどまで。
-  // 横の縁は、カバーの前（尖りの深さ）で台形の幅になり、奥へ向かって傾けて広げる（奥では柱に埋まる）
+  // コクピットカバー（依頼主の印 2）：柱とは別の楔の塊。柱の値には引きずられない（依頼主：「分けて」）。欄は柱と同じ言葉で、長さと角度で直接決める。
+  // 横から見た形＝前へ尖る五角（上の端は水平、上の面は尖りから上の面の傾きで上がる、下の面は尖りから垂直より後ろへ倒れる、下の端は水平、背は垂直）。
+  // 正面＝上の端・尖り・下の端の 3 つの幅を結ぶ台形。横の縁はその縁を含み、外へ向けて前へ傾ける
   if (P.cov1On) {
     setPart(PART.cov1);
-    const col = colOf('cov1'), W = P.col1W, H = P.col1H, D = P.col1D, top = y0 - P.col1Y, bot = top - H, e = 0.03;
-    const zf = D / 2, yp = top - H * P.col1PtR;
-    const zt = zf - (top - yp) / Math.tan(P.col1AUd * D2R), zfb = zf - (yp - bot) * Math.tan(P.col1ALd * D2R);   // 柱の上の前の縁・底の前の縁
-    const zAt = y => y >= yp ? zf - (y - yp) * (zf - zt) / (top - yp || 1) : zf - (yp - y) * (zf - zfb) / (yp - bot || 1);   // 柱の正面の面の z
-    // 上の端・尖り・下の端（横から見た 3 点）。上の端の高さと前の出は柱の面から測る。下の端は上の端から「高さ」だけ下（柱の底より下へも出せる）
-    const yT = Math.min(top - e, top - H * P.cov1TopR), zT = zAt(yT) + P.cov1TopOut;
-    const yB = yT - Math.max(2 * e, P.cov1H);
-    const yk = Math.min(yT - e, Math.max(yB + e, top - H * P.cov1PtR)), zk = zf + P.cov1OutM;
-    const zBf = Math.max(zAt(yB), zk - (yk - yB) * Math.tan(P.cov1LowD * D2R));
-    // 正面の幅：上の端・尖りの高さ・下の端の 3 つ。横の縁はカバーの前（尖りの深さ）でこの幅になり、奥へ向かって傾けて広げる
-    const wT = W * P.cov1WTR / 2, wK = W * P.cov1WKR / 2, wB = W * P.cov1WBR / 2, bev = P.cov1BevD * D2R, zB = zf - D * P.cov1DeepR;
+    const col = colOf('cov1'), e = 0.03;
+    const yT = y0 - P.cov1Y, yB = yT - Math.max(2 * e, P.cov1H), yk = Math.min(yT - e, Math.max(yB + e, yT - P.cov1H * P.cov1Pt)), zk = P.cov1Z;
+    const zT = zk - (yT - yk) / Math.tan(P.cov1AU * D2R), zBf = zk - (yk - yB) * Math.tan(P.cov1LowD * D2R), zB = zk - P.cov1D;
+    const wT = P.cov1WT / 2, wK = P.cov1WK / 2, wB = P.cov1WB / 2, bev = P.cov1BevD * D2R;
     const nU = new V(0, zk - zT, yT - yk).normalize(), nL = new V(0, -(zk - zBf), yk - yB).normalize();
-    // 横の縁：幅はその高さのカバーの前の面で測る（上の端・尖り・下の端の前の縁が台形の角）。面はその縁を含み、外へ向けて前へ傾ける
     const zFr = y => y >= yk ? zk + (y - yk) * (zT - zk) / (yT - yk) : zk + (yk - y) * (zBf - zk) / (yk - yB);
     const side = (sg, wa, ya, wb, yb) => {
       const pa = new V(sg * wa, ya, zFr(ya)), dd = new V(sg * wb, yb, zFr(yb)).sub(pa).normalize();
       const n = new V(sg * Math.sin(bev), 0, Math.cos(bev)); n.addScaledVector(dd, -n.dot(dd)).normalize();
       return { n, d: n.dot(pa) };
     };
-    const common = [plane(180, 0, new V(0, 0, zB)), plane(90, 0, new V(W / 2 - e, 0, 0)), plane(-90, 0, new V(-W / 2 + e, 0, 0))];
-    // 上の段（上の端から尖りまで）と下の段（尖りから下の端まで）。正面の幅の折れが外へ膨らむ形も出せるよう 2 つの塊にする
-    crystal(M, [...common, plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yk, 0)), { n: nU, d: nU.dot(new V(0, yk, zk)) }, side(1, wT, yT, wK, yk), side(-1, wT, yT, wK, yk)], col);
-    crystal(M, [...common, plane(0, 90, new V(0, yk, 0)), plane(0, -90, new V(0, yB, 0)), { n: nL, d: nL.dot(new V(0, yk, zk)) }, side(1, wK, yk, wB, yB), side(-1, wK, yk, wB, yB)], col);
+    const back = plane(180, 0, new V(0, 0, zB));
+    // 上の段（上の端から尖りまで）と下の段（尖りから下の端まで）。尖りの高さで幅が折れても外へ膨らめるよう 2 つの塊にする
+    crystal(M, [back, plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yk, 0)), { n: nU, d: nU.dot(new V(0, yk, zk)) }, side(1, wT, yT, wK, yk), side(-1, wT, yT, wK, yk)], col);
+    crystal(M, [back, plane(0, 90, new V(0, yk, 0)), plane(0, -90, new V(0, yB, 0)), { n: nL, d: nL.dot(new V(0, yk, zk)) }, side(1, wK, yk, wB, yB), side(-1, wK, yk, wB, yB)], col);
   }
   // 襟：箱か、首を囲む円筒の輪
   if (P.collarOn) {
@@ -1598,16 +1590,16 @@ const BODY_SECS = [
     ['r', 'col1NotchDR', '欠きの下がり（高さの割合）', 0.05, 0.9, 0.01, 0.5],
     ['r', 'col1NotchTm', '欠きの奥行', 0.02, 0.5, 0.01, 0.15]]],
   ['sec-cov1', 'コクピットカバー', [['c', 'cov1'], ['on', 'cov1On', false],
-    ['r', 'cov1TopR', '上の端の高さ（柱の上からの割合）', 0, 0.8, 0.01, 0.22],
-    ['r', 'cov1TopOut', '上の端の出（柱の面から）', -0.5, 1, 0.01, 0.03],
-    ['r', 'cov1H', '高さ（上の端から下の端まで）', 0.1, 4, 0.01, 1.7],
-    ['r', 'cov1PtR', '尖りの高さ（柱の上からの割合）', 0.05, 0.95, 0.01, 0.92],
-    ['r', 'cov1OutM', '尖りの出（柱の前から）', 0, 1.2, 0.01, 0.3],
-    ['r', 'cov1LowD', '尖りから下の前の倒れ（垂直から後ろへ °）', 0, 75, 0.5, 21],
-    ['r', 'cov1WTR', '上の幅（柱の幅の割合）', 0.05, 0.95, 0.01, 0.36],
-    ['r', 'cov1WKR', '尖りの高さでの幅（柱の幅の割合）', 0.05, 0.95, 0.01, 0.34],
-    ['r', 'cov1WBR', '下の幅（柱の幅の割合）', 0.05, 0.95, 0.01, 0.28],
-    ['r', 'cov1DeepR', '奥（柱の前から奥行の割合）', 0.05, 0.95, 0.01, 0.47],
+    ['r', 'cov1Y', '上端の下がり', -1, 4, 0.01, 0.42],
+    ['r', 'cov1H', '高さ', 0.1, 4, 0.01, 1.7],
+    ['r', 'cov1D', '奥行（尖りから背まで）', 0.05, 4, 0.01, 1.0],
+    ['r', 'cov1Z', '前への出（体の中心から尖りまで）', -1, 3, 0.01, 1.04],
+    ['r', 'cov1Pt', '尖りの高さ（上からの割合）', 0.02, 0.98, 0.01, 0.47],
+    ['r', 'cov1AU', '上の面の傾き（°）', 10, 85, 0.5, 53.5],
+    ['r', 'cov1LowD', '下の面の倒れ（°）', 0, 75, 0.5, 21],
+    ['r', 'cov1WT', '上の端の幅', 0.05, 4, 0.01, 0.72],
+    ['r', 'cov1WK', '尖りの高さの幅', 0.05, 4, 0.01, 0.68],
+    ['r', 'cov1WB', '下の端の幅', 0.05, 4, 0.01, 0.56],
     ['r', 'cov1BevD', '横の縁の傾き（°）', 30, 90, 0.5, 75]]],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
