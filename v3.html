@@ -34,31 +34,22 @@
   #ui .sec.open{display:block}
   #ui .sec h2{cursor:pointer}
   #ui .sec h2::after{content:"×";float:right;color:#667;font-weight:400}
-  #toc{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 2px}
-  #toc button{padding:3px 8px;font-size:13px}
-  #map,#mapBody{display:block;width:88%;height:auto;margin:4px auto 0;user-select:none}
-  #mapBody .pt{fill:#2b2f37;stroke:#5a6068;stroke-width:1;cursor:pointer}
-  #mapBody .pt:hover{fill:#3b4553}
-  #mapBody .pt.todo{fill:#22252b;stroke-dasharray:3 2}
-  #mapBody .pt.on{fill:#4a7;stroke:#8fd}
-  #mapBody text{fill:#aab;font-size:9px;text-anchor:middle;pointer-events:none}
-  #map .nav{cursor:pointer}
-  #map .nav rect{fill:#2b2f37;stroke:#5a6068}
-  #map .nav:hover rect{fill:#3b4553}
-  #map .pt{fill:#2b2f37;stroke:#5a6068;stroke-width:1;cursor:pointer}
-  #map .pt:hover{fill:#3b4553}
-  #map .pt.on{fill:#4a7;stroke:#8fd}
-  #map text{fill:#aab;font-size:9px;text-anchor:middle;pointer-events:none}
-  #map text.cap{fill:#667;font-size:8px}
-  #crumbs{color:#8fb;margin:2px 0 6px;font-size:14px}
-  #crumbs a{color:#9bd;text-decoration:none}
-  #crumbs a:hover{text-decoration:underline}
-  #crumbs .here{color:#fff}
+  #tree{margin:2px 0 8px;border:1px solid #2c3038;border-radius:6px;background:#1b1d22;padding:4px 0;user-select:none}
+  .lay{display:flex;align-items:center;gap:6px;padding:3px 6px;cursor:pointer;border-radius:4px;line-height:20px}
+  .lay:hover{background:rgba(255,255,255,.06)}
+  .lay.on{background:#2f4a3a;color:#fff}
+  .lay.off .nm{color:#667}
+  .lay .tri{width:12px;flex:none;color:#889;text-align:center}
+  .lay .eye{width:18px;flex:none;text-align:center;color:#8fb;border-radius:4px}
+  .lay .eye:hover{background:rgba(255,255,255,.12)}
+  .lay .eye.none{visibility:hidden}
+  .lay .eye.hid{color:#556}
+  .lay .nm{flex:1}
+  .lay.grp .nm{color:#9bd}
   .txt{background:#1b1d22;color:#eee;border:1px solid #3a3f47;border-radius:5px;padding:3px 6px;font:inherit}
   #libList .btns button{padding:2px 6px}
   .tplknobs details{margin:2px 0;border-left:2px solid #333;padding-left:6px}
   .tplknobs summary{cursor:pointer;color:#9bd;font-size:11px}
-  #maplabel{color:#8fb;min-height:18px;margin:0 0 2px;text-align:center;font-size:13px}
   .seedrow{display:flex;gap:4px;align-items:center;margin:3px 0;padding:0 4px}
   .seedrow span{color:#bbb;width:118px;flex:none}
   .seedrow input,.seedin{width:66px;box-sizing:border-box;background:#1b1d22;color:#eee;border:1px solid #3a3f47;border-radius:5px;padding:3px 6px;font:inherit}
@@ -94,56 +85,7 @@
   <div class="btns" id="v2row2"><button data-t="v2Side">横に並べる</button><button data-t="v2Only">Ver2 だけ</button><span id="v2stat" style="color:#777;align-self:center"></span></div>
 </div>
 <div id="ui">
-  <div id="crumbs"></div>
-  <svg id="mapBody" viewBox="0 0 226 150" xmlns="http://www.w3.org/2000/svg">
-    <g class="pt" data-sec="sec-fig" data-name="全身"><rect x="2" y="2" width="34" height="16" rx="3"/><text x="19" y="14">全身</text></g>
-    <polygon class="pt" data-part="head" data-name="頭" points="113,4 101,10 99,20 103,30 123,30 127,20 125,10"/>
-    <polygon class="pt" data-sec="sec-neck" data-name="首" points="108,30 118,30 118,36 108,36"/>
-    <polygon class="pt" data-sec="sec-chest" data-name="胴体" points="88,36 138,36 136,94 90,94"/>
-    <polygon class="pt" data-sec="sec-plate" data-name="胸板" points="96,49 130,49 128,67 98,67"/>
-    <text x="113" y="20">頭</text><text x="113" y="46">胴体</text><text x="113" y="61">胸板</text>
-    <text x="30" y="130" style="fill:#667;font-size:8px;text-anchor:start">胴体から作る</text>
-  </svg>
-  <svg id="map" viewBox="0 0 226 150" xmlns="http://www.w3.org/2000/svg" style="display:none">
-    <g class="pt" data-sec="sec-body" data-name="頭の全体"><rect x="2" y="2" width="44" height="16" rx="3"/><text x="24" y="14">頭の全体</text></g>
-    <g class="nav" id="mapToBody"><rect x="178" y="2" width="46" height="16" rx="3"/><text x="201" y="14">← 全身</text></g>
-    <text class="cap" x="58" y="149">正面</text><text class="cap" x="165" y="149">横（左が前）</text>
-    <!-- 正面 -->
-    <polygon class="pt" data-sec="sec-crest" data-name="前立" points="58,4 50,26 66,26"/>
-    <polygon class="pt" data-sec="sec-horn" data-name="角" points="30,12 42,30 30,32"/>
-    <polygon class="pt" data-sec="sec-horn" data-name="角" points="86,12 74,30 86,32"/>
-    <polygon class="pt" data-sec="sec-helmet" data-name="兜" points="58,20 36,32 26,54 26,70 90,70 90,54 80,32"/>
-    <polygon class="pt" data-sec="sec-brim" data-name="ひさし" points="22,70 94,70 98,78 18,78"/>
-    <polygon class="pt" data-sec="sec-face" data-name="顔" points="34,78 82,78 84,104 70,118 46,118 32,104"/>
-    <polygon class="pt" data-sec="sec-twin" data-name="ツインアイ" points="38,84 54,84 54,92 38,92"/>
-    <polygon class="pt" data-sec="sec-twin" data-name="ツインアイ" points="62,84 78,84 78,92 62,92"/>
-    <circle class="pt" data-sec="sec-mono" data-name="モノアイ" cx="58" cy="97" r="4"/>
-    <polygon class="pt" data-sec="sec-deco" data-name="顔飾り（溝）" points="55,104 61,104 61,116 55,116"/>
-    <polygon class="pt" data-sec="sec-ear" data-name="耳" points="22,80 32,80 32,96 22,96"/>
-    <polygon class="pt" data-sec="sec-ear" data-name="耳" points="84,80 94,80 94,96 84,96"/>
-    <polygon class="pt" data-sec="sec-guard" data-name="側頭" points="22,96 32,96 34,114 24,114"/>
-    <polygon class="pt" data-sec="sec-guard" data-name="側頭" points="84,96 94,96 92,114 82,114"/>
-    <polygon class="pt" data-sec="sec-chin" data-name="顎" points="44,118 72,118 68,128 48,128"/>
-    <polygon class="pt" data-sec="sec-neck" data-name="首" points="48,128 68,128 68,140 48,140"/>
-    <text x="58" y="52">兜</text>
-    <!-- 横（左が前） -->
-    <polygon class="pt" data-sec="sec-crest" data-name="前立" points="162,6 168,6 167,22 163,22"/>
-    <polygon class="pt" data-sec="sec-helmet" data-name="兜" points="165,20 140,34 132,54 132,70 165,70"/>
-    <polygon class="pt" data-sec="sec-occ" data-name="兜の後ろ" points="165,20 190,34 198,54 198,70 165,70"/>
-    <polygon class="pt" data-sec="sec-brim" data-name="ひさし" points="126,70 166,70 166,78 122,78"/>
-    <polygon class="pt" data-sec="sec-face" data-name="顔" points="134,78 166,78 166,118 142,118 132,104"/>
-    <polygon class="pt" data-sec="sec-twin" data-name="ツインアイ" points="138,84 158,84 158,92 138,92"/>
-    <circle class="pt" data-sec="sec-mono" data-name="モノアイ" cx="148" cy="98" r="4"/>
-    <polygon class="pt" data-sec="sec-ear" data-name="耳" points="166,80 178,80 178,96 166,96"/>
-    <polygon class="pt" data-sec="sec-guard" data-name="側頭" points="166,96 178,96 178,114 166,114"/>
-    <polygon class="pt" data-sec="sec-back" data-name="後頭部" points="178,78 200,78 200,110 178,110"/>
-    <polygon class="pt" data-sec="sec-muff" data-name="首当て" points="168,114 202,114 204,126 166,126"/>
-    <polygon class="pt" data-sec="sec-chin" data-name="顎" points="142,118 166,118 164,128 146,128"/>
-    <polygon class="pt" data-sec="sec-neck" data-name="首" points="150,128 172,128 172,140 150,140"/>
-    <text x="150" y="50">兜</text><text x="182" y="50">後ろ</text><text x="189" y="97">後頭部</text>
-  </svg>
-  <div id="maplabel"></div>
-  <div id="toc"></div>
+  <div id="tree"></div>
   <div id="samples" class="btns"><span style="color:#aaa;align-self:center">見本</span><select id="sampleSel" class="txt" style="flex:1;min-width:0"></select><button id="sampleOpen">開く</button></div>
   <div class="seedrow" data-home="sec-body"><span>形状種</span><button id="prev" class="b">前</button><input id="seed" type="number" value="1" min="0"><button id="next" class="b">次</button></div>
   <div class="row seedrow-r" data-home="sec-body"><label>揺らぎ</label><input type="range" id="jitter" min="0" max="1" step="0.01" value="0.3"><input class="val" type="number"></div>
@@ -387,10 +329,10 @@ function basis(pl) {
 
 // ---- 三角形を集める ----
 class Tris {
-  constructor() { this.pos = []; this.col = []; this.lines = []; this.part = 0; this.pid = []; }
+  constructor() { this.pos = []; this.col = []; this.lines = []; this.lid = []; this.part = 0; this.pid = []; }
   tri(a, b, c, col) { for (const p of [a, b, c]) { this.pos.push(p.x, p.y, p.z); this.col.push(col.r, col.g, col.b); this.pid.push(this.part); } }
   quad(a, b, c, d, col) { this.tri(a, b, c, col); this.tri(a, c, d, col); }
-  poly(pts, col, edgeOk) { for (let i = 1; i < pts.length - 1; i++) this.tri(pts[0], pts[i], pts[i + 1], col); for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; if (!edgeOk || edgeOk(a, b)) this.lines.push(a.x, a.y, a.z, b.x, b.y, b.z); } }
+  poly(pts, col, edgeOk) { for (let i = 1; i < pts.length - 1; i++) this.tri(pts[0], pts[i], pts[i + 1], col); for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; if (!edgeOk || edgeOk(a, b)) { this.lines.push(a.x, a.y, a.z, b.x, b.y, b.z); this.lid.push(this.part); } } }
   geom() {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
@@ -639,8 +581,8 @@ const rotPts2 = (pts, deg) => { const a = deg * D2R; return pts.map(([x, y]) => 
 function regularEye(n) { const o = []; for (let i = 0; i < n; i++) { const a = PI / 2 + i / n * 2 * PI; o.push([+Math.cos(a).toFixed(3), +Math.sin(a).toFixed(3)]); } return o; }
 
 // ---- 部位の番号（3D を押した所から左の欄を光らせるため）----
-const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37 };
-const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate' };
+const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, belt: 40, skF: 41, skS: 42, skB: 43, crotch: 44 };
+const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-belt', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch' };
 const setPart = id => { M.part = id; G.part = id; };
 
 // ---- 頭 ----
@@ -1127,6 +1069,7 @@ function pipeAt(S, a, b, ctrl, r, segs, col) {
 function spikeAt(S, base, axis, r, L, col) { const ax = axis.clone().normalize(); const e1 = Math.abs(ax.y) < 0.9 ? new V().crossVectors(UP, ax).normalize() : new V(1, 0, 0), e2 = new V().crossVectors(ax, e1).normalize(); polyBlock(M, S.p(base), S.v(ax), S.v(e1), S.v(e2), 8, r, L, 0.06, col); }
 
 function body() {
+  if (!P.g_torsoOn) return;
   const y0 = ANCHOR.y + 0.12 + (P.headSink || 0), X = new V(1, 0, 0), Y = UP, Z = ZF, DOWN = new V(0, -1, 0);
   const fig = P.figKind;   // human / tread / ball
   const W = space(new V(0, 0, 0));
@@ -1148,31 +1091,85 @@ function body() {
     crystal(M, f, col);
     return top - H;
   };
-  coreCrystal('core', y0, PART.chest, colOf('chest'));
+  if (P.coreOn) coreCrystal('core', y0, PART.chest, colOf('chest'));
 
-  // 胸板：胴体を包んで前から背中まで回る塊（依頼主：「この胸板は実際は背中まで回ってるんだよ」）。胴体とは別の部位。
-  // 背・上・下・正面・横の面で決め、「半分に割る」で左右一対になり正中に割れ目が空く
-  {
-    setPart(PART.plate);
-    const col = colOf('plate');
-    const top = y0 - P.plateY, H = P.plateH, rx = P.plateW / 2;
-    const zm = P.plateZ, zb = zm - P.plateD / 2, zf = zm + P.plateD / 2, ym = top - H / 2;
+  // 塊：胴体を前から背中まで通る（依頼主：「この胸板は実際は背中まで回ってるんだよ」）。背・上・下・正面・横の面で決める。
+  // 「半分に割る」が付く物は左右一対になり正中に割れ目が空く。胸板・胸の中央・襟・腹・腰の帯・股が同じ作り
+  const slab = (pre, part, split) => {
+    setPart(part);
+    const col = colOf(pre);
+    const top = y0 - P[pre + 'Y'], H = P[pre + 'H'], rx = P[pre + 'W'] / 2;
+    const zm = P[pre + 'Z'], zb = zm - P[pre + 'D'] / 2, zf = zm + P[pre + 'D'] / 2, ym = top - H / 2;
     const common = [
-      plane(180, P.plateBackE, new V(0, ym, zb)),      // 背：＋で上が前へ寄る
-      plane(0, P.plateTopE, new V(0, top, zm)),        // 上の面：90 で水平、小さいほど前へ下がる。奥行の真ん中で「高さ」になる
-      plane(0, -P.plateBotE, new V(0, top - H, zm)),   // 下の面：90 で水平、小さいほど前へ上がる
+      plane(180, P[pre + 'BackE'], new V(0, ym, zb)),      // 背：＋で上が前へ寄る
+      plane(0, P[pre + 'TopE'], new V(0, top, zm)),        // 上の面：90 で水平、小さいほど前へ下がる。奥行の真ん中で「高さ」になる
+      plane(0, -P[pre + 'BotE'], new V(0, top - H, zm)),   // 下の面：90 で水平、小さいほど前へ上がる
     ];
-    if (P.plateSplit) {
-      for (const s of [1, -1]) crystal(M, [...common,
-        plane(s * P.plateAF, P.plateFrontE, new V(0, ym, zf), 'plateF'),        // 正面：＋で上が後ろへ寄る
-        plane(s * P.plateSideA, P.plateSideE, new V(s * rx, ym, zm), 'plateS'), // 横の面
-        plane(-s * 90, 0, new V(s * P.plateGap / 2, 0, 0)),                     // 割れ目に向く面
+    if (split && P[pre + 'Split']) {
+      for (const sg of [1, -1]) crystal(M, [...common,
+        plane(sg * P[pre + 'AF'], P[pre + 'FrontE'], new V(0, ym, zf), pre + 'F'),           // 正面：＋で上が後ろへ寄る
+        plane(sg * P[pre + 'SideA'], P[pre + 'SideE'], new V(sg * rx, ym, zm), pre + 'S'),   // 横の面
+        plane(-sg * 90, 0, new V(sg * P[pre + 'Gap'] / 2, 0, 0)),                            // 割れ目に向く面
       ], col);
     } else {
-      crystal(M, [...common, ...fp0(P.plateAF, P.plateFrontE, new V(0, ym, zf), 'plateF'), ...pair(P.plateSideA, P.plateSideE, new V(rx, ym, zm), 'plateS')], col);
+      crystal(M, [...common, ...fp0(P[pre + 'AF'], P[pre + 'FrontE'], new V(0, ym, zf), pre + 'F'), ...pair(P[pre + 'SideA'], P[pre + 'SideE'], new V(rx, ym, zm), pre + 'S')], col);
     }
-  }
+  };
+  if (P.collarOn) slab('collar', PART.collar, false);
+  if (P.plateOn) slab('plate', PART.plate, true);
+  if (P.centerOn) slab('center', PART.center, false);
+  if (P.abdOn) slab('abd', PART.abd, false);
+  if (P.beltOn) slab('belt', PART.belt, false);
+  if (P.crotchOn) slab('crotch', PART.crotch, false);
 
+  // スカート：腰から下げる板。前・横・後ろで輪になる。張り出し（正中の軸からの距離）、開き（下が外へ振れる）、すぼまり（下へ細る）
+  const hang = (pre, part, az, split) => {
+    setPart(part);
+    const col = colOf(pre), a = az * D2R;
+    const top = y0 - P[pre + 'Y'], H = P[pre + 'H'], T = P[pre + 'T'], R = P[pre + 'R'], f = P[pre + 'Flare'], tp = P[pre + 'Taper'], W = P[pre + 'W'];
+    const u = new V(Math.sin(a), 0, Math.cos(a)), v = new V(Math.cos(a), 0, -Math.sin(a));   // u 外向き、v 板に沿う向き
+    const c = new V(0, 0, P[pre + 'Z'] || 0);
+    const pOut = c.clone().addScaledVector(u, R).setY(top);
+    const outer = plane(az, f, pOut);                                      // 外の面：開きの分だけ下が外へ
+    const base = [outer, plane(az + 180, -f, pOut.clone().addScaledVector(outer.n, -T)),   // 内の面（厚みの分だけ内へ）
+      plane(0, 90, new V(0, top, 0)),                                                     // 上
+      plane(az, -P[pre + 'BotE'], c.clone().addScaledVector(u, R).setY(top - H))];        // 下：90 で水平
+    const edge = (sg, w, e) => plane(az + sg * 90, -e, c.clone().addScaledVector(v, sg * w).setY(top));
+    if (split && P[pre + 'Split']) { for (const sg of [1, -1]) crystal(M, [...base, edge(sg, W / 2, tp), edge(-sg, -P[pre + 'Gap'] / 2, 0)], col); }
+    else crystal(M, [...base, edge(1, W / 2, tp), edge(-1, W / 2, tp)], col);
+  };
+  if (P.g_skirtOn) {
+    if (P.skFOn) hang('skF', PART.skF, 0, true);
+    if (P.skSOn) { hang('skS', PART.skS, 90, false); hang('skS', PART.skS, -90, false); }
+    if (P.skBOn) hang('skB', PART.skB, 180, false);
+  }
+}
+
+// ---- グループの「上下のずれ・前後のずれ・大きさ」：そのグループに属する部位の三角形と線に掛ける。内側のグループから ----
+function partsUnder(node) {
+  const out = new Set();
+  const walk = n => { if (n.children) { for (const c of n.children) walk(c); return; } for (const id of (SEC_PARTS[n.sec] || [])) out.add(id); };
+  walk(node); return out;
+}
+function applyGroupXf() {
+  if (typeof TREE !== 'object') return;
+  const walk = node => {
+    if (!node.children) return;
+    for (const c of node.children) walk(c);
+    if (!node.xf) return;
+    const y = P['g_' + node.id + 'Y'] || 0, z = P['g_' + node.id + 'Z'] || 0, sc = P['g_' + node.id + 'S'] ?? 1;
+    if (!y && !z && sc === 1) return;
+    const set = partsUnder(node), b = new THREE.Box3();
+    for (const T of [M, G]) for (let i = 0; i < T.pid.length; i++) if (set.has(T.pid[i])) b.expandByPoint(new V(T.pos[3 * i], T.pos[3 * i + 1], T.pos[3 * i + 2]));
+    if (b.isEmpty()) return;
+    const c = b.getCenter(new V());
+    const xf = (arr, i) => { arr[i] = c.x + (arr[i] - c.x) * sc; arr[i + 1] = c.y + (arr[i + 1] - c.y) * sc + y; arr[i + 2] = c.z + (arr[i + 2] - c.z) * sc + z; };
+    for (const T of [M, G]) {
+      for (let i = 0; i < T.pid.length; i++) if (set.has(T.pid[i])) xf(T.pos, 3 * i);
+      for (let i = 0; i < T.lid.length; i++) if (set.has(T.lid[i])) { xf(T.lines, 6 * i); xf(T.lines, 6 * i + 3); }
+    }
+  };
+  walk(TREE);
 }
 
 // ---- 色 ----
@@ -1213,12 +1210,12 @@ const PAINT_CHOICES = {
   guard: ['sub', 'main', 'main'], back: ['sub', 'main'], face: ['face', 'face', 'main'], chin: ['accent', 'accent', 'fin'],
   ear: ['accent', 'main', 'sub'], crest: ['fin', 'fin', 'accent'], horn: ['fin', 'accent', 'main'],
   neck: ['dark', 'dark', 'sub', 'main'],
-  chest: ['main', 'main', 'sub'], plate: ['main', 'sub', 'accent', 'main'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
+  chest: ['main', 'main', 'sub'], plate: ['main', 'sub', 'accent', 'main'], center: ['accent', 'sub', 'main'], belt: ['sub', 'main', 'dark'], skF: ['main', 'main', 'sub'], skS: ['main', 'main', 'sub'], skB: ['main', 'main', 'sub'], crotch: ['sub', 'dark', 'main'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
   shoulder: ['main', 'main', 'sub', 'accent'], upperarm: ['sub', 'main', 'main'], forearm: ['main', 'main', 'sub'], gauntlet: ['main', 'sub', 'accent'], hand: ['dark', 'dark', 'sub'],
   thigh: ['main', 'main', 'sub'], knee: ['sub', 'accent', 'main'], shin: ['main', 'main', 'sub'], foot: ['sub', 'main', 'dark'], pack: ['sub', 'main', 'dark'], thruster: ['dark'], tank: ['sub', 'main', 'accent'], joint: ['dark'], pipe: ['dark', 'dark', 'accent'], cannon: ['sub', 'main', 'dark'], hatch: ['accent', 'sub', 'main'], tread: ['dark', 'sub'], hull: ['sub', 'main'], ball: ['main', 'sub'], chestFront: ['accent', 'sub', 'main'], claw: ['dark', 'accent', 'main'],
 };
-const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw', 'plate'];
-const colOf = part => P[part + 'Color'] ? new THREE.Color(P[part + 'Color']) : PC(part);
+const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw', 'plate', 'center', 'belt', 'skF', 'skS', 'skB', 'crotch'];
+const colOf = part => PC(part);
 function paintMap(paintSeed) {
   const m = {};
   if (paintSeed === 0) { for (const k in PAINT_CHOICES) m[k] = PAINT_CHOICES[k][0]; return m; }
@@ -1227,7 +1224,18 @@ function paintMap(paintSeed) {
   rnd = keep; return m;
 }
 let PAINT = {};
-const PC = part => P[part + 'Color'] ? new THREE.Color(P[part + 'Color']) : COL[PAINT[part]];
+// 部位の色：自分の色 ＞ 上のグループの色（内側のグループが勝つ）＞ 塗り分けの色
+let GRP_COL = {};
+const PC = part => P[part + 'Color'] ? new THREE.Color(P[part + 'Color']) : GRP_COL[part] ? new THREE.Color(GRP_COL[part]) : COL[PAINT[part]];
+function grpColors() {
+  GRP_COL = {};
+  const walk = (node, inh) => {
+    const col = node.children ? (P['g_' + node.id + 'Color'] || inh) : inh;
+    if (node.children) { for (const c of node.children) walk(c, col); return; }
+    if (col) for (const pre of (PRE_OF_SEC[node.sec] || [])) GRP_COL[pre] = col;
+  };
+  if (typeof TREE === 'object') walk(TREE, '');
+}
 
 // ---- 三次元 ----
 const canvas = document.getElementById('c');
@@ -1251,12 +1259,13 @@ function build() {
   clearHL();
   if (group) { scene.remove(group); group.traverse(o => o.geometry && o.geometry.dispose()); }
   rnd = rng(P.seed * 7919 + 17); JT = {};
-  COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed);
+  COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed); grpColors();
   M = new Tris(); G = new Tris();
   let nf;
   if (P.headOn) nf = head();
   else { const km = M, kg = G; M = new Tris(); G = new Tris(); nf = head(); M = km; G = kg; }
   body();
+  applyGroupXf();
   group = new THREE.Group();
   group.add(new THREE.Mesh(M.geom(), matMetal));
   group.add(new THREE.Mesh(G.geom(), matGlow));
@@ -1305,10 +1314,38 @@ canvas.addEventListener('pointerup', e => {
 // ---- 体の欄：表から作る（つまみの id、名前、最小、最大、刻み、初期値）----
 const HEAD_KEYS = Object.keys(P).slice();
 const HEAD_SEC_IDS = new Set([...document.querySelectorAll('#ui h2[id^=sec-]')].map(h => h.id));
+// 塊の欄（胸板・胸の中央・襟・腹・腰の帯・股に共通）
+const slabRows = (pre, d, split) => [['c', pre], ['on', pre + 'On', d.on],
+  ...(split ? [['toggle', pre + 'Split', '半分に割る', !!d.split], ['r', pre + 'Gap', '割れ目の幅', 0, 0.8, 0.01, d.gap ?? 0.12]] : []),
+  ['r', pre + 'W', '幅', 0.2, 4, 0.02, d.W], ['r', pre + 'H', '高さ', 0.1, 5, 0.02, d.H], ['r', pre + 'D', '奥行', 0.2, 4, 0.02, d.D],
+  ['r', pre + 'Y', '上端の下がり', -1, 4, 0.01, d.Y], ['r', pre + 'Z', '前後のずれ', -1.5, 1.5, 0.01, d.Z ?? 0],
+  ['r', pre + 'TopE', '上の面の傾き', 15, 90, 1, d.TopE ?? 80], ['r', pre + 'BotE', '下の面の傾き', 15, 90, 1, d.BotE ?? 80],
+  ['r', pre + 'FrontE', '正面の傾き', -45, 45, 1, d.FrontE ?? 6], ['r', pre + 'BackE', '背の傾き', -45, 45, 1, d.BackE ?? 6],
+  ['r', pre + 'AF', '正中の折れ', 0, 45, 1, d.AF ?? 0], ['r', pre + 'SideA', '横の面の向き', 50, 130, 1, d.SideA ?? 90], ['r', pre + 'SideE', '横の面の傾き', -45, 45, 1, d.SideE ?? 6]];
+// スカートの板の欄
+const hangRows = (pre, d, split) => [['c', pre], ['on', pre + 'On', d.on],
+  ...(split ? [['toggle', pre + 'Split', '半分に割る', !!d.split], ['r', pre + 'Gap', '割れ目の幅', 0, 0.8, 0.01, d.gap ?? 0.1]] : []),
+  ['r', pre + 'W', d.wName || '幅', 0.1, 4, 0.02, d.W], ['r', pre + 'H', '高さ', 0.1, 4, 0.02, d.H], ['r', pre + 'T', '厚み', 0.03, 0.6, 0.01, d.T ?? 0.12],
+  ['r', pre + 'Y', '上端の下がり', -1, 5, 0.01, d.Y], ['r', pre + 'R', '張り出し', 0.1, 3, 0.01, d.R],
+  ...(d.z ? [['r', pre + 'Z', '前後のずれ', -1.5, 1.5, 0.01, 0]] : []),
+  ['r', pre + 'Flare', '開き', -30, 60, 1, d.Flare ?? 12], ['r', pre + 'Taper', 'すぼまり', -30, 45, 1, d.Taper ?? 8], ['r', pre + 'BotE', '下の面の傾き', 15, 90, 1, d.BotE ?? 85]];
+// グループの属性（色は下の物に継がれる。表示はレイヤーの目印で）
+const groupRows = (id, on) => [['c', 'g_' + id], ['on', on, true], ['r', 'g_' + id + 'Y', '上下のずれ', -3, 3, 0.01, 0], ['r', 'g_' + id + 'Z', '前後のずれ', -3, 3, 0.01, 0], ['r', 'g_' + id + 'S', '大きさ', 0.3, 2.5, 0.01, 1]];
 const BODY_SECS = [
-  ['sec-fig', '全身', [['toggle', 'headOn', '頭']]],
-  ['sec-chest', '胴体', [['c', 'chest'], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
-  ['sec-plate', '胸板', [['c', 'plate'], ['toggle', 'plateSplit', '半分に割る', false], ['r', 'plateGap', '割れ目の幅', 0, 0.8, 0.01, 0.12], ['r', 'plateW', '幅', 0.4, 4, 0.02, 2.6], ['r', 'plateH', '高さ', 0.2, 3, 0.02, 1.4], ['r', 'plateD', '奥行', 0.4, 4, 0.02, 1.8], ['r', 'plateY', '上端の下がり', -0.5, 3, 0.01, 0.15], ['r', 'plateZ', '前後のずれ', -1, 1, 0.01, 0], ['r', 'plateTopE', '上の面の傾き', 15, 90, 1, 70], ['r', 'plateBotE', '下の面の傾き', 15, 90, 1, 80], ['r', 'plateFrontE', '正面の傾き', -45, 45, 1, 6], ['r', 'plateBackE', '背の傾き', -45, 45, 1, 12], ['r', 'plateAF', '正中の折れ', 0, 45, 1, 0], ['r', 'plateSideA', '横の面の向き', 50, 130, 1, 90], ['r', 'plateSideE', '横の面の傾き', -45, 45, 1, 6]]],
+  ['sec-fig', '全身', []],
+  ['sec-head', '頭', groupRows('head', 'headOn')],
+  ['sec-torso', '胴体', groupRows('torso', 'g_torsoOn')],
+  ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
+  ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
+  ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
+  ['sec-collar', '襟', slabRows('collar', { W: 1.2, H: 0.35, D: 1.0, Y: -0.2, TopE: 85, BotE: 85, FrontE: 15, BackE: 15, SideE: 15 }, false)],
+  ['sec-abd', '腹', slabRows('abd', { W: 1.6, H: 0.8, D: 1.5, Y: 1.55, TopE: 85, BotE: 85, FrontE: -5, BackE: 6, SideE: 5 }, false)],
+  ['sec-belt', '腰の帯', slabRows('belt', { W: 2.2, H: 0.5, D: 1.7, Y: 2.35, TopE: 80, BotE: 80, FrontE: 6, BackE: 6, SideE: 6 }, false)],
+  ['sec-skirt', 'スカート', groupRows('skirt', 'g_skirtOn')],
+  ['sec-skF', '前', hangRows('skF', { W: 1.6, H: 1.2, Y: 2.4, R: 0.95, split: true, gap: 0.1 }, true)],
+  ['sec-skS', '横', hangRows('skS', { W: 1.2, wName: '前後の長さ', H: 1.1, Y: 2.4, R: 1.25, z: true }, false)],
+  ['sec-skB', '後ろ', hangRows('skB', { W: 1.8, H: 1.2, Y: 2.4, R: 0.95 }, false)],
+  ['sec-crotch', '股', slabRows('crotch', { W: 0.8, H: 0.6, D: 1.2, Y: 2.85, TopE: 85, BotE: 70, FrontE: 20, BackE: 20, SideE: -10 }, false)],
 ];
 {
   const colorRow = (pre, label) => `<div class="row"><label>${label || '色'}</label><input type="color" id="${pre}Color" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="${pre}" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>`;
@@ -1319,6 +1356,7 @@ const BODY_SECS = [
     const flush = () => { if (toggles) { html += `<div class="btns">${toggles}</div>`; toggles = ''; } };
     for (const r of rows) {
       if (r[0] === 'toggle') { toggles += `<button data-t="${r[1]}">${r[2]}</button>`; if (!(r[1] in P)) P[r[1]] = r[3] !== false; continue; }
+      if (r[0] === 'on') { if (!(r[1] in P)) P[r[1]] = r[2] !== false; continue; }
       flush();
       if (r[0] === 'eyecolor') { html += `<div class="row"><label>${r[2]}</label><input type="color" id="${r[1]}" value="#ff5a4a" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"></div>`; continue; }
       if (r[0] === 'kinds') { html += `<div class="btns"><span style="color:#aaa;align-self:center">${r[3]}</span>${r[2].map(([k, l]) => `<button data-kind="${k}" data-pre="${r[1]}">${l}</button>`).join('')}</div>`; if (!((r[1] + 'Kind') in P)) P[r[1] + 'Kind'] = r[4] || r[2][0][0]; continue; }
@@ -1331,6 +1369,7 @@ const BODY_SECS = [
   document.getElementById('toggles').insertAdjacentHTML('beforebegin', html);
 }
 if (!('chestEyeColor' in P)) P.chestEyeColor = '#ff5a4a';
+for (const k of ['g_headColor', 'g_headY', 'g_headZ', 'g_headS']) HEAD_KEYS.push(k);
 const BODY_KEYS = Object.keys(P).filter(k => !HEAD_KEYS.includes(k));
 // 欄は部位ごとに包んで、模型（か 3D）で押した部位の欄だけを出す
 const UI_KEY = 'crystal-head-ui';
@@ -1343,55 +1382,66 @@ const UI_KEY = 'crystal-head-ui';
   }
 }
 let openId = null, mapMode = 'body';
-const HINT = '模型の部位を押すと、その欄が開きます（3D の部品を押しても同じ）';
-function crumbs() {
-  const el = document.getElementById('crumbs');
-  const parts = [['全身', () => { openSec(null); showMap('body'); }]];
-  if (mapMode === 'head') parts.push(['頭', () => { openSec(null); showMap('head'); }]);
-  if (openId) parts.push([document.getElementById(openId).textContent.replace(/（.*）/, ''), null]);
-  el.textContent = '';
-  parts.forEach(([t, fn], i) => {
-    if (i) el.append(' ＞ ');
-    const a = document.createElement(fn ? 'a' : 'span'); a.textContent = t;
-    if (fn) { a.href = '#'; a.onclick = e => { e.preventDefault(); fn(); }; } else a.className = 'here';
-    el.append(a);
-  });
+// ---- レイヤー：右の一覧はグラフィックソフトのレイヤー、欄のつまみはそのレイヤーのアピアランス（依頼主、10/24）。
+// 入れ子にでき、まとめるグループにも属性（色・表示・上下と前後のずれ・大きさ）が付く ----
+const LEAF_ON = { 'sec-muff': 'muffOn', 'sec-twin': 'twin', 'sec-mono': 'mono', 'sec-neck': 'neck', 'sec-chin': 'chin', 'sec-ear': 'ears', 'sec-back': 'back',
+  'sec-chest': 'coreOn', 'sec-plate': 'plateOn', 'sec-center': 'centerOn', 'sec-collar': 'collarOn', 'sec-abd': 'abdOn', 'sec-belt': 'beltOn', 'sec-skF': 'skFOn', 'sec-skS': 'skSOn', 'sec-skB': 'skBOn', 'sec-crotch': 'crotchOn' };
+const leaf = sec => ({ id: sec, sec, on: LEAF_ON[sec] });
+const TREE = { id: 'all', name: '全身', sec: 'sec-fig', children: [
+  { id: 'head', name: '頭', sec: 'sec-head', on: 'headOn', xf: true, children: ['sec-body', 'sec-helmet', 'sec-occ', 'sec-brim', 'sec-muff', 'sec-guard', 'sec-back', 'sec-face', 'sec-deco', 'sec-twin', 'sec-mono', 'sec-ear', 'sec-chin', 'sec-neck', 'sec-crest', 'sec-horn'].map(leaf) },
+  { id: 'torso', name: '胴体', sec: 'sec-torso', on: 'g_torsoOn', xf: true, children: [...['sec-chest', 'sec-collar', 'sec-plate', 'sec-center', 'sec-abd', 'sec-belt'].map(leaf),
+    { id: 'skirt', name: 'スカート', sec: 'sec-skirt', on: 'g_skirtOn', xf: true, children: ['sec-skF', 'sec-skS', 'sec-skB'].map(leaf) }, leaf('sec-crotch')] },
+] };
+const nameOf = node => node.name || (document.getElementById(node.sec) ? document.getElementById(node.sec).textContent.replace(/（.*）/, '') : node.sec);
+// 欄 → その欄にある部位の番号（3D の三角形の part 属性）と、色の接頭辞
+const SEC_PARTS = {};
+for (const id in PART_TARGET) { const sec = PART_TARGET[id] === 'btn-vents' ? 'sec-face' : PART_TARGET[id]; (SEC_PARTS[sec] = SEC_PARTS[sec] || []).push(+id); }
+const PRE_OF_SEC = {};
+for (const w of document.querySelectorAll('#ui .sec')) PRE_OF_SEC[w.dataset.sec] = [...w.querySelectorAll('input[type=color]')].map(el => el.id.replace(/Color$/, '')).filter(k => !k.startsWith('g_'));
+const isHeadSec = id => HEAD_SEC_IDS.has(id) || id === 'sec-head';
+const TREE_OPEN = new Set((() => { try { const v = localStorage.getItem(UI_KEY + '-tree'); return v ? JSON.parse(v) : ['all', 'head', 'torso', 'skirt']; } catch (e) { return ['all', 'head', 'torso', 'skirt']; } })());
+const saveTree = () => { try { localStorage.setItem(UI_KEY + '-tree', JSON.stringify([...TREE_OPEN])); } catch (e) {} };
+function pathTo(sec) {   // 根からその欄までの節
+  const go = (n, path) => { const p = [...path, n]; if (n.sec === sec) return p; if (n.children) for (const c of n.children) { const r = go(c, p); if (r) return r; } return null; };
+  return go(TREE, []) || [];
+}
+function trisOfParts(set) { const out = []; for (const T of [M, G]) for (let i = 0; i < T.pid.length; i++) if (set.has(T.pid[i])) out.push(T.pos[3 * i], T.pos[3 * i + 1], T.pos[3 * i + 2]); return out; }
+function renderTree() {
+  const box = document.getElementById('tree'); if (!box) return; box.textContent = '';
+  const walk = (node, depth, hidden) => {
+    const k = node.on, off = hidden || (k ? !P[k] : false);
+    const row = document.createElement('div');
+    row.className = 'lay' + (node.sec === openId ? ' on' : '') + (node.children ? ' grp' : '') + (off ? ' off' : '');
+    row.dataset.sec = node.sec; row.style.paddingLeft = (6 + depth * 14) + 'px';
+    const tri = document.createElement('span'); tri.className = 'tri'; tri.textContent = node.children ? (TREE_OPEN.has(node.id) ? '▾' : '▸') : '';
+    if (node.children) tri.onclick = e => { e.stopPropagation(); if (TREE_OPEN.has(node.id)) TREE_OPEN.delete(node.id); else TREE_OPEN.add(node.id); saveTree(); renderTree(); };
+    const eye = document.createElement('span'); eye.className = 'eye';
+    if (k) { eye.textContent = P[k] ? '●' : '○'; eye.title = P[k] ? '隠す' : '出す'; if (!P[k]) eye.classList.add('hid'); eye.onclick = e => { e.stopPropagation(); P[k] = !P[k]; save(); build(); syncUI(); renderTree(); }; }
+    else eye.classList.add('none');
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = nameOf(node);
+    row.append(tri, eye, nm);
+    row.onclick = () => openSec(openId === node.sec ? null : node.sec);
+    row.onmouseenter = () => { if (M) showHL(trisOfParts(node.children ? partsUnder(node) : new Set(SEC_PARTS[node.sec] || []))); };
+    row.onmouseleave = () => clearHL();
+    box.append(row);
+    if (node.children && TREE_OPEN.has(node.id)) for (const c of node.children) walk(c, depth + 1, off);
+  };
+  walk(TREE, 0, false);
 }
 function showMap(mode) {
   const changed = mapMode !== mode;
   mapMode = mode;
-  document.getElementById('mapBody').style.display = mode === 'body' ? '' : 'none';
-  document.getElementById('map').style.display = mode === 'head' ? '' : 'none';
   try { localStorage.setItem(UI_KEY + '-map', mode); } catch (e) {}
   if (changed) setView(curView);
   libRender();
-  crumbs(); renderToc();
 }
-const BODY_HINT = '全身。部位を押すとその欄が開きます（頭を押すと頭の図に）';
-for (const g of document.querySelectorAll('#mapBody .pt')) {
-  g.addEventListener('click', () => {
-    if (g.dataset.part === 'head') { if (openId && !HEAD_SEC_IDS.has(openId)) openSec(null); showMap('head'); mapLabel(openId ? document.getElementById(openId).textContent : HINT); }
-    else if (g.dataset.sec) openSec(openId === g.dataset.sec ? null : g.dataset.sec);
-  });
-  g.addEventListener('mouseenter', () => mapLabel(g.dataset.name));
-  g.addEventListener('mouseleave', () => mapLabel(openId ? document.getElementById(openId).textContent : (mapMode === 'head' ? HINT : BODY_HINT)));
-}
-document.getElementById('mapToBody').addEventListener('click', () => { openSec(null); showMap('body'); mapLabel(BODY_HINT); });
-const mapLabel = t => { document.getElementById('maplabel').textContent = t; };
 function openSec(id) {
   if (id && !document.querySelector('#ui .sec[data-sec="' + id + '"]')) id = null;
   openId = id;
   for (const w of document.querySelectorAll('#ui .sec')) w.classList.toggle('open', w.dataset.sec === id);
-  for (const g of document.querySelectorAll('#map .pt, #mapBody .pt')) g.classList.toggle('on', g.dataset.sec === id);
-  if (id) showMap(HEAD_SEC_IDS.has(id) ? 'head' : 'body');
-  mapLabel(id ? document.getElementById(id).textContent : (mapMode === 'head' ? HINT : BODY_HINT));
+  if (id) { showMap(isHeadSec(id) ? 'head' : 'body'); for (const n of pathTo(id)) if (n.children) TREE_OPEN.add(n.id); saveTree(); }
   try { localStorage.setItem(UI_KEY, id || ''); } catch (e) {}
-  crumbs(); renderToc();
-}
-for (const g of document.querySelectorAll('#map .pt')) {
-  g.addEventListener('click', () => openSec(openId === g.dataset.sec ? null : g.dataset.sec));
-  g.addEventListener('mouseenter', () => mapLabel(g.dataset.name));
-  g.addEventListener('mouseleave', () => mapLabel(openId ? document.getElementById(openId).textContent : HINT));
+  renderTree();
 }
 for (const h of document.querySelectorAll('#ui .sec h2')) h.addEventListener('click', () => openSec(null));   // 題名を押すと閉じる
 
@@ -1400,16 +1450,6 @@ for (const h of document.querySelectorAll('#ui .sec h2')) h.addEventListener('cl
   const homes = new Map();
   for (const el of document.querySelectorAll('[data-home]')) { const k = el.dataset.home; if (!homes.has(k)) homes.set(k, []); homes.get(k).push(el); }
   for (const [k, els] of homes) { const w = document.querySelector('#ui .sec[data-sec="' + k + '"]'); if (w) w.querySelector('h2').after(...els); }
-}
-function renderToc() {
-  const box = document.getElementById('toc'); if (!box) return; box.textContent = '';
-  const ids = mapMode === 'head' ? [...HEAD_SEC_IDS] : BODY_SECS.map(sc => sc[0]);
-  for (const id of ids) {
-    const h = document.getElementById(id); if (!h) continue;
-    const b = document.createElement('button'); b.textContent = h.textContent.replace(/（.*）/, ''); b.classList.toggle('on', openId === id);
-    b.onclick = () => openSec(openId === id ? null : id); box.append(b);
-  }
-  if (mapMode !== 'head') { const b = document.createElement('button'); b.textContent = '頭 ＞'; b.onclick = () => { if (openId && !HEAD_SEC_IDS.has(openId)) openSec(null); showMap('head'); }; box.append(b); }
 }
 function closePops() { for (const p of document.querySelectorAll('.pop')) p.style.display = 'none'; for (const id of ['libBtn', 'v2Btn']) document.getElementById(id).classList.remove('on'); }
 for (const [btnId, popId] of [['libBtn', 'pop-lib'], ['v2Btn', 'pop-v2']]) {
@@ -1431,10 +1471,11 @@ function probeTris(mut) {   // 値を一時に変えて組み、三角形だけ�
   let out = null;
   try {
     mut();
-    rnd = rng(P.seed * 7919 + 17); JT = {}; COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed);
+    rnd = rng(P.seed * 7919 + 17); JT = {}; COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed); grpColors();
     M = new Tris(); G = new Tris();
     if (P.headOn) head(); else { const km = M, kg = G; M = new Tris(); G = new Tris(); head(); M = km; G = kg; }
     body();
+    applyGroupXf();
     out = { m: { pos: M.pos, pid: M.pid }, g: { pos: G.pos, pid: G.pid } };
   } catch (e) { out = null; }
   const o = JSON.parse(keep); for (const k of Object.keys(P)) delete P[k]; Object.assign(P, o);
@@ -1717,7 +1758,7 @@ function flashPart(targetId) {
   if (!el) return;
   if (el.tagName === 'H2' && el.id.startsWith('sec-')) {
     openSec(el.id);
-    for (const g of document.querySelectorAll('#map .pt[data-sec="' + el.id + '"]')) { g.classList.remove('flash'); void g.getBBox(); g.classList.add('flash'); setTimeout(() => g.classList.remove('flash'), 1300); }
+    const row = document.querySelector('#tree .lay[data-sec="' + el.id + '"]'); if (row) { row.classList.add('flash'); setTimeout(() => row.classList.remove('flash'), 1300); }
   }
   const items = [el];
   if (el.tagName === 'H2') { let n = el.nextElementSibling; while (n && n.tagName !== 'H2') { items.push(n); n = n.nextElementSibling; } }
@@ -1802,7 +1843,9 @@ function syncUI() {
   if (document.getElementById('chestEyeColor')) document.getElementById('chestEyeColor').value = P.chestEyeColor;
   if (typeof drawTwin === 'function') { drawTwin(); drawEar(); drawChin(); drawFace(); drawSec(); drawNeck(); }
   for (const pre of COLOR_PRES) { const el = document.getElementById(pre + 'Color'); if (el && (P[pre + 'Color'] || (COL && PAINT[pre]))) el.value = P[pre + 'Color'] || '#' + PC(pre).getHexString(); }
+  for (const el of document.querySelectorAll('input[type=color][id^=g_]')) el.value = P[el.id] || '#888888';
   for (const b of document.querySelectorAll('button[data-t]')) b.classList.toggle('on', !!P[b.dataset.t]);
+  if (typeof renderTree === 'function') renderTree();
   for (const b of document.querySelectorAll('button[data-kind]')) b.classList.toggle('on', P[b.dataset.pre + 'Kind'] === b.dataset.kind);
   for (const b of document.querySelectorAll('button[data-side]')) b.classList.toggle('on', P[b.dataset.pre + 'Side'] === b.dataset.side);
   for (const b of document.querySelectorAll('button[data-place]')) b.classList.toggle('on', P.decoPlace === b.dataset.place);
@@ -1919,6 +1962,7 @@ document.getElementById('earReset').onclick = () => { P.earPts = defaultShape('e
 document.getElementById('earN').addEventListener('input', () => { P.earPts = defaultShape('earPts', P.earN); save(); build(); drawEar(); });
 document.getElementById('earColor').addEventListener('input', e => { P.earColor = e.target.value; save(); build(); drawEar(); });
 for (const b of document.querySelectorAll('button.colreset')) b.onclick = () => { P[b.dataset.pre + 'Color'] = ''; syncUI(); save(); build(); };
+for (const el of document.querySelectorAll('input[type=color][id^=g_]')) el.addEventListener('input', e => { P[el.id] = e.target.value; save(); build(); });
 for (const pre of COLOR_PRES.slice(6)) { const el = document.getElementById(pre + 'Color'); if (el) el.addEventListener('input', e => { P[pre + 'Color'] = e.target.value; save(); build(); }); }
 if (document.getElementById('chestEyeColor')) document.getElementById('chestEyeColor').addEventListener('input', e => { P.chestEyeColor = e.target.value; save(); build(); });
 // ガチャ：その欄のつまみを乱数で引き直す。戻すで 1 つ前へ
