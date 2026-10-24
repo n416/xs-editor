@@ -1398,27 +1398,36 @@ function body() {
     const bar = (dx, dy, bw) => { const L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L; return { d: [dx / L, dy / L], n: [nx, ny], hp: [[nx, ny, bw / 2, 'out'], [-nx, -ny, bw / 2, 'out']], bw }; };
     const pieces = [];
     const kind = P.ltrKind;
+    // 字は、どの縁も「全部が外の縁」か「全部が内の縁（ほかの塊と接する）」になるように切り分ける。外の縁だけを落とすので、棒の交わる所に切れ込みが入らない
+    // （依頼主：「縁の落としをした時にT字にクロス部分にまで切れ込みが入るのはまずいのでは」）
     if (kind === 'T') {
       const hb = Math.min(P.ltrHB, H * 0.95), sw = Math.min(P.ltrSW, W), yb = H2 - hb, rise = P.ltrRise, rl = Math.min(P.ltrRiseL, W2);
-      const top = [...box.slice(0, 3), [0, -1, -yb, 'out']];
-      if (rise > 0 && rl > 0) for (const sg of [1, -1]) top.push([sg * rise / rl, -1, -yb + rise / rl * (W2 - rl), 'out']);   // 横棒の下の辺が端で上がる
-      pieces.push(top);
+      const under = [[0, -1, -yb, 'out']];
+      if (rise > 0 && rl > 0) for (const sg of [1, -1]) under.push([sg * rise / rl, -1, -yb + rise / rl * (W2 - rl), 'out']);   // 横棒の下の辺が端で上がる
+      // 横棒：縦棒の真上（下の辺は縦棒と接する）と、その左右
+      pieces.push([...box.slice(0, 3), [1, 0, sw / 2, 'in'], [-1, 0, sw / 2, 'in'], [0, -1, -yb, 'in']]);
+      pieces.push([...box.slice(0, 3), ...under, [1, 0, -sw / 2, 'in']]);
+      pieces.push([...box.slice(0, 3), ...under, [-1, 0, -sw / 2, 'in']]);
       pieces.push([[1, 0, sw / 2, 'out'], [-1, 0, sw / 2, 'out'], [0, 1, yb, 'in'], [0, -1, H2, 'out']]);
     } else {
       const bw = P.ltrBW, bars = [];
       if (kind === 'X') { bars.push(bar(W, H, bw), bar(W, -H, bw)); }
       else { bars.push(bar(0, 1, bw), bar(Math.sin(Math.PI / 3), Math.cos(Math.PI / 3), bw), bar(-Math.sin(Math.PI / 3), Math.cos(Math.PI / 3), bw)); }   // ＊：縦 1 本と左右 60° の 2 本
-      bars.forEach((b, i) => {
-        for (const sg of (i === 0 ? [0] : [1, -1])) {
-          const hp = [...box, ...b.hp];
-          for (let j = 0; j < i; j++) {   // 先の棒の外：この腕がある側
-            const o = bars[j], side = Math.sign(o.n[0] * b.d[0] * sg + o.n[1] * b.d[1] * sg) || 1;
-            hp.push([-side * o.n[0], -side * o.n[1], -o.bw / 2, 'in']);
-          }
-          if (sg) hp.push([-sg * b.d[0], -sg * b.d[1], 0, 'in']);   // この腕の半分（真ん中から片側）
-          pieces.push(hp);
-        }
-      });
+      // 棒の縁の線で区切る：どの棒についても「手前の外・棒の中・向こうの外」の 3 つのどれか。どれかの棒の中なら字の一部。
+      // 区切りの縁の向こうも字の一部なら内の縁、そうでなければ外の縁
+      const m = bars.length, inAny = st => st.some(x => x === 0);
+      for (let code = 0; code < 3 ** m; code++) {
+        const st = []; for (let c = code, k = 0; k < m; k++, c = Math.floor(c / 3)) st.push(c % 3 - 1);
+        if (!inAny(st)) continue;
+        const hp = [...box];
+        st.forEach((x, k) => {
+          const [nx, ny] = bars[k].n, h = bars[k].bw / 2, flip = v => { const t2 = st.slice(); t2[k] = v; return inAny(t2) ? 'in' : 'out'; };
+          if (x === 0) { hp.push([nx, ny, h, flip(1)], [-nx, -ny, h, flip(-1)]); }
+          else if (x === 1) hp.push([-nx, -ny, -h, flip(0)]);
+          else hp.push([nx, ny, -h, flip(0)]);
+        });
+        pieces.push(hp);
+      }
     }
     // 多角形を half-plane で切る（縁の種類を持ったまま）
     const clip = (poly, [a, b, c, tag]) => {
