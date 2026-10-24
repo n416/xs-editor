@@ -1182,7 +1182,7 @@ function body() {
     const ratio = [1, 0.9, 0.8, 0.7, 0.6][P.col1Taper | 0], w2 = W / 2 * ratio, ys = top - H / 2;
     for (const sg of [1, -1]) {
       f.push(plane(sg * 90, 0, new V(sg * W / 2, 0, 0)));
-      if (ratio < 1) { const n = new V(sg * (ys - bot), (W / 2 - w2), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, ys, 0)) }); }
+      if (ratio < 1) { const n = new V(sg * (ys - bot), -(W / 2 - w2), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, ys, 0)) }); }   // 斜めの面の向きは外向きで下向き（縁 (dx, dy) に直交する (−dy, dx)）
       const c = [0, 0.1, 0.25, 0.4][P.col1ChT | 0] * W / 2; if (c > 0) f.push(plane(sg * 90, 45, new V(sg * (W / 2 - c), top, 0)));
     }
     crystal(M, f, col);
