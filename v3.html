@@ -586,8 +586,8 @@ const rotPts2 = (pts, deg) => { const a = deg * D2R; return pts.map(([x, y]) => 
 function regularEye(n) { const o = []; for (let i = 0; i < n; i++) { const a = PI / 2 + i / n * 2 * PI; o.push([+Math.cos(a).toFixed(3), +Math.sin(a).toFixed(3)]); } return o; }
 
 // ---- 部位の番号（3D を押した所から左の欄を光らせるため）----
-const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, band: 40, skF: 41, skS: 42, skB: 43, crotch: 44, x1: 45, x2: 46, x3: 47, x4: 48, x5: 49, x6: 50, skC: 52, col1: 53 };
-const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-band', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch', 45: 'sec-x1', 46: 'sec-x2', 47: 'sec-x3', 48: 'sec-x4', 49: 'sec-x5', 50: 'sec-x6', 52: 'sec-skC', 53: 'sec-col1' };
+const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, band: 40, skF: 41, skS: 42, skB: 43, crotch: 44, x1: 45, x2: 46, x3: 47, x4: 48, x5: 49, x6: 50, skC: 52, col1: 53, cov1: 54 };
+const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-band', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch', 45: 'sec-x1', 46: 'sec-x2', 47: 'sec-x3', 48: 'sec-x4', 49: 'sec-x5', 50: 'sec-x6', 52: 'sec-skC', 53: 'sec-col1', 54: 'sec-cov1' };
 const setPart = id => { M.part = id; G.part = id; };
 
 // ---- 頭 ----
@@ -1183,6 +1183,9 @@ function body() {
     for (const sg of [1, -1]) {
       f.push(plane(sg * 90, 0, new V(sg * W / 2, 0, 0)));
       if (ratio < 1) { const n = new V(sg * (ys - bot), -(W / 2 - w2), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, ys, 0)) }); }   // 斜めの面の向きは外向きで下向き（縁 (dx, dy) に直交する (−dy, dx)）
+      // 上の細り：上の N 割を両側から斜めに狭める。面の向きは外向きで上向き
+      const ru = [1, 0.9, 0.8, 0.7, 0.6][P.col1TaperU | 0], yu = top - H * P.col1TaperUH / 10;
+      if (ru < 1) { const n = new V(sg * (top - yu), W / 2 * (1 - ru), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, yu, 0)) }); }
       const c = [0, 0.1, 0.25, 0.4][P.col1ChT | 0] * W / 2; if (c > 0) f.push(plane(sg * 90, 45, new V(sg * (W / 2 - c), top, 0)));
       // 上の断面：前の両角を後ろへ向ける（上から見て 八）。角の面は正面の尖りの線を通る
       const ph = [0, 10, 20, 30][P.col1Hachi | 0] * D2R, fw = [0.3, 0.5, 0.7][P.col1HachiW | 0] * W / 2;
@@ -1197,19 +1200,26 @@ function body() {
       cut.push([{ n: nU.clone().negate(), d: -(dU - nt) }, plane(0, -90, new V(0, top - nd, 0)), plane(90, 0, new V(nw / 2, 0, 0)), plane(-90, 0, new V(-nw / 2, 0, 0))]);
     }
     crystal(M, f, col, cut.length ? cut : undefined);
-    // 正面の板：正面の上下 2 面の上の台形の範囲を、縁を斜めにして前へ押し出す。板の上の面は範囲の上の縁と出た尖りを通る面、下の面は底の縁と尖りを通る面
-    if (P.col1Ex | 0) {
-      const d = [0.15, 0.3, 0.45][P.col1ExOut | 0], bev = [30, 45, 70][P.col1ExBev | 0] * D2R;
-      const yT = top - H * P.col1ExTop / 10, yB = bot, wT = W / 2 * P.col1ExWT / 10 * 2 / 2, wB = W / 2 * P.col1ExWB / 10 * 2 / 2;
-      const zAt = y => y >= yp ? zf - (y - yp) * (zf - zt) / (top - yp) : zf - (yp - y) * (zf - zfb) / (yp - bot);   // 正面の面の上の z
-      const TL = new V(-wT, yT, zAt(yT)), TR = new V(wT, yT, zAt(yT)), BL = new V(-wB, yB, zAt(yB)), BR = new V(wB, yB, zAt(yB)), Pt = new V(0, yp, zf + d);
-      const planeOf = (a, b, c, want) => { const n = new V().crossVectors(b.clone().sub(a), c.clone().sub(a)).normalize(); if (n.dot(want) < 0) n.negate(); return { n, d: n.dot(a) }; };
-      const g = [planeOf(TL, TR, Pt, new V(0, 1, 1)), planeOf(BL, BR, Pt, new V(0, -1, 1))];
-      for (const sg of [1, -1]) { const T = sg > 0 ? TR : TL, B = sg > 0 ? BR : BL; const T3 = new V(T.x - sg * d / Math.tan(bev), T.y, T.z + d); g.push(planeOf(T, B, T3, new V(sg, 0, 0))); }
-      // 柱の中に少し入れて止める（柱の面と同じ平面に面を持たないよう、上・底・背・横は 0.02 内側）
-      g.push(plane(0, 90, new V(0, top - 0.02, 0)), plane(0, -90, new V(0, bot + 0.02, 0)), plane(180, 0, new V(0, 0, zb + 0.05)), plane(90, 0, new V(W / 2 - 0.02, 0, 0)), plane(-90, 0, new V(-W / 2 + 0.02, 0, 0)));
-      crystal(M, g, col);
+  }
+  // コクピットカバー（依頼主の印 2）：柱の正面の中央に入れる楔の塊。柱とは別の立体で、柱の前の面のうち範囲の所はこれに置き換わる。
+  // 正面＝上が広く下へ細る台形、横＝前へ尖る楔（上の面は柱の上の前の縁から尖りへ、下の面は尖りから柱の底の前の縁へ）、奥は胸の奥行の中ほどまで。
+  // 横の縁は、柱の前（尖りの線の深さ）で台形の幅になり、そこから前へ傾けて狭める（奥では広がって柱に埋まる）
+  if (P.cov1On) {
+    setPart(PART.cov1);
+    const col = colOf('cov1'), W = P.col1W, H = P.col1H, D = P.col1D, top = y0 - P.col1Y, bot = top - H, e = 0.03;
+    const zf = D / 2, yp = top - H * P.col1Pt / 10;
+    const zt = zf - (top - yp) / Math.tan(P.col1AU * D2R), zfb = zf - (yp - bot) * Math.tan(P.col1AL * D2R);   // 柱の上の前の縁・底の前の縁
+    const yk = top - H * P.cov1Pt / 10, zk = zf + [0.2, 0.4, 0.6][P.cov1Out | 0];                            // 尖り
+    const wT = W * P.cov1WT / 20, wB = W * P.cov1WB / 20, bev = [65, 75, 85][P.cov1Bev | 0] * D2R, zB = zf - D * P.cov1Deep / 10;
+    const nU = new V(0, zk - zt, top - yk).normalize(), nL = new V(0, -(zk - zfb), yk - bot).normalize();
+    const f = [plane(0, 90, new V(0, top - e, 0)), plane(0, -90, new V(0, bot + e, 0)), plane(180, 0, new V(0, 0, zB)),
+      { n: nU, d: nU.dot(new V(0, yk, zk)) }, { n: nL, d: nL.dot(new V(0, yk, zk)) }];
+    for (const sg of [1, -1]) {
+      const nx = new V(sg * H, -(wT - wB), 0).normalize();   // 正面の台形の横の縁の外向き
+      const n = new V(nx.x * Math.sin(bev), nx.y * Math.sin(bev), Math.cos(bev));   // 前へ傾ける
+      f.push({ n, d: n.dot(new V(sg * wT, top, zf)) }, plane(sg * 90, 0, new V(sg * (W / 2 - e), 0, 0)));
     }
+    crystal(M, f, col);
   }
   // 襟：箱か、首を囲む円筒の輪
   if (P.collarOn) {
@@ -1423,11 +1433,11 @@ const PAINT_CHOICES = {
   guard: ['sub', 'main', 'main'], back: ['sub', 'main'], face: ['face', 'face', 'main'], chin: ['accent', 'accent', 'fin'],
   ear: ['accent', 'main', 'sub'], crest: ['fin', 'fin', 'accent'], horn: ['fin', 'accent', 'main'],
   neck: ['dark', 'dark', 'sub', 'main'],
-  chest: ['main', 'main', 'sub'], plate: ['main', 'sub', 'accent', 'main'], center: ['accent', 'sub', 'main'], band: ['sub', 'main', 'dark'], skF: ['main', 'main', 'sub'], skS: ['main', 'main', 'sub'], skB: ['main', 'main', 'sub'], skC: ['main', 'main', 'sub'], crotch: ['sub', 'dark', 'main'], col1: ['main', 'sub', 'accent'], x1: ['main', 'sub', 'accent'], x2: ['main', 'sub', 'accent'], x3: ['main', 'sub', 'accent'], x4: ['main', 'sub', 'accent'], x5: ['main', 'sub', 'accent'], x6: ['main', 'sub', 'accent'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
+  chest: ['main', 'main', 'sub'], plate: ['main', 'sub', 'accent', 'main'], center: ['accent', 'sub', 'main'], band: ['sub', 'main', 'dark'], skF: ['main', 'main', 'sub'], skS: ['main', 'main', 'sub'], skB: ['main', 'main', 'sub'], skC: ['main', 'main', 'sub'], crotch: ['sub', 'dark', 'main'], col1: ['main', 'sub', 'accent'], cov1: ['sub', 'main', 'accent'], x1: ['main', 'sub', 'accent'], x2: ['main', 'sub', 'accent'], x3: ['main', 'sub', 'accent'], x4: ['main', 'sub', 'accent'], x5: ['main', 'sub', 'accent'], x6: ['main', 'sub', 'accent'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
   shoulder: ['main', 'main', 'sub', 'accent'], upperarm: ['sub', 'main', 'main'], forearm: ['main', 'main', 'sub'], gauntlet: ['main', 'sub', 'accent'], hand: ['dark', 'dark', 'sub'],
   thigh: ['main', 'main', 'sub'], knee: ['sub', 'accent', 'main'], shin: ['main', 'main', 'sub'], foot: ['sub', 'main', 'dark'], pack: ['sub', 'main', 'dark'], thruster: ['dark'], tank: ['sub', 'main', 'accent'], joint: ['dark'], pipe: ['dark', 'dark', 'accent'], cannon: ['sub', 'main', 'dark'], hatch: ['accent', 'sub', 'main'], tread: ['dark', 'sub'], hull: ['sub', 'main'], ball: ['main', 'sub'], chestFront: ['accent', 'sub', 'main'], claw: ['dark', 'accent', 'main'],
 };
-const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw', 'plate', 'center', 'band', 'skF', 'skS', 'skB', 'skC', 'crotch', 'col1', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6'];
+const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw', 'plate', 'center', 'band', 'skF', 'skS', 'skB', 'skC', 'crotch', 'col1', 'cov1', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6'];
 const colOf = part => PC(part);
 function paintMap(paintSeed) {
   const m = {};
@@ -1568,19 +1578,22 @@ const BODY_SECS = [
     ['w', 'col1AU', '上の面の傾き', 20, 80, 5, 50, SLOPE],
     ['w', 'col1AL', '下の面の倒れ', 0, 60, 5, 30, LEAN],
     ['w', 'col1Taper', '下半分の細り', 0, 4, 1, 2, v => ['無し', '少し', '中くらい', '大きく', 'とても'][v]],
+    ['w', 'col1TaperU', '上の細り', 0, 4, 1, 0, v => ['無し', '少し', '中くらい', '大きく', 'とても'][v]],
+    ['w', 'col1TaperUH', '上の細りの長さ', 2, 6, 1, 4, v => `上から ${v} 割`],
     ['w', 'col1ChT', '上の角の落とし', 0, 3, 1, 1, v => ['無し', '小', '中', '大'][v]],
     ['w', 'col1Hachi', '前の角の向き', 0, 3, 1, 0, v => ['前のまま', '少し後ろへ（10°）', '後ろへ（20°）', '大きく後ろへ（30°）'][v]],
     ['w', 'col1HachiW', '前の角の面の幅', 0, 2, 1, 1, v => ['狭い', '中くらい', '広い'][v]],
     ['w', 'col1Notch', '上の正中の欠き', 0, 1, 1, 0, v => ['無し', 'あり'][v]],
     ['w', 'col1NotchW', '欠きの幅', 0, 2, 1, 1, v => ['狭い', '中くらい', '広い'][v]],
     ['w', 'col1NotchD', '欠きの下がり', 0, 2, 1, 1, v => ['浅い', '中くらい', '深い'][v]],
-    ['w', 'col1NotchT', '欠きの奥行', 0, 2, 1, 1, v => ['薄い', '中くらい', '厚い'][v]],
-    ['w', 'col1Ex', '正面の板を押し出す', 0, 1, 1, 0, v => ['無し', 'あり'][v]],
-    ['w', 'col1ExTop', '板の上端', 1, 5, 1, 3, v => `上から ${v} 割（下端は底まで）`],
-    ['w', 'col1ExWT', '板の上の幅', 2, 6, 1, 4, v => `幅の ${v} 割`],
-    ['w', 'col1ExWB', '板の下の幅', 1, 5, 1, 3, v => `幅の ${v} 割`],
-    ['w', 'col1ExOut', '板の出', 0, 2, 1, 1, v => ['少し（0.15）', '中くらい（0.3）', '大きく（0.45）'][v]],
-    ['w', 'col1ExBev', '板の縁の傾き', 0, 2, 1, 1, v => ['緩い（30°）', '中くらい（45°）', '急（70°）'][v]]]],
+    ['w', 'col1NotchT', '欠きの奥行', 0, 2, 1, 1, v => ['薄い', '中くらい', '厚い'][v]]]],
+  ['sec-cov1', 'コクピットカバー', [['c', 'cov1'], ['on', 'cov1On', false],
+    ['w', 'cov1Pt', '尖りの高さ', 1, 7, 1, 4, v => `柱の上から ${v} 割`],
+    ['w', 'cov1Out', '尖りの出', 0, 2, 1, 1, v => ['少し（柱の前から 0.2）', '中くらい（0.4）', '大きく（0.6）'][v]],
+    ['w', 'cov1WT', '上の幅', 2, 7, 1, 4, v => `柱の幅の ${v} 割`],
+    ['w', 'cov1WB', '下の幅', 1, 6, 1, 3, v => `柱の幅の ${v} 割`],
+    ['w', 'cov1Deep', '奥', 3, 6, 1, 4, v => `柱の前から奥行の ${v} 割`],
+    ['w', 'cov1Bev', '横の縁の傾き', 0, 2, 1, 1, v => ['緩い（65°）', '中くらい（75°）', '急（85°）'][v]]]],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
@@ -1643,12 +1656,12 @@ let openId = null, mapMode = 'body';
 // ---- レイヤー：右の一覧はグラフィックソフトのレイヤー、欄のつまみはそのレイヤーのアピアランス（依頼主、10/24）。
 // 入れ子にでき、まとめるグループにも属性（色・表示・上下と前後のずれ・大きさ）が付く ----
 const LEAF_ON = { 'sec-muff': 'muffOn', 'sec-twin': 'twin', 'sec-mono': 'mono', 'sec-neck': 'neck', 'sec-chin': 'chin', 'sec-ear': 'ears', 'sec-back': 'back',
-  'sec-chest': 'coreOn', 'sec-plate': 'plateOn', 'sec-center': 'centerOn', 'sec-collar': 'collarOn', 'sec-abd': 'abdOn', 'sec-band': 'bandOn', 'sec-pipe': 'pipeOn', 'sec-skF': 'skFOn', 'sec-skS': 'skSOn', 'sec-skB': 'skBOn', 'sec-skC': 'skCOn', 'sec-crotch': 'crotchOn', 'sec-col1': 'col1On',
+  'sec-chest': 'coreOn', 'sec-plate': 'plateOn', 'sec-center': 'centerOn', 'sec-collar': 'collarOn', 'sec-abd': 'abdOn', 'sec-band': 'bandOn', 'sec-pipe': 'pipeOn', 'sec-skF': 'skFOn', 'sec-skS': 'skSOn', 'sec-skB': 'skBOn', 'sec-skC': 'skCOn', 'sec-crotch': 'crotchOn', 'sec-col1': 'col1On', 'sec-cov1': 'cov1On',
   'sec-x1': 'x1On', 'sec-x2': 'x2On', 'sec-x3': 'x3On', 'sec-x4': 'x4On', 'sec-x5': 'x5On', 'sec-x6': 'x6On' };
 const leaf = sec => ({ id: sec, sec, on: LEAF_ON[sec] });
 const TREE = { id: 'all', name: '全身', sec: 'sec-fig', children: [
   { id: 'head', name: '頭', sec: 'sec-head', on: 'headOn', xf: true, children: ['sec-body', 'sec-helmet', 'sec-occ', 'sec-brim', 'sec-muff', 'sec-guard', 'sec-back', 'sec-face', 'sec-deco', 'sec-twin', 'sec-mono', 'sec-ear', 'sec-chin', 'sec-neck', 'sec-crest', 'sec-horn'].map(leaf) },
-  { id: 'torso', name: '胴体', sec: 'sec-torso', on: 'g_torsoOn', xf: true, children: [...['sec-col1', 'sec-chest', 'sec-collar', 'sec-plate', 'sec-center', 'sec-abd', 'sec-band', 'sec-pipe'].map(leaf),
+  { id: 'torso', name: '胴体', sec: 'sec-torso', on: 'g_torsoOn', xf: true, children: [...['sec-col1', 'sec-cov1', 'sec-chest', 'sec-collar', 'sec-plate', 'sec-center', 'sec-abd', 'sec-band', 'sec-pipe'].map(leaf),
     { id: 'skirt', name: 'スカート', sec: 'sec-skirt', on: 'g_skirtOn', xf: true, children: ['sec-skC', 'sec-skF', 'sec-skS', 'sec-skB'].map(leaf) }, leaf('sec-crotch'),
     ...[1, 2, 3, 4, 5, 6].map(i => ({ ...leaf('sec-x' + i), use: 'x' + i + 'Use' })), { add: true }] },
 ] };
