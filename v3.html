@@ -1296,9 +1296,9 @@ function body() {
   if (P.splOn) {
     setPart(PART.spl);
     const col = colOf('spl'), N = Math.max(1, P.splN | 0), Wt = P.splW, gap = N > 1 ? Math.min(P.splGap, Wt * 0.5 / (N - 1)) : 0, w = (Wt - gap * (N - 1)) / N;
-    const yT = y0 - P.splY, H = P.splH, yB = yT - H, zc = P.splZ, D = P.splD, nf = Math.max(1, P.splFn | 0);
-    const ax = { X: new V(1, 0, 0), Y: new V(0, 1, 0), Z: new V(0, 0, 1) };
+    const yT = y0 - P.splY, H = P.splH, yB = yT - H, zc = P.splZ, D = P.splD;
     const prof = P.splProf && P.splProfPts && P.splProfPts.length >= 3 ? profPlanes(P.splProfPts, zc, D, yT - H / 2, H) : null;   // 描いた横の形
+    const shape = prof || profPlanes([[1, 1], [-1, 1], [-1, -1], [1, -1]], zc, D, yT - H / 2, H);   // 描かない時は箱
     for (let i = 0; i < N; i++) {
       const x0 = -Wt / 2 + i * (w + gap), x1 = x0 + w, cx = (x0 + x1) / 2;
       // 外の側（体の中心から遠い側）だけを切る：外の上の角の落とし、底の外の上がり（正面から見て底が外へ上がる）。真ん中の塊は両側
@@ -1314,27 +1314,28 @@ function body() {
           const yA = yT - drop * (w - cx) / w, yC = yT - drop - cy, n = new V(so * (yA - yC), cx, 0).normalize();
           cuts.push({ n, d: n.dot(new V(xo - so * cx, yA, 0)) });
         }
+        // 外の横の面の四隅の落とし：外の面の上下・前後の 4 つの隅だけを斜めに落とす（横から見て横の面の角が輪郭より丸く見える。輪郭は変わらない）
+        const kc = P.splCorner;
+        if (kc > 0) for (const [sy, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+          let K = null, best = -1e9; for (const [z, y] of shape.pts) { const v = sy * y + sz * z; if (v > best) { best = v; K = new V(xo, y, z); } }
+          const p1 = new V(xo - so * kc, K.y, K.z), p2 = new V(xo, K.y - sy * kc, K.z), p3 = new V(xo, K.y, K.z - sz * kc);
+          const n = p2.clone().sub(p1).cross(p3.clone().sub(p1)).normalize(); if (n.dot(K.clone().sub(p1)) < 0) n.negate();
+          cuts.push({ n, d: n.dot(p1), corner: true });
+        }
         const rise = Math.min(P.splBotUp, H * 0.9);
         if (rise > 0) { const n = new V(so * rise, -Math.abs(xo - xi), 0).normalize(); cuts.push({ n, d: n.dot(new V(xi, yB, 0)) }); }
       }
-      const lim = Math.min(w / 2, H / 2, D / 2) * 0.999, rOf = q => Math.min(lim, q.n.y > 0.7 ? P.splRT : q.n.y < -0.7 ? P.splRB : q.n.z >= 0 ? P.splRV : P.splRK);   // 横の面とこの面の間の丸みの半径
-      if (prof) {   // 横の形を描いた時：左右の面と描いた形の面。丸みは左右の面と描いた面の間（上向きの面は上の縁、下向きは下の縁、ほかは縦の角）
-        const sides = [plane(90, 0, new V(x1, 0, 0)), plane(-90, 0, new V(x0, 0, 0))], f = [...sides, ...prof.planes, ...cuts];
-        for (const a of sides) for (const b of prof.planes) f.push(...roundEdge(a, b, rOf(b), nf));
-        crystal(M, f, col); continue;
+      // 横の面のまわりの縁：平らな面 1 枚で落とす。縁ごとに、横の面に沿った幅と相手の面（前・背中・上・下）に沿った幅の 2 つで決める
+      // （見本の前の縁は、横から見ると太く正面から見ると細い）。相手の面は向きで分ける：上向き＝上、下向き＝下、ほかは前か背中
+      const lim = Math.min(w, H, D) * 0.45;
+      const legs = q => q.n.y > 0.7 ? [P.splETs, P.splETo] : q.n.y < -0.7 ? [P.splEBs, P.splEBo] : q.n.z >= 0 ? [P.splEFs, P.splEFo] : [P.splEKs, P.splEKo];
+      const sides = [plane(90, 0, new V(x1, 0, 0)), plane(-90, 0, new V(x0, 0, 0))], f = [...sides, ...shape.planes, ...cuts];
+      for (const a of sides) for (const b of shape.planes) {
+        const [ls, lo] = legs(b).map(x => Math.min(lim, x)); if (!(ls > 0 && lo > 0)) continue;
+        const E = a.n.clone().multiplyScalar(a.d).addScaledVector(b.n, b.d);   // 2 つの面の交わる線の上の点（2 つの面は直交）
+        const m = a.n.clone().multiplyScalar(ls).addScaledVector(b.n, lo).normalize();   // 横の面に ls、相手の面に lo だけ入った 2 本の線を通る面
+        f.push({ n: m, d: m.dot(E.clone().addScaledVector(a.n, -lo)) });
       }
-      const ext = { X: w / 2, Y: H / 2, Z: D / 2 }, ctr = new V(cx, yT - H / 2, zc);
-      const f = [plane(90, 0, new V(x1, 0, 0)), plane(-90, 0, new V(x0, 0, 0)), plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yB, 0)), plane(0, 0, new V(0, 0, zc + D / 2)), plane(180, 0, new V(0, 0, zc - D / 2))];
-      // 縁の丸み：2 つの面（向き a, b）の間の縁を半径 r の円柱に接する nf 枚の面で丸める
-      const round = (A, sa, B, sb, r) => {
-        r = Math.min(r, ext[A] * 0.999, ext[B] * 0.999); if (!(r > 0)) return;
-        const a = ax[A].clone().multiplyScalar(sa), b = ax[B].clone().multiplyScalar(sb);
-        const c = ctr.clone().addScaledVector(a, ext[A] - r).addScaledVector(b, ext[B] - r);   // 丸みの中心の線の上の点
-        for (let k = 0; k < nf; k++) { const t = Math.PI / 2 * (2 * k + 1) / (2 * nf), m = a.clone().multiplyScalar(Math.cos(t)).addScaledVector(b, Math.sin(t)); f.push({ n: m, d: m.dot(c) + r }); }
-      };
-      for (const sx of [1, -1]) for (const sz of [1, -1]) round('X', sx, 'Z', sz, sz > 0 ? P.splRV : P.splRK);
-      for (const [B, sb] of [['X', 1], ['X', -1], ['Z', 1], ['Z', -1]]) { round('Y', 1, B, sb, P.splRT); round('Y', -1, B, sb, P.splRB); }
-      f.push(...cuts);
       crystal(M, f, col);
     }
   }
@@ -1735,12 +1736,14 @@ const BODY_SECS = [
     ['r', 'splN', '分ける数', 1, 6, 1, 2], ['r', 'splGap', '割れ目の幅', 0, 4, 0.01, 1.18],
     ['r', 'splW', '幅（全体）', 0.2, 6, 0.01, 2.34], ['r', 'splH', '高さ', 0.1, 4, 0.01, 1.47], ['r', 'splD', '奥行', 0.1, 4, 0.01, 1.59],
     ['r', 'splY', '上端の下がり', -1, 4, 0.01, 0.17], ['r', 'splZ', '前後の位置', -2, 2, 0.01, 0],
-    ['r', 'splRV', '横の面の前の縁（横の面と前の面の間、半径）', 0, 1, 0.01, 0.17], ['r', 'splRK', '横の面の後ろの縁（半径）', 0, 1, 0.01, 0.08], ['r', 'splRT', '横の面の上の縁（半径）', 0, 1, 0.01, 0.2], ['r', 'splRB', '横の面の下の縁（半径）', 0, 1, 0.01, 0.12],
-    ['r', 'splFn', '縁の面の数（1 で平らな落とし）', 1, 6, 1, 1],
+    ['r', 'splEFs', '前の縁：横の面に沿った幅', 0, 1, 0.01, 0.22], ['r', 'splEFo', '前の縁：前の面に沿った幅', 0, 1, 0.01, 0.09],
+    ['r', 'splEKs', '後ろの縁：横の面に沿った幅', 0, 1, 0.01, 0.06], ['r', 'splEKo', '後ろの縁：背中の面に沿った幅', 0, 1, 0.01, 0.06],
+    ['r', 'splETs', '上の縁：横の面に沿った幅', 0, 1, 0.01, 0.09], ['r', 'splETo', '上の縁：上の面に沿った幅', 0, 1, 0.01, 0.11],
+    ['r', 'splEBs', '下の縁：横の面に沿った幅', 0, 1, 0.01, 0.12], ['r', 'splEBo', '下の縁：下の面に沿った幅', 0, 1, 0.01, 0.1],
     ['r', 'splTopDrop', '上の縁の外への下がり（正面から見て）', 0, 1.5, 0.01, 0.05],
     ['r', 'splChO', '外の上の角の足しの落とし：横の長さ', 0, 1, 0.01, 0], ['r', 'splChOV', '外の上の角の足しの落とし：縦の長さ', 0, 1.5, 0.01, 0],
-    ['r', 'splBotUp', '底の外の上がり（正面から見て）', 0, 1.5, 0.01, 0.19],
-    ['shape', 'spl', '横から見た柱の形（左が前）。点をつまんで動かす。丸みは左右の面とこの形の縁の間に付く（縦の角・上の縁・下の縁の丸み）。へこんだ形は作れない', true, [[0.88, 1], [-0.55, 0.98], [-0.71, 0.82], [-0.84, 0.64], [-0.94, 0.4], [-0.99, 0.13], [-1, -0.23], [-0.97, -0.55], [-0.88, -0.77], [-0.73, -0.92], [-0.49, -1], [0.73, -0.99], [0.86, -0.94], [0.96, -0.83], [1, -0.59], [0.99, 0.86], [0.96, 0.94]]], ['r', 'splProfN', '横の形の角の数', 3, 24, 1, 17]]],
+    ['r', 'splCorner', '外の横の面の四隅の落とし', 0, 1, 0.01, 0.25], ['r', 'splBotUp', '底の外の上がり（正面から見て）', 0, 1.5, 0.01, 0.12],
+    ['shape', 'spl', '横から見た柱の形（左が前）。点をつまんで動かす。丸みは左右の面とこの形の縁の間に付く（縦の角・上の縁・下の縁の丸み）。へこんだ形は作れない', true, [[0.83, 1], [-0.54, 0.96], [-0.69, 0.85], [-0.83, 0.65], [-0.94, 0.35], [-1, 0.05], [-0.99, -0.32], [-0.9, -0.68], [-0.61, -0.93], [0.79, -1], [0.93, -0.95], [0.99, -0.8], [0.91, 0.94]]], ['r', 'splProfN', '横の形の角の数', 3, 24, 1, 13]]],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
