@@ -1171,31 +1171,31 @@ function body() {
   if (P.col1On) {
     setPart(PART.col1);
     const col = colOf('col1'), W = P.col1W, H = P.col1H, D = P.col1D, top = y0 - P.col1Y, bot = top - H;
-    const zf = D / 2, zb = -D / 2, yp = top - H * P.col1Pt / 10;
-    const aU = P.col1AU * D2R, aL = P.col1AL * D2R;
+    const zf = D / 2, zb = -D / 2, yp = top - H * P.col1PtR;
+    const aU = P.col1AUd * D2R, aL = P.col1ALd * D2R;
     const zt = zf - (top - yp) / Math.tan(aU);              // 上の面の前の縁：尖りから上の面の傾きで上がった所
     const zfb = zf - (yp - bot) * Math.tan(aL);              // 底の前の縁：尖りから下の面の倒れで下がった所
     const nU = new V(0, zf - zt, top - yp).normalize(), nL = new V(0, -(zf - zfb), yp - bot).normalize();   // 面の向き：縁の向き (dy, dz) に直交する (−dz, dy)
     const f = [plane(0, 90, new V(0, top, 0)), plane(0, -90, new V(0, bot, 0)), plane(180, 0, new V(0, 0, zb)),
       { n: nU, d: nU.dot(new V(0, yp, zf)) }, { n: nL, d: nL.dot(new V(0, yp, zf)) }];
     // 正面：横の面は上半分が垂直、下半分は斜めにつないで細る
-    const ratio = [1, 0.9, 0.8, 0.7, 0.6][P.col1Taper | 0], w2 = W / 2 * ratio, ys = top - H / 2;
+    const ratio = P.col1TaperR, w2 = W / 2 * ratio, ys = bot + H * P.col1TaperLH;
     for (const sg of [1, -1]) {
       f.push(plane(sg * 90, 0, new V(sg * W / 2, 0, 0)));
       if (ratio < 1) { const n = new V(sg * (ys - bot), -(W / 2 - w2), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, ys, 0)) }); }   // 斜めの面の向きは外向きで下向き（縁 (dx, dy) に直交する (−dy, dx)）
       // 上の細り：上の N 割を両側から斜めに狭める。面の向きは外向きで上向き
-      const ru = [1, 0.9, 0.8, 0.7, 0.6][P.col1TaperU | 0], yu = top - H * P.col1TaperUH / 10;
+      const ru = P.col1TaperUR, yu = top - H * P.col1TaperUHR;
       if (ru < 1) { const n = new V(sg * (top - yu), W / 2 * (1 - ru), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, yu, 0)) }); }
-      const c = [0, 0.1, 0.25, 0.4][P.col1ChT | 0] * W / 2; if (c > 0) f.push(plane(sg * 90, 45, new V(sg * (W / 2 - c), top, 0)));
+      const c = P.col1ChTR * W / 2; if (c > 0) f.push(plane(sg * 90, P.col1ChTA, new V(sg * (W / 2 - c), top, 0)));
       // 上の断面：前の両角を後ろへ向ける（上から見て 八）。角の面は正面の尖りの線を通る
-      const ph = [0, 10, 20, 30][P.col1Hachi | 0] * D2R, fw = [0.3, 0.5, 0.7][P.col1HachiW | 0] * W / 2;
+      const ph = P.col1HachiD * D2R, fw = P.col1HachiWR * W / 2;
       // 角の面は、正面の上下 2 つの面を縦の軸のまわりに後ろへ回した物（尖りの線を分ける点を通る）。縦 1 枚の面だと尖りの高さの近くしか削れない
       if (ph > 0) { const p0 = new V(sg * (W / 2 - fw), yp, zf); for (const n0 of [nU, nL]) { const n = new V(sg * n0.z * Math.sin(ph), n0.y, n0.z * Math.cos(ph)); f.push({ n, d: n.dot(p0) }); } }
     }
     // 上の正中の欠き：上の面に沿った厚みで、正中の上を四角に欠く（板の上端が入る所）
     const cut = [];
-    if (P.col1Notch | 0) {
-      const nw = [0.4, 0.6, 0.8][P.col1NotchW | 0], nd = [0.3, 0.5, 0.7][P.col1NotchD | 0] * H, nt = [0.1, 0.15, 0.25][P.col1NotchT | 0];
+    if (P.col1NotchWm > 0) {
+      const nw = P.col1NotchWm, nd = P.col1NotchDR * H, nt = P.col1NotchTm;
       const dU = nU.dot(new V(0, yp, zf));
       cut.push([{ n: nU.clone().negate(), d: -(dU - nt) }, plane(0, -90, new V(0, top - nd, 0)), plane(90, 0, new V(nw / 2, 0, 0)), plane(-90, 0, new V(-nw / 2, 0, 0))]);
     }
@@ -1207,11 +1207,11 @@ function body() {
   if (P.cov1On) {
     setPart(PART.cov1);
     const col = colOf('cov1'), W = P.col1W, H = P.col1H, D = P.col1D, top = y0 - P.col1Y, bot = top - H, e = 0.03;
-    const zf = D / 2, yp = top - H * P.col1Pt / 10;
-    const zt = zf - (top - yp) / Math.tan(P.col1AU * D2R), zfb = zf - (yp - bot) * Math.tan(P.col1AL * D2R);   // 柱の上の前の縁・底の前の縁
-    const yk = top - H * P.cov1Pt / 10, zk = zf + [0.2, 0.4, 0.6][P.cov1Out | 0];                            // 尖り
-    const wT = W * P.cov1WT / 20, wB = W * P.cov1WB / 20, bev = [70, 80, 88][P.cov1Bev | 0] * D2R, zB = zf - D * P.cov1Deep / 10;
-    const lean = [10, 20, 30][P.cov1Low | 0], zbf = lean ? Math.max(zfb, zk - (yk - bot) * Math.tan(lean * D2R)) : zfb;   // 下の端の前：尖りから後ろへ倒す（腰でも前へ出たまま厚みが残る）
+    const zf = D / 2, yp = top - H * P.col1PtR;
+    const zt = zf - (top - yp) / Math.tan(P.col1AUd * D2R), zfb = zf - (yp - bot) * Math.tan(P.col1ALd * D2R);   // 柱の上の前の縁・底の前の縁
+    const yk = top - H * P.cov1PtR, zk = zf + P.cov1OutM;                            // 尖り
+    const wT = W * P.cov1WTR / 2, wB = W * P.cov1WBR / 2, bev = P.cov1BevD * D2R, zB = zf - D * P.cov1DeepR;
+    const zbf = Math.max(zfb, zk - (yk - bot) * Math.tan(P.cov1LowD * D2R));   // 下の端の前：尖りから後ろへ倒す（腰でも前へ出たまま厚みが残る）
     const nU = new V(0, zk - zt, top - yk).normalize(), nL = new V(0, -(zk - zbf), yk - bot).normalize();
     const f = [plane(0, 90, new V(0, top - e, 0)), plane(0, -90, new V(0, bot + e, 0)), plane(180, 0, new V(0, 0, zB)),
       { n: nU, d: nU.dot(new V(0, yk, zk)) }, { n: nL, d: nL.dot(new V(0, yk, zk)) }];
@@ -1508,7 +1508,7 @@ let curView = 'iso', REFIT = true;   // REFIT：開いた時と「初期値に�
 let BODY_FRAME = { t: new V(0, -4.2, 0), d: 19 };
 const frameOf = () => mapMode === 'head' ? { t: new V(0, -0.05, 0), d: 4.6 } : BODY_FRAME;
 function setView(v) {
-  curView = v; const { t, d } = frameOf();
+  curView = v; const { t } = frameOf(), d = frameOf().d * Math.max(1, 1.3 / camera.aspect);   // 縦長の画面では横がはみ出さないよう離す
   if (v === 'iso') camera.position.set(t.x + d * 0.54, t.y + d * 0.28, t.z + d * 0.72);
   if (v === 'front') camera.position.set(t.x, t.y + 0.1, t.z + d);
   if (v === 'top') camera.position.set(t.x, t.y + d, t.z + 0.001);
@@ -1575,27 +1575,28 @@ const BODY_SECS = [
   ['sec-torso', '胴体', groupRows('torso', 'g_torsoOn')],
   ['sec-col1', '柱（胸）', [['c', 'col1'], ['on', 'col1On', false],
     ['r', 'col1W', '幅', 0.4, 4, 0.02, 2.0], ['r', 'col1H', '高さ', 0.2, 4, 0.02, 1.7], ['r', 'col1D', '奥行', 0.2, 4, 0.02, 1.7], ['r', 'col1Y', '上端の下がり', -1, 4, 0.01, 0.17],
-    ['w', 'col1Pt', '尖りの高さ', 1, 9, 1, 4, v => `上から ${v} 割`],
-    ['w', 'col1AU', '上の面の傾き', 20, 80, 5, 50, SLOPE],
-    ['w', 'col1AL', '下の面の倒れ', 0, 60, 5, 30, LEAN],
-    ['w', 'col1Taper', '下半分の細り', 0, 4, 1, 2, v => ['無し', '少し', '中くらい', '大きく', 'とても'][v]],
-    ['w', 'col1TaperU', '上の細り', 0, 4, 1, 0, v => ['無し', '少し', '中くらい', '大きく', 'とても'][v]],
-    ['w', 'col1TaperUH', '上の細りの長さ', 2, 6, 1, 4, v => `上から ${v} 割`],
-    ['w', 'col1ChT', '上の角の落とし', 0, 3, 1, 1, v => ['無し', '小', '中', '大'][v]],
-    ['w', 'col1Hachi', '前の角の向き', 0, 3, 1, 0, v => ['前のまま', '少し後ろへ（10°）', '後ろへ（20°）', '大きく後ろへ（30°）'][v]],
-    ['w', 'col1HachiW', '前の角の面の幅', 0, 2, 1, 1, v => ['狭い', '中くらい', '広い'][v]],
-    ['w', 'col1Notch', '上の正中の欠き', 0, 1, 1, 0, v => ['無し', 'あり'][v]],
-    ['w', 'col1NotchW', '欠きの幅', 0, 2, 1, 1, v => ['狭い', '中くらい', '広い'][v]],
-    ['w', 'col1NotchD', '欠きの下がり', 0, 2, 1, 1, v => ['浅い', '中くらい', '深い'][v]],
-    ['w', 'col1NotchT', '欠きの奥行', 0, 2, 1, 1, v => ['薄い', '中くらい', '厚い'][v]]]],
+    ['r', 'col1PtR', '尖りの高さ（上からの割合）', 0.05, 0.95, 0.01, 0.4],
+    ['r', 'col1AUd', '上の面の傾き（°）', 10, 85, 0.5, 50],
+    ['r', 'col1ALd', '下の面の倒れ（°）', 0, 75, 0.5, 30],
+    ['r', 'col1TaperR', '下の細り：底の幅（割合）', 0.3, 1, 0.01, 0.8],
+    ['r', 'col1TaperLH', '下の細りの長さ（下からの割合）', 0.05, 0.95, 0.01, 0.5],
+    ['r', 'col1TaperUR', '上の細り：上の幅（割合）', 0.3, 1, 0.01, 0.8],
+    ['r', 'col1TaperUHR', '上の細りの長さ（上からの割合）', 0.05, 0.95, 0.01, 0.4],
+    ['r', 'col1ChTR', '上の角の落とし（半幅の割合）', 0, 0.6, 0.01, 0.1],
+    ['r', 'col1ChTA', '上の角の落としの傾き（°）', 10, 80, 0.5, 45],
+    ['r', 'col1HachiD', '前の角を後ろへ向ける（°）', 0, 45, 0.5, 0],
+    ['r', 'col1HachiWR', '前の角の面の幅（半幅の割合）', 0.05, 1, 0.01, 0.5],
+    ['r', 'col1NotchWm', '上の正中の欠きの幅（0 で無し）', 0, 1.6, 0.01, 0],
+    ['r', 'col1NotchDR', '欠きの下がり（高さの割合）', 0.05, 0.9, 0.01, 0.5],
+    ['r', 'col1NotchTm', '欠きの奥行', 0.02, 0.5, 0.01, 0.15]]],
   ['sec-cov1', 'コクピットカバー', [['c', 'cov1'], ['on', 'cov1On', false],
-    ['w', 'cov1Pt', '尖りの高さ', 1, 7, 1, 4, v => `柱の上から ${v} 割`],
-    ['w', 'cov1Out', '尖りの出', 0, 2, 1, 1, v => ['少し（柱の前から 0.2）', '中くらい（0.4）', '大きく（0.6）'][v]],
-    ['w', 'cov1Low', '尖りから下の前の倒れ', 0, 3, 1, 1, v => ['少し（10°）', '中くらい（20°）', '大きく（30°）', '柱の底の前の縁まで'][v]],
-    ['w', 'cov1WT', '上の幅', 2, 7, 1, 3, v => `柱の幅の ${v} 割`],
-    ['w', 'cov1WB', '下の幅', 1, 6, 1, 2, v => `柱の幅の ${v} 割`],
-    ['w', 'cov1Deep', '奥', 3, 6, 1, 4, v => `柱の前から奥行の ${v} 割`],
-    ['w', 'cov1Bev', '横の縁の傾き', 0, 2, 1, 1, v => ['緩い（70°）', '中くらい（80°）', '急（88°）'][v]]]],
+    ['r', 'cov1PtR', '尖りの高さ（柱の上からの割合）', 0.05, 0.9, 0.01, 0.4],
+    ['r', 'cov1OutM', '尖りの出（柱の前から）', 0, 1.2, 0.01, 0.4],
+    ['r', 'cov1LowD', '尖りから下の前の倒れ（垂直から後ろへ °）', 0, 75, 0.5, 20],
+    ['r', 'cov1WTR', '上の幅（柱の幅の割合）', 0.05, 0.95, 0.01, 0.3],
+    ['r', 'cov1WBR', '下の幅（柱の幅の割合）', 0.05, 0.95, 0.01, 0.2],
+    ['r', 'cov1DeepR', '奥（柱の前から奥行の割合）', 0.05, 0.95, 0.01, 0.4],
+    ['r', 'cov1BevD', '横の縁の傾き（°）', 30, 90, 0.5, 80]]],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
@@ -2054,7 +2055,7 @@ function flashPart(targetId) {
 
 // ---- 配線 ----
 // 開いた時の形：柱 1 本＋コクピットカバー 1 つ（依頼主が「なにこのゴミ」と言った胸板・胸の中央・腹・腰の帯の箱積みは出さない）
-const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: true, cov1On: true, col1TaperU: 2, layoutV: 2 };
+const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: true, cov1On: true, layoutV: 2 };
 Object.assign(P, START);
 const DEFAULTS = JSON.parse(JSON.stringify(P));
 const KEY = 'crystal-head-knobs';
