@@ -1184,8 +1184,18 @@ function body() {
       f.push(plane(sg * 90, 0, new V(sg * W / 2, 0, 0)));
       if (ratio < 1) { const n = new V(sg * (ys - bot), -(W / 2 - w2), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, ys, 0)) }); }   // 斜めの面の向きは外向きで下向き（縁 (dx, dy) に直交する (−dy, dx)）
       const c = [0, 0.1, 0.25, 0.4][P.col1ChT | 0] * W / 2; if (c > 0) f.push(plane(sg * 90, 45, new V(sg * (W / 2 - c), top, 0)));
+      // 上の断面：前の両角を後ろへ向ける（上から見て 八）。角の面は正面の尖りの線を通る
+      const ph = [0, 10, 20, 30][P.col1Hachi | 0] * D2R, fw = [0.3, 0.5, 0.7][P.col1HachiW | 0] * W / 2;
+      if (ph > 0) { const n = new V(sg * Math.sin(ph), 0, Math.cos(ph)); f.push({ n, d: n.dot(new V(sg * (W / 2 - fw), yp, zf)) }); }
     }
-    crystal(M, f, col);
+    // 上の正中の欠き：上の面に沿った厚みで、正中の上を四角に欠く（板の上端が入る所）
+    const cut = [];
+    if (P.col1Notch | 0) {
+      const nw = [0.4, 0.6, 0.8][P.col1NotchW | 0], nd = [0.3, 0.5, 0.7][P.col1NotchD | 0] * H, nt = [0.1, 0.15, 0.25][P.col1NotchT | 0];
+      const dU = nU.dot(new V(0, yp, zf));
+      cut.push([{ n: nU.clone().negate(), d: -(dU - nt) }, plane(0, -90, new V(0, top - nd, 0)), plane(90, 0, new V(nw / 2, 0, 0)), plane(-90, 0, new V(-nw / 2, 0, 0))]);
+    }
+    crystal(M, f, col, cut.length ? cut : undefined);
   }
   // 襟：箱か、首を囲む円筒の輪
   if (P.collarOn) {
@@ -1544,7 +1554,13 @@ const BODY_SECS = [
     ['w', 'col1AU', '上の面の傾き', 20, 80, 5, 50, SLOPE],
     ['w', 'col1AL', '下の面の倒れ', 0, 60, 5, 30, LEAN],
     ['w', 'col1Taper', '下半分の細り', 0, 4, 1, 2, v => ['無し', '少し', '中くらい', '大きく', 'とても'][v]],
-    ['w', 'col1ChT', '上の角の落とし', 0, 3, 1, 1, v => ['無し', '小', '中', '大'][v]]]],
+    ['w', 'col1ChT', '上の角の落とし', 0, 3, 1, 1, v => ['無し', '小', '中', '大'][v]],
+    ['w', 'col1Hachi', '前の角の向き', 0, 3, 1, 0, v => ['前のまま', '少し後ろへ（10°）', '後ろへ（20°）', '大きく後ろへ（30°）'][v]],
+    ['w', 'col1HachiW', '前の角の面の幅', 0, 2, 1, 1, v => ['狭い', '中くらい', '広い'][v]],
+    ['w', 'col1Notch', '上の正中の欠き', 0, 1, 1, 0, v => ['無し', 'あり'][v]],
+    ['w', 'col1NotchW', '欠きの幅', 0, 2, 1, 1, v => ['狭い', '中くらい', '広い'][v]],
+    ['w', 'col1NotchD', '欠きの下がり', 0, 2, 1, 1, v => ['浅い', '中くらい', '深い'][v]],
+    ['w', 'col1NotchT', '欠きの奥行', 0, 2, 1, 1, v => ['薄い', '中くらい', '厚い'][v]]]],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
