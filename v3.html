@@ -1183,7 +1183,7 @@ function body() {
       const inBox = [plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yB, 0)), plane(90, 0, new V(x + hw, 0, 0)), plane(-90, 0, new V(x - hw, 0, 0))];
       // 羽：穴の中に N 枚、傾けて並ぶ薄い板。前は正面の面、後ろは穴の底まで
       for (let i = 0; i < N; i++) {
-        const yc = yT - (i + 0.5) * P.ductH / N, cpt = new V(x, yc, 0);
+        const yc = yT - (i + 0.5) * P.ductH / N, cpt = new V(x, yc, g.zf - P.ductD / 2);   // 羽の中心は穴の奥行の真ん中（0 だと傾きの分だけ穴の外へずれる）
         const dmid = nf.dot(cpt);
         crystal(M, [...inBox, { n: fr.n.clone(), d: fr.d }, { n: fr.n.clone().negate(), d: -(fr.d - P.ductD) }, { n: nf.clone(), d: dmid + P.ductFT / 2 }, { n: nf.clone().negate(), d: -dmid + P.ductFT / 2 }], col);
       }
