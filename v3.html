@@ -1996,9 +1996,10 @@ window.__shotOrtho = async (view, w, h, halfH, cy, post = '') => {
   const t = new V(0, cy, 0);
   if (view === 'front') cam.position.set(0, cy, 30); else if (view === 'side') cam.position.set(30, cy, 0); else if (view === 'back') cam.position.set(0, cy, -30); else if (view === 'top') { cam.position.set(0, 30, 0); cam.up.set(0, 0, -1); }
   cam.lookAt(t); cam.updateProjectionMatrix();
+  const low = new THREE.DirectionalLight(0xffffff, 0.9); low.position.set(0.5, -2, 3); scene.add(low);   // 比べる絵では下向きの面も読めるように、前下からも当てる
   renderer.setPixelRatio(1); renderer.setSize(w, h, false); renderer.render(scene, cam);
   const url = canvas.toDataURL('image/png');
-  renderer.setPixelRatio(Math.min(2, devicePixelRatio)); resize();
+  scene.remove(low); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); resize();
   if (post) { const r = await fetch(post, { method: 'POST', body: url }); return await r.text(); }
   return url;
 };
