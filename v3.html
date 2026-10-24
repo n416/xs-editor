@@ -1277,6 +1277,8 @@ function checkBody(eps = 0.02, deep = 0.1) {   // deep：突き抜けと見な�
     // 突き抜け：自分のかけら 1 つが、よその部位の中に入り、かつその部位の外へ反対向きに 2 方向で出ている
     const hit = new Set();
     for (const oid in byPart) { if (+oid === id || hit.has(+oid)) continue; const theirs = byPart[oid];
+      // 相手の大半が自分の中に埋まっている（埋め込まれた小さい塊）なら、自分がそれを突き抜けたとは数えない
+      const tp = theirs.flatMap(b => b.probe); if (tp.length && tp.filter(p => mine.some(a => near(a, p, eps))).length / tp.length >= 0.6) continue;
       for (const a of mine) {
         const ins = a.probe.filter(p => theirs.some(b => inside(b, p, deep))); if (!ins.length) continue;
         const outs = a.pts.filter(p => !theirs.some(b => near(b, p, eps))); if (outs.length < 2) continue;
