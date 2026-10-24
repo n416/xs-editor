@@ -1294,7 +1294,10 @@ function body() {
 const BODY_SELF = new Set([PART.chest, PART.plate, PART.abd, PART.band]);   // 胴そのものの塊：「後ろまで貫通」の決まりの対象なので突き抜ける側からは除く
 function checkBody(eps = 0.02) {
   // 凸のかけらごとに頂点を持つ（左右一対や輪のように 1 つの部位が離れた複数のかけらでできていても、かけら単位で見る）
-  const pcs = REG.filter(pc => pc.part > 16).map(pc => ({ part: pc.part, planes: pc.planes, pts: (() => { const o = []; for (const f of clipFaces(pc.planes)) for (const q of f.pts) if (!o.some(r => r.distanceToSquared(q) < 1e-8)) o.push(q); return o; })() }));
+  // 頂点だけでなく、頂点どうしの中点と重心も「中の点」の候補にする（貫く棒は中に頂点を持たない）
+  const pcs = REG.filter(pc => pc.part > 16).map(pc => { const o = []; for (const f of clipFaces(pc.planes)) for (const q of f.pts) if (!o.some(r => r.distanceToSquared(q) < 1e-8)) o.push(q);
+    const mids = []; for (let i = 0; i < o.length; i++) for (let j = i + 1; j < o.length; j++) mids.push(o[i].clone().lerp(o[j], 0.5)); if (o.length) mids.push(o.reduce((a, q) => a.add(q), new V()).multiplyScalar(1 / o.length));
+    return { part: pc.part, planes: pc.planes, pts: o, probe: o.concat(mids) }; });
   const byPart = {}; for (const pc of pcs) (byPart[pc.part] = byPart[pc.part] || []).push(pc);
   const inside = (pc, p, m) => pc.planes.every(pl => pl.n.dot(p) - pl.d <= -m);
   const near = (pc, p, m) => pc.planes.every(pl => pl.n.dot(p) - pl.d <= m);
@@ -1305,14 +1308,14 @@ function checkBody(eps = 0.02) {
     // 浮き：自分の頂点がよその部位に触れず、よその頂点も自分に触れない
     let touch = false;
     for (const oid in byPart) { if (+oid === id) continue; const theirs = byPart[oid];
-      if (mine.some(a => a.pts.some(p => theirs.some(b => near(b, p, eps)))) || theirs.some(b => b.pts.some(p => mine.some(a => near(a, p, eps))))) { touch = true; break; } }
+      if (mine.some(a => a.probe.some(p => theirs.some(b => near(b, p, eps)))) || theirs.some(b => b.probe.some(p => mine.some(a => near(a, p, eps))))) { touch = true; break; } }
     if (!touch && Object.keys(byPart).length > 1) floating.push(name(id));
     if (BODY_SELF.has(id)) continue;
     // 突き抜け：自分のかけら 1 つが、よその部位の中に入り、かつその部位の外へ反対向きに 2 方向で出ている
     const hit = new Set();
     for (const oid in byPart) { if (+oid === id || hit.has(+oid)) continue; const theirs = byPart[oid];
       for (const a of mine) {
-        const ins = a.pts.filter(p => theirs.some(b => inside(b, p, eps))); if (!ins.length) continue;
+        const ins = a.probe.filter(p => theirs.some(b => inside(b, p, eps))); if (!ins.length) continue;
         const outs = a.pts.filter(p => !theirs.some(b => near(b, p, eps))); if (outs.length < 2) continue;
         // 外の 2 点を結ぶ線分がその部位の中を通るなら、反対側へ抜けている（面の上に横たわる板は、線分が外を通るので当たらない）
         let through = false;
