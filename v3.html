@@ -1314,7 +1314,9 @@ function body() {
     setPart(part);
     const ownZ = P[pre + 'Z'], ownDT = P[pre + 'DT'] / 2;
     const yT = fit ? fit.y : y0 - P[pre + 'Y'], H = Math.max(0.02, P[pre + 'H']), yB = yT - H;
-    const wT = fit ? fit.w / 2 : P[pre + 'WT'] / 2, zTf = fit ? fit.zf : ownZ + ownDT, zTb = fit ? fit.zb : ownZ - ownDT, zc = (zTf + zTb) / 2;
+    // 「そろえる」の時の内への縮め（腹だけ）：上の端を上の部品の底の内側に置く。上の部品の底に乗ったまま、左右・前・背で小さくできる
+    const iw = fit ? Math.max(0, P[pre + 'IW'] || 0) : 0, iF = fit ? Math.max(0, P[pre + 'IF'] || 0) : 0, iB = fit ? Math.max(0, P[pre + 'IB'] || 0) : 0;
+    const wT = fit ? Math.max(0.01, fit.w / 2 - iw) : P[pre + 'WT'] / 2, zTf = fit ? fit.zf - iF : ownZ + ownDT, zTb = fit ? Math.min(fit.zb + iB, zTf - 0.02) : ownZ - ownDT, zc = (zTf + zTb) / 2;
     const wB = P[pre + 'WB'] / 2, dB = P[pre + 'DB'] / 2, c = P[pre + 'Ch'];
     const f = [plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yB, 0))];
     const sides = [], fronts = [];
@@ -1920,10 +1922,11 @@ const BODY_SECS = [
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
   ['sec-collar', '襟', [['kinds', 'collar', [['box', '箱'], ['ring', '輪']], '種類', 'box'], ...slabRows('collar', { W: 1.2, H: 0.35, D: 1.0, Y: -0.2, TopE: 85, BotE: 85, FrontE: 15, BackE: 15, SideE: 15 }, false), ['r', 'collarRi', '輪の穴の径', 0, 3, 0.01, 0.8], ['r', 'collarNg', '輪の角数', 6, 24, 1, 16]]],
   ['sec-bel', '腹', [['c', 'bel'], ['on', 'belOn', false], ['toggle', 'belFit', '上の端を胸の本体の底にそろえる', true],
-    ['r', 'belY', '上端の下がり', -1, 5, 0.01, 1.62], ['r', 'belH', '高さ', 0.05, 3, 0.01, 0.4], ['r', 'belZ', '前後の位置', -2, 2, 0.01, -0.02],
-    ['r', 'belWT', '上の端の幅', 0.1, 4, 0.01, 1.59], ['r', 'belWB', '下の端の幅', 0.1, 4, 0.01, 1.25],
-    ['r', 'belDT', '上の端の奥行', 0.1, 4, 0.01, 1.33], ['r', 'belDB', '下の端の奥行', 0.1, 4, 0.01, 1.05],
-    ['r', 'belCh', '縦の角の落とし', 0, 0.6, 0.01, 0.1]]],
+    ['r', 'belY', '上端の下がり', -1, 5, 0.01, 1.62], ['r', 'belH', '高さ', 0.05, 3, 0.01, 0.35], ['r', 'belZ', '前後の位置', -2, 2, 0.01, -0.02],
+    ['r', 'belWT', '上の端の幅', 0.1, 4, 0.01, 1.59], ['r', 'belWB', '下の端の幅', 0.1, 4, 0.01, 1.1],
+    ['r', 'belDT', '上の端の奥行', 0.1, 4, 0.01, 1.33], ['r', 'belDB', '下の端の奥行', 0.1, 4, 0.01, 0.84],
+    ['r', 'belCh', '縦の角の落とし', 0, 0.6, 0.01, 0.1],
+    ['r', 'belIW', 'そろえる時：上の端の左右の縮め（胸の本体の底の端から内へ）', 0, 1.5, 0.01, 0.07], ['r', 'belIF', 'そろえる時：上の端の前の縮め（内へ）', 0, 1.5, 0.01, 0.25], ['r', 'belIB', 'そろえる時：上の端の背の縮め（内へ）', 0, 1.5, 0.01, 0]]],
   ['sec-abd', '腹（箱）', slabRows('abd', { W: 1.6, H: 0.8, D: 1.5, Y: 1.55, TopE: 85, BotE: 85, FrontE: -5, BackE: 6, SideE: 5 }, false)],
   ['sec-band', '腰の帯', slabRows('band', { W: 2.2, H: 0.5, D: 1.7, Y: 2.35, TopE: 80, BotE: 80, FrontE: 6, BackE: 6, SideE: 6 }, false)],
   ['sec-pipe', '管', [['c', 'pipe'], ['on', 'pipeOn', false], ['r', 'pipeR', '太さ', 0.03, 0.3, 0.01, 0.1], ['r', 'pipeN', '節の数', 2, 16, 1, 8],
@@ -2379,9 +2382,10 @@ function flashPart(targetId) {
 
 // ---- 配線 ----
 // 開いた時の形：モノアイの機体の胴体（依頼主：「いま（白い機体）がメインになっているのを、（モノアイの機体）メインにしてくださいな」）。
-// 左右の柱（スプリット柱）・胸の本体・胸の T 字の板。腹は出さない（依頼主：「いややめましょう。見ての通り殆ど無いんですよ。腹。でも貴方が書いたような大きさは絶対ない」）。白い機体の柱・コクピットカバー・腹の上・腹の下は一覧に残して切る。
+// 左右の柱（スプリット柱）・胸の本体・胸の T 字の板・腹。腹は胸の本体の底にそろえて内へ縮めた低い塊（依頼主：「見ての通り殆ど無いんですよ。腹」「T字の胸よりは小さい」「胸より小さい塩梅で戻して」）。
+// 比は見本から：上の端の前は柱の前より約 0.48 奥、背は胸と同じ、高さは柱全体の幅の約 0.15、下の端は上の端の約 0.92 倍の幅。幅は見本の腹の真ん中の面（胸の本体とほぼ同じ幅）に合わせて胸より小さく。白い機体の柱・コクピットカバー・腹の上・腹の下は一覧に残して切る。
 // 依頼主が「なにこのゴミ」と言った胸板・胸の中央・腹・腰の帯の箱積みは出さない
-const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: false, layoutV: 9 };
+const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: true, layoutV: 10 };
 Object.assign(P, START);
 const DEFAULTS = JSON.parse(JSON.stringify(P));
 const KEY = 'crystal-head-knobs';
@@ -2481,6 +2485,7 @@ function syncUI() {
   for (const el of document.querySelectorAll('.wv')) { const w = WORD[el.dataset.w]; if (w) el.textContent = w.fmt(P[el.dataset.w]); }
   for (const b of document.querySelectorAll('button[data-t]')) b.classList.toggle('on', !!P[b.dataset.t]);
   for (const [t, keys] of [['abuFit', ['abuY', 'abuZ', 'abuWT', 'abuDT']], ['ablFit', ['ablY', 'ablZ', 'ablWT', 'ablDT']], ['belFit', ['belY', 'belZ', 'belWT', 'belDT']]]) for (const k of keys) { const el = document.getElementById(k); if (el) { const row = el.closest('.row'); row.style.opacity = P[t] ? 0.35 : ''; for (const x of row.querySelectorAll('input')) x.disabled = !!P[t]; } }
+  for (const k of ['belIW', 'belIF', 'belIB']) { const el = document.getElementById(k); if (el) { const row = el.closest('.row'); row.style.opacity = P.belFit ? '' : 0.35; for (const x of row.querySelectorAll('input')) x.disabled = !P.belFit; } }
   if (typeof renderTree === 'function') renderTree();
   for (const b of document.querySelectorAll('button[data-kind]')) b.classList.toggle('on', P[b.dataset.pre + 'Kind'] === b.dataset.kind);
   for (const b of document.querySelectorAll('button[data-side]')) b.classList.toggle('on', P[b.dataset.pre + 'Side'] === b.dataset.side);
