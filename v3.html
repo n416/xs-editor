@@ -1180,17 +1180,26 @@ function body() {
       { n: nU, d: nU.dot(new V(0, yp, zf)) }, { n: nL, d: nL.dot(new V(0, yp, zf)) }];
     // 正面：横の面は上半分が垂直、下半分は斜めにつないで細る
     const ratio = P.col1TaperR, w2 = W / 2 * ratio, ys = bot + H * P.col1TaperLH;
+    const sideF = [];   // 横の面（縦の角の落としに使う）
     for (const sg of [1, -1]) {
-      f.push(plane(sg * 90, 0, new V(sg * W / 2, 0, 0)));
-      if (ratio < 1) { const n = new V(sg * (ys - bot), -(W / 2 - w2), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, ys, 0)) }); }   // 斜めの面の向きは外向きで下向き（縁 (dx, dy) に直交する (−dy, dx)）
+      f.push(plane(sg * 90, 0, new V(sg * W / 2, 0, 0))); sideF.push(f[f.length - 1]);
+      if (ratio < 1) { const n = new V(sg * (ys - bot), -(W / 2 - w2), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, ys, 0)) }); sideF.push(f[f.length - 1]); }   // 斜めの面の向きは外向きで下向き（縁 (dx, dy) に直交する (−dy, dx)）
       // 上の細り：上の N 割を両側から斜めに狭める。面の向きは外向きで上向き
       const ru = P.col1TaperUR, yu = top - H * P.col1TaperUHR;
-      if (ru < 1) { const n = new V(sg * (top - yu), W / 2 * (1 - ru), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, yu, 0)) }); }
+      if (ru < 1) { const n = new V(sg * (top - yu), W / 2 * (1 - ru), 0).normalize(); f.push({ n, d: n.dot(new V(sg * W / 2, yu, 0)) }); sideF.push(f[f.length - 1]); }
       const c = P.col1ChTR * W / 2; if (c > 0) f.push(plane(sg * 90, P.col1ChTA, new V(sg * (W / 2 - c), top, 0)));
       // 上の断面：前の両角を後ろへ向ける（上から見て 八）。角の面は正面の尖りの線を通る
       const ph = P.col1HachiD * D2R, fw = P.col1HachiWR * W / 2;
       // 角の面は、正面の上下 2 つの面を縦の軸のまわりに後ろへ回した物（尖りの線を分ける点を通る）。縦 1 枚の面だと尖りの高さの近くしか削れない
       if (ph > 0) { const p0 = new V(sg * (W / 2 - fw), yp, zf); for (const n0 of [nU, nL]) { const n = new V(sg * n0.z * Math.sin(ph), n0.y, n0.z * Math.cos(ph)); f.push({ n, d: n.dot(p0) }); } }
+    }
+    // 縦の角の落とし：横の面と前・背の面の間を、どちらの面にも幅 c ほど残して落とす（腹の上・腹の下と同じ。継ぎ目の角が合う）
+    const cv = P.col1ChV;
+    if (cv > 0) for (const a of sideF) for (const b of [f[3], f[4], f[2]]) {
+      const u = a.n.clone().cross(b.n), uu = u.lengthSq(); if (uu < 1e-6) continue;
+      const p0 = a.n.clone().cross(u).multiplyScalar(-b.d).add(u.clone().cross(b.n).multiplyScalar(-a.d)).multiplyScalar(1 / uu);   // 2 つの面の交わる線の上の点
+      const n = a.n.clone().add(b.n).normalize(), half = Math.acos(Math.max(-1, Math.min(1, a.n.dot(b.n)))) / 2;
+      f.push({ n, d: n.dot(p0) - cv * Math.sin(half) });
     }
     // 上の正中の欠き：上の面に沿った厚みで、正中の上を四角に欠く（板の上端が入る所）
     const cut = [];
@@ -1617,6 +1626,7 @@ const BODY_SECS = [
     ['r', 'col1TaperUHR', '上の細りの長さ（上からの割合）', 0.05, 0.95, 0.01, 0.3],
     ['r', 'col1ChTR', '上の角の落とし（半幅の割合）', 0, 0.6, 0.01, 0.1],
     ['r', 'col1ChTA', '上の角の落としの傾き（°）', 10, 80, 0.5, 45],
+    ['r', 'col1ChV', '縦の角の落とし', 0, 0.6, 0.01, 0.1],
     ['r', 'col1HachiD', '前の角を後ろへ向ける（°）', 0, 45, 0.5, 0],
     ['r', 'col1HachiWR', '前の角の面の幅（半幅の割合）', 0.05, 1, 0.01, 0.5],
     ['r', 'col1NotchWm', '上の正中の欠きの幅（0 で無し）', 0, 1.6, 0.01, 0],
