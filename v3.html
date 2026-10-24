@@ -618,12 +618,25 @@ function bevelEdge(a, b, la, lb) {
   const m = u.clone().cross(P2.clone().sub(P1)).normalize(); if (m.dot(E.clone().sub(P1)) < 0) m.negate();
   return { n: m, d: m.dot(P1) };
 }
-// 胸面：真ん中で z0、幅 W の端で k だけ奥の円（縦の軸）に、n 枚の弦を張った折れ面。k = 0 で平ら（1 枚）。胸の本体の正面と字の形の板の裏で同じ物を使う
-function chestFace(W, k, n, z0) {
+// 胸面：左右と上下の 2 方向に曲がる折れ面（依頼主：「Z方向にも曲がるんだよ？」）。真ん中で z0。
+// 左右：幅 W の端で k だけ奥の円に n 枚の弦。上下：高さ Hf（真ん中の高さ yc0）の上下の端で kv だけ奥の円に nv 枚の弦。
+// 奥への下がりは左右の分と上下の分の足し算で、どちらも弦でつなぐので、縦横に区切った 1 枚ずつが平らな面になる。胸の本体の正面と字の形の板の裏で同じ物を使う
+function chestFace(W, k, n, z0, Hf, kv, nv, yc0) {
   const R = k > 1e-4 ? (W * W / 4 + k * k) / (2 * k) : 0, N = R ? Math.max(1, n | 0) : 1, sw = W / N;
-  const circ = sv => R ? new THREE.Vector3(R * Math.sin(sv / R), 0, z0 - R * (1 - Math.cos(sv / R))) : new THREE.Vector3(sv, 0, z0);   // 円の上の点（sv は円に沿った横の長さ）
-  const facet = g => { const s0 = -W / 2 + g * sw, A0 = circ(s0), A1 = circ(s0 + sw), dC = A1.clone().sub(A0).normalize(); return { s0, s1: s0 + sw, A0, A1, n: new THREE.Vector3(-dC.z, 0, dC.x) }; };
-  return { R, N, sw, circ, facet };
+  const Rv = kv > 1e-4 ? (Hf * Hf / 4 + kv * kv) / (2 * kv) : 0, NV = Rv ? Math.max(1, nv | 0) : 1, hh = Hf / NV;
+  const xs = [], dh = [], ys = [], dv = [];
+  for (let g = 0; g <= N; g++) { const sv = -W / 2 + g * sw; xs.push(R ? R * Math.sin(sv / R) : sv); dh.push(R ? R * (1 - Math.cos(sv / R)) : 0); }
+  for (let h = 0; h <= NV; h++) { const y = yc0 - Hf / 2 + h * hh; ys.push(y); dv.push(Rv ? Rv - Math.sqrt(Math.max(0, Rv * Rv - (y - yc0) ** 2)) : 0); }
+  const col = sv => Math.min(N - 1, Math.max(0, Math.floor((sv + W / 2) / sw))), row = y => Math.min(NV - 1, Math.max(0, Math.floor((y - ys[0]) / hh)));
+  const lerp = (a, i, u) => a[i] + (a[i + 1] - a[i]) * u;
+  // 胸面の上の点（sv は左右の横の長さ、y は高さ）。区切りの中では sv と y の 1 次式なので平ら
+  const at = (sv, y) => { const g = col(sv), h = row(y), u = (sv - (-W / 2 + g * sw)) / sw, v = (y - ys[h]) / hh; return new THREE.Vector3(lerp(xs, g, u), y, z0 - lerp(dh, g, u) - lerp(dv, h, v)); };
+  const facet = (g, h) => {
+    const s0 = -W / 2 + g * sw, y0 = ys[h], P0 = at(s0 + sw * 0.25, y0 + hh * 0.25), P1 = at(s0 + sw * 0.75, y0 + hh * 0.25), P2 = at(s0 + sw * 0.25, y0 + hh * 0.75);
+    const n = P1.clone().sub(P0).cross(P2.clone().sub(P0)).normalize(); if (n.z < 0) n.negate();
+    return { g, h, s0, s1: s0 + sw, y0, y1: y0 + hh, n, d: n.dot(P0) };
+  };
+  return { N, NV, sw, hh, at, facet, xEnd: Math.abs(xs[N]), ys };
 }
 // 横の形を高さ y で切った時の背と前の z
 function profSpanAt(q, y) { let lo = 1e9, hi = -1e9; for (let i = 0; i < q.length; i++) { const [z1, y1] = q[i], [z2, y2] = q[(i + 1) % q.length]; if ((y1 - y) * (y2 - y) > 0 || y1 === y2) continue; const z = z1 + (z2 - z1) * (y - y1) / (y2 - y1); lo = Math.min(lo, z); hi = Math.max(hi, z); } return lo <= hi ? [lo, hi] : null; }
@@ -1362,9 +1375,9 @@ function body() {
   if (P.chbOn) {
     setPart(PART.chb);
     const col = colOf('chb'), Wf = P.chbW, yT = y0 - P.chbY, yB = yT - P.chbH, Z0 = P.chbZ, bev = P.chbBev;
-    const face = chestFace(Wf, Math.min(P.chbBend, Wf * 0.49), P.chbFacets, Z0), xE = Math.abs(face.circ(Wf / 2).x);
+    const face = chestFace(Wf, Math.min(P.chbBend, Wf * 0.49), P.chbFacets, Z0, P.chbH, Math.min(P.chbBendV, P.chbH * 0.49), P.chbFacetsV, yT - P.chbH / 2), xE = face.xEnd;
     const top = plane(0, 90, new V(0, yT, 0)), bot = plane(0, -90, new V(0, yB, 0)), sides = [plane(90, 0, new V(xE, 0, 0)), plane(-90, 0, new V(-xE, 0, 0))];
-    const fronts = []; for (let g = 0; g < face.N; g++) { const fc = face.facet(g); fronts.push({ n: fc.n, d: fc.n.dot(fc.A0) }); }
+    const fronts = []; for (let g = 0; g < face.N; g++) for (let h = 0; h < face.NV; h++) { const fc = face.facet(g, h); fronts.push({ n: fc.n, d: fc.d }); }
     const f = [top, bot, ...sides, plane(180, 0, new V(0, 0, Z0 - P.chbD)), ...fronts];
     if (bev > 0) for (const a of fronts) for (const b of [top, bot, ...sides]) { const c = bevelEdge(a, b, bev, bev); if (c) f.push(c); }
     crystal(M, f, col);
@@ -1377,8 +1390,9 @@ function body() {
     setPart(PART.ltr);
     const col = colOf('ltr'), W = P.ltrW, H = P.ltrH, t = Math.max(0.01, P.ltrT), yc = y0 - P.ltrY - H / 2, bev = P.ltrBev, e = 0.02;
     // 胸面：「胸の本体に合わせる」で胸の本体の正面、切なら自分の欄（幅は字の幅）。字は胸面の真ん中に置く
-    const fit = P.ltrFit && P.chbOn, Wf = fit ? P.chbW : W;
-    const face = chestFace(Wf, Math.min(fit ? P.chbBend : P.ltrBend, Wf * 0.49), fit ? P.chbFacets : P.ltrFacets, fit ? P.chbZ : P.ltrZ), R = face.R;
+    const fit = P.ltrFit && P.chbOn, Wf = fit ? P.chbW : W, Hf = fit ? P.chbH : H, yf = fit ? y0 - P.chbY - P.chbH / 2 : yc;
+    const face = chestFace(Wf, Math.min(fit ? P.chbBend : P.ltrBend, Wf * 0.49), fit ? P.chbFacets : P.ltrFacets, fit ? P.chbZ : P.ltrZ,
+      Hf, Math.min(fit ? P.chbBendV : P.ltrBendV, Hf * 0.49), fit ? P.chbFacetsV : P.ltrFacetsV, yf);
     // 字の形：(s, y) の凸の多角形の集まり。縁は half-plane a·s + b·y ≤ c と、その縁の種類（out＝外の縁、in＝棒どうしの切り分け）
     const H2 = H / 2, W2 = W / 2, box = [[1, 0, W2, 'out'], [-1, 0, W2, 'out'], [0, 1, H2, 'out'], [0, -1, H2, 'out']];
     const bar = (dx, dy, bw) => { const L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L; return { d: [dx / L, dy / L], n: [nx, ny], hp: [[nx, ny, bw / 2, 'out'], [-nx, -ny, bw / 2, 'out']], bw }; };
@@ -1419,32 +1433,36 @@ function body() {
       return out;
     };
     const big = W + H + 10;
-    const segs = face.N, sw = face.sw;
+    // 区切りの境（字の中を通る物だけが折れ目）
+    const sB = [], yB = []; for (let g = 1; g < face.N; g++) sB.push(-Wf / 2 + g * face.sw); for (let h = 1; h < face.NV; h++) yB.push(face.ys[h] - yc);
     for (const hp of pieces) {
       let poly = [{ s: -big, y: -big, tag: 'out' }, { s: big, y: -big, tag: 'out' }, { s: big, y: big, tag: 'out' }, { s: -big, y: big, tag: 'out' }];
       for (const h of hp) { poly = clip(poly, h); if (poly.length < 3) break; }
       if (poly.length < 3) continue;
-      for (let g = 0; g < segs; g++) {
+      for (let g = 0; g < face.N; g++) for (let h = 0; h < face.NV; h++) {
+        const fc = face.facet(g, h);
         let q = poly;
-        const fc = face.facet(g);
-        if (segs > 1) q = clip(clip(q, [-1, 0, -fc.s0, 'seg']), [1, 0, fc.s1, 'seg']);
+        if (face.N > 1) q = clip(clip(q, [-1, 0, -fc.s0, 'seg']), [1, 0, fc.s1, 'seg']);
+        if (face.NV > 1 && q.length >= 3) q = clip(clip(q, [0, -1, -(fc.y0 - yc), 'seg']), [0, 1, fc.y1 - yc, 'seg']);
+        if (q.length < 3) continue;
         q = q.filter((v, i) => { const w2 = q[(i + 1) % q.length]; return Math.hypot(v.s - w2.s, v.y - w2.y) > 1e-6; });   // 重なった点（切る線が角をちょうど通った時）を除く
         if (q.length < 3) continue;
-        // この面：円の上の 2 点を結ぶ弦の面。板の点は弦の上へ横の長さの割合で置く
-        const s0 = fc.s0, A0 = fc.A0, A1 = fc.A1, N = fc.n;
-        const map = v => A0.clone().lerp(A1, (v.s - s0) / sw).add(new V(0, yc + v.y, 0));
+        // この区切りの面に乗せる。板の点は胸面の上の点（区切りの中では平ら）
+        const N = fc.n, map = v => face.at(v.s, yc + v.y);
         const B = q.map(map), C = B.reduce((m, v) => m.add(v), new V()).multiplyScalar(1 / B.length);
-        const back = { n: N.clone().negate(), d: -N.dot(A0) + e }, front = { n: N.clone(), d: N.dot(A0) + t };
+        const back = { n: N.clone().negate(), d: -fc.d + e }, front = { n: N.clone(), d: fc.d + t };
         const f = [back, front];
-        // 縁の種類は、縁がどの線の上にあるかで決める：折れ目（内側の面の境）、棒どうしの切り分け（in）、ほかは外の縁
+        // 縁の種類は、縁がどの線の上にあるかで決める：折れ目（区切りの境）、棒どうしの切り分け（in）、ほかは外の縁
         const onLine = (A, Bv, a, b, c) => Math.abs(a * A.s + b * A.y - c) < 1e-6 && Math.abs(a * Bv.s + b * Bv.y - c) < 1e-6;
-        const inner = [s0, s0 + sw].filter(x => Math.abs(x) < W2 - 1e-6);
         for (let i = 0; i < q.length; i++) {
           const A = q[i], Bv = q[(i + 1) % q.length], pa = B[i], pb = B[(i + 1) % q.length];
-          A.tag = inner.some(x => onLine(A, Bv, 1, 0, x)) ? 'seg' : hp.some(h => h[3] === 'in' && onLine(A, Bv, h[0], h[1], h[2])) ? 'in' : 'out';
+          const sx = sB.find(x => onLine(A, Bv, 1, 0, x)), sy = yB.find(y => onLine(A, Bv, 0, 1, y));
+          A.tag = sx !== undefined || sy !== undefined ? 'seg' : hp.some(hh => hh[3] === 'in' && onLine(A, Bv, hh[0], hh[1], hh[2])) ? 'in' : 'out';
           let pl;
-          if (A.tag === 'seg') { const tn = R ? new V(Math.cos(A.s / R), 0, -Math.sin(A.s / R)) : new V(1, 0, 0); const n = (tn.dot(C.clone().sub(pa)) > 0 ? tn.clone().negate() : tn.clone()); pl = { n, d: n.dot(pa) }; }   // 折れ目：円の半径の面（隣の面と同じ面）
-          else { const n = pb.clone().sub(pa).cross(N).normalize(); if (n.dot(C.clone().sub(pa)) > 0) n.negate(); pl = { n, d: n.dot(pa) }; }
+          if (A.tag === 'seg') {   // 折れ目：隣の区切りと同じ面（境の線と、2 つの面の向きの間の向きを含む面）
+            const nb = sx !== undefined ? face.facet(sx > (fc.s0 + fc.s1) / 2 ? g + 1 : g - 1, h) : face.facet(g, (sy + yc) > (fc.y0 + fc.y1) / 2 ? h + 1 : h - 1);
+            const n = pb.clone().sub(pa).cross(N.clone().add(nb.n)).normalize(); if (n.dot(C.clone().sub(pa)) > 0) n.negate(); pl = { n, d: n.dot(pa) };
+          } else { const n = pb.clone().sub(pa).cross(N).normalize(); if (n.dot(C.clone().sub(pa)) > 0) n.negate(); pl = { n, d: n.dot(pa) }; }
           f.push(pl);
           if (A.tag === 'out' && bev > 0) { const cut = bevelEdge(front, pl, bev, bev); if (cut) f.push(cut); }
         }
@@ -1860,11 +1878,13 @@ const BODY_SECS = [
     ['r', 'chbW', '幅', 0.1, 4, 0.01, 1.17], ['r', 'chbH', '高さ', 0.1, 4, 0.01, 1.4], ['r', 'chbD', '奥行（正面の真ん中から背まで）', 0.1, 4, 0.01, 1.4],
     ['r', 'chbY', '上端の下がり', -1, 4, 0.01, 0.31], ['r', 'chbZ', '前後の位置（正面の真ん中）', -2, 3, 0.01, 0.7],
     ['r', 'chbBend', '正面の丸みの強さ（幅の端が真ん中より奥へ下がる長さ、0 で平ら）', 0, 1.5, 0.01, 0.15], ['r', 'chbFacets', '正面の面の数（2 で真ん中の折れ）', 1, 12, 1, 3],
+    ['r', 'chbBendV', '正面の上下の丸みの強さ（上と下の端が真ん中より奥へ下がる長さ、0 で平ら）', 0, 1.5, 0.01, 0.1], ['r', 'chbFacetsV', '正面の上下の面の数', 1, 12, 1, 2],
     ['r', 'chbBev', '縁の落とし', 0, 0.3, 0.01, 0.02]]],
   ['sec-ltr', '字の形の板', [['c', 'ltr'], ['on', 'ltrOn', false], ['toggle', 'ltrFit', '胸の本体に合わせる', true], ['kinds', 'ltr', [['T', 'T 字'], ['X', 'X 字'], ['A', '＊字']], '形', 'T'],
     ['r', 'ltrW', '幅', 0.1, 4, 0.01, 1.17], ['r', 'ltrH', '高さ', 0.1, 4, 0.01, 1.08], ['r', 'ltrT', '厚み', 0.01, 0.6, 0.01, 0.08],
     ['r', 'ltrY', '上端の下がり', -1, 4, 0.01, 0.45], ['r', 'ltrZ', '前後の位置（胸面の真ん中）', -2, 3, 0.01, 0.8],
     ['r', 'ltrBend', '胸面の丸みの強さ（幅の端が真ん中より奥へ下がる長さ、0 で平ら）', 0, 1.5, 0.01, 0.15], ['r', 'ltrFacets', '胸面の面の数（2 で真ん中の折れ）', 1, 12, 1, 3],
+    ['r', 'ltrBendV', '胸面の上下の丸みの強さ（上と下の端が真ん中より奥へ下がる長さ、0 で平ら）', 0, 1.5, 0.01, 0], ['r', 'ltrFacetsV', '胸面の上下の面の数', 1, 12, 1, 2],
     ['r', 'ltrBev', '縁の落とし', 0, 0.3, 0.01, 0.02],
     ['r', 'ltrHB', 'T 字：横棒の高さ', 0.02, 3, 0.01, 0.49], ['r', 'ltrSW', 'T 字：縦棒の幅', 0.02, 3, 0.01, 0.35],
     ['r', 'ltrRise', 'T 字：横棒の下の辺の両端の上がり', 0, 1, 0.01, 0.06], ['r', 'ltrRiseL', 'T 字：上がる所の長さ（端から）', 0, 2, 0.01, 0.22],
@@ -2421,7 +2441,7 @@ function syncUI() {
   if (document.getElementById('chestEyeColor')) document.getElementById('chestEyeColor').value = P.chestEyeColor;
   if (typeof drawTwin === 'function') { drawTwin(); drawEar(); drawChin(); drawFace(); drawSec(); drawNeck(); }
   if (typeof PROF_DRAWS === 'object') for (const d of PROF_DRAWS) d();
-  for (const k of ['ltrZ', 'ltrBend', 'ltrFacets']) { const el = document.getElementById(k); if (el) { const off = !!(P.ltrFit && P.chbOn), row = el.closest('.row'); row.style.opacity = off ? 0.35 : ''; for (const x of row.querySelectorAll('input')) x.disabled = off; } }
+  for (const k of ['ltrZ', 'ltrBend', 'ltrFacets', 'ltrBendV', 'ltrFacetsV']) { const el = document.getElementById(k); if (el) { const off = !!(P.ltrFit && P.chbOn), row = el.closest('.row'); row.style.opacity = off ? 0.35 : ''; for (const x of row.querySelectorAll('input')) x.disabled = off; } }
   for (const k of ['col1PtR', 'col1AUd', 'col1ALd', 'col1NotchWm', 'col1NotchDR', 'col1NotchTm']) { const el = document.getElementById(k); if (el) { const row = el.closest('.row'); row.style.opacity = P.col1Prof ? 0.35 : ''; for (const x of row.querySelectorAll('input')) x.disabled = !!P.col1Prof; } }
   for (const pre of COLOR_PRES) { const el = document.getElementById(pre + 'Color'); if (el && (P[pre + 'Color'] || (COL && PAINT[pre]))) el.value = P[pre + 'Color'] || '#' + PC(pre).getHexString(); }
   for (const el of document.querySelectorAll('input[type=color][id^=g_]')) el.value = P[el.id] || '#888888';
