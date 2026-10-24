@@ -595,6 +595,29 @@ function profPlanes(pts, zc, D, ym, H) {
   }
   return { planes: out, pts: q };
 }
+const BOX4F = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+// 正面の形の点（割合）→ 面。u は 1 本の幅の割合で +1 が外（体の中心から遠い側）、v は高さの割合。so は外の向き（+1 で +x）
+function frontPlanes(pts, cx, so, w, ym, H) {
+  const q = pts.map(([u, v]) => [cx + so * u * w / 2, ym + v * H / 2]);
+  let area = 0; for (let i = 0; i < q.length; i++) { const [x1, y1] = q[i], [x2, y2] = q[(i + 1) % q.length]; area += x1 * y2 - x2 * y1; }
+  const out = [];
+  for (let i = 0; i < q.length; i++) {
+    const [x1, y1] = q[i], [x2, y2] = q[(i + 1) % q.length], ex = x2 - x1, ey = y2 - y1; if (Math.hypot(ex, ey) < 1e-6) continue;
+    const n = (area > 0 ? new THREE.Vector3(ey, -ex, 0) : new THREE.Vector3(-ey, ex, 0)).normalize();
+    out.push({ n, d: n.dot(new THREE.Vector3(x1, y1, 0)) });
+  }
+  return out;
+}
+// 2 つの面 a, b の間の縁を平らな面 1 枚で落とす：a の上を縁から la、b の上を縁から lb 入った 2 本の線を通る面
+function bevelEdge(a, b, la, lb) {
+  if (!(la > 0 && lb > 0)) return null;
+  const u = a.n.clone().cross(b.n), uu = u.lengthSq(); if (uu < 1e-4) return null;
+  const E = b.n.clone().cross(u).multiplyScalar(a.d).add(u.clone().cross(a.n).multiplyScalar(b.d)).multiplyScalar(1 / uu);   // 縁の上の点
+  const tA = b.n.clone().addScaledVector(a.n, -b.n.dot(a.n)).normalize().negate(), tB = a.n.clone().addScaledVector(b.n, -a.n.dot(b.n)).normalize().negate();   // 面の上で縁から中へ向かう向き
+  const P1 = E.clone().addScaledVector(tA, la), P2 = E.clone().addScaledVector(tB, lb);
+  const m = u.clone().cross(P2.clone().sub(P1)).normalize(); if (m.dot(E.clone().sub(P1)) < 0) m.negate();
+  return { n: m, d: m.dot(P1) };
+}
 // 横の形を高さ y で切った時の背と前の z
 function profSpanAt(q, y) { let lo = 1e9, hi = -1e9; for (let i = 0; i < q.length; i++) { const [z1, y1] = q[i], [z2, y2] = q[(i + 1) % q.length]; if ((y1 - y) * (y2 - y) > 0 || y1 === y2) continue; const z = z1 + (z2 - z1) * (y - y1) / (y2 - y1); lo = Math.min(lo, z); hi = Math.max(hi, z); } return lo <= hi ? [lo, hi] : null; }
 // 2 つの面の間の縁を半径 r で丸める：両方の面から r 内の線を中心に、接する nf 枚の面
@@ -1292,16 +1315,39 @@ function body() {
   const abuBot = P.abuOn ? tai('abu', PART.abu, P.abuFit && P.col1On ? colBot() : null) : null;
   if (P.ablOn) tai('abl', PART.abl, P.ablFit && abuBot ? abuBot : null);
   // スプリット柱：1 本の柱を左右に等分した塊（依頼主：「スプリット柱とかにしておこう」「分ける個数は設定できるようにして」「スプリットしない場合は1。デフォルトは2。奇数も偶数も許して」）。
-  // どの塊も前から背中まで通る。横から見た形は描ける（描かなければ箱）。2026-10-24 にまっさらから作り直し中：面の欄は見本を 1 つの立体として読んでから足す
+  // 1 本の柱は、横から見た形を左右に伸ばした立体と、正面から見た形を前後に伸ばした立体の重なり（どちらも描ける、描かなければ箱）。後ろから見た形は正面と同じ。
+  // 正面の形は外（体の中心から遠い側）を +1 に描き、左の柱には裏返して使う。真ん中の柱（分ける数が奇数）は両側に使う。
+  // 縁はどれも平らな面 1 枚で落とす。外の横の面と前・背中・上・下の面の間は 2 つの面それぞれに沿った幅、内の横の面の縁と、正面の上の辺・底の辺の縁は幅 1 つ
   if (P.splOn) {
     setPart(PART.spl);
     const col = colOf('spl'), N = Math.max(1, P.splN | 0), Wt = P.splW, gap = N > 1 ? Math.min(P.splGap, Wt * 0.5 / (N - 1)) : 0, w = (Wt - gap * (N - 1)) / N;
     const yT = y0 - P.splY, H = P.splH, zc = P.splZ, D = P.splD;
     const prof = P.splProf && P.splProfPts && P.splProfPts.length >= 3 ? profPlanes(P.splProfPts, zc, D, yT - H / 2, H) : null;   // 描いた横の形
     const shape = prof || profPlanes([[1, 1], [-1, 1], [-1, -1], [1, -1]], zc, D, yT - H / 2, H);   // 描かない時は箱
+    const frPts = P.splFr && P.splFrPts && P.splFrPts.length >= 3 ? P.splFrPts : BOX4F;
+    const ym = yT - H / 2;
+    // 横の形の面の向き：上・下・前・背中
+    const sideKind = q => q.n.y > 0.7 ? 'T' : q.n.y < -0.7 ? 'B' : q.n.z >= 0 ? 'F' : 'K';
     for (let i = 0; i < N; i++) {
-      const x0 = -Wt / 2 + i * (w + gap), x1 = x0 + w;
-      crystal(M, [plane(90, 0, new V(x1, 0, 0)), plane(-90, 0, new V(x0, 0, 0)), ...shape.planes], col);
+      const x0 = -Wt / 2 + i * (w + gap), x1 = x0 + w, cx = (x0 + x1) / 2;
+      const outs = N > 1 && Math.abs(cx) > w * 0.25 ? [Math.sign(cx)] : [1, -1];
+      const f = [...shape.planes];
+      for (const so of outs) {
+        const fr = frontPlanes(frPts, cx, so, w, ym, H);
+        f.push(...fr);
+        for (const a of fr) {
+          // 正面の形の面の向き：外の横・内の横・上の辺・底の辺
+          const ax = a.n.x * so, kind = ax > 0.7 ? 'O' : ax < -0.7 ? 'I' : a.n.y > 0.5 ? 'U' : a.n.y < -0.5 ? 'D' : null; if (!kind) continue;
+          for (const b of shape.planes) {
+            const sk = sideKind(b); let la = 0, lb = 0;
+            if (kind === 'O') { la = P['splE' + sk + 's']; lb = P['splE' + sk + 'o']; }
+            else if (kind === 'I') la = lb = P.splEI;
+            else if (sk === 'F' || sk === 'K') la = lb = kind === 'U' ? P.splEU : P.splED;
+            const lim = Math.min(w, H, D) * 0.45, cut = bevelEdge(a, b, Math.min(lim, la), Math.min(lim, lb)); if (cut) f.push(cut);
+          }
+        }
+      }
+      crystal(M, f, col);
     }
   }
   // 襟：箱か、首を囲む円筒の輪
@@ -1701,7 +1747,13 @@ const BODY_SECS = [
     ['r', 'splN', '分ける数', 1, 6, 1, 2], ['r', 'splGap', '割れ目の幅', 0, 4, 0.01, 1.18],
     ['r', 'splW', '幅（全体）', 0.2, 6, 0.01, 2.34], ['r', 'splH', '高さ', 0.1, 4, 0.01, 1.47], ['r', 'splD', '奥行', 0.1, 4, 0.01, 1.59],
     ['r', 'splY', '上端の下がり', -1, 4, 0.01, 0.17], ['r', 'splZ', '前後の位置', -2, 2, 0.01, 0],
-    ['shape', 'spl', '横から見た柱の形（左が前）。点をつまんで動かす。へこんだ形は作れない'], ['r', 'splProfN', '横の形の角の数', 3, 24, 1, 4]]],
+    ['shape', 'spl', '横から見た柱の形（左が前）。点をつまんで動かす。へこんだ形は作れない', true, [[0.83, 1], [-0.54, 0.96], [-0.69, 0.85], [-0.83, 0.65], [-0.94, 0.35], [-1, 0.05], [-0.99, -0.32], [-0.9, -0.68], [-0.61, -0.93], [0.79, -1], [0.93, -0.95], [0.99, -0.8], [0.91, 0.94]]], ['r', 'splProfN', '横の形の角の数', 3, 24, 1, 13],
+    ['shape', 'spl', '正面から見た柱 1 本の形（右が外＝体の中心から遠い側）。左の柱には裏返して使う。後ろから見ても同じ形。へこんだ形は作れない', true, [[-1, 1], [0.46, 0.89], [0.58, 0.81], [1, -0.75], [-0.75, -1]], 'Fr', '正面の形を描く'], ['r', 'splFrN', '正面の形の角の数', 3, 24, 1, 5],
+    ['r', 'splEFs', '外の前の縁：横の面に沿った幅', 0, 1, 0.01, 0.22], ['r', 'splEFo', '外の前の縁：前の面に沿った幅', 0, 1, 0.01, 0.09],
+    ['r', 'splEKs', '外の後ろの縁：横の面に沿った幅', 0, 1, 0.01, 0.05], ['r', 'splEKo', '外の後ろの縁：背中の面に沿った幅', 0, 1, 0.01, 0.05],
+    ['r', 'splETs', '外の上の縁：横の面に沿った幅', 0, 1, 0.01, 0.06], ['r', 'splETo', '外の上の縁：上の面に沿った幅', 0, 1, 0.01, 0.06],
+    ['r', 'splEBs', '外の下の縁：横の面に沿った幅', 0, 1, 0.01, 0.1], ['r', 'splEBo', '外の下の縁：下の面に沿った幅', 0, 1, 0.01, 0.1],
+    ['r', 'splEI', '内の横の面の縁', 0, 1, 0.01, 0.05], ['r', 'splEU', '正面の上の辺の縁（前と背中）', 0, 1, 0.01, 0.05], ['r', 'splED', '正面の底の辺の縁（前と背中）', 0, 1, 0.01, 0.05]]],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
@@ -1741,7 +1793,7 @@ const BODY_SECS = [
       if (r[0] === 'kinds') { html += `<div class="btns"><span style="color:#aaa;align-self:center">${r[3]}</span>${r[2].map(([k, l]) => `<button data-kind="${k}" data-pre="${r[1]}">${l}</button>`).join('')}</div>`; if (!((r[1] + 'Kind') in P)) P[r[1] + 'Kind'] = r[4] || r[2][0][0]; continue; }
       if (r[0] === 'r') { html += `<div class="row"><label>${r[2]}</label><input type="range" id="${r[1]}" min="${r[3]}" max="${r[4]}" step="${r[5]}" value="${r[6]}"><input class="val" type="number"></div>`; if (!(r[1] in P)) P[r[1]] = r[6]; }
       else if (r[0] === 'c') { html += colorRow(r[1], r[2]); if (!((r[1] + 'Color') in P)) P[r[1] + 'Color'] = ''; }
-      else if (r[0] === 'shape') { const pre = r[1]; html += `<div class="btns"><button data-t="${pre}Prof">横の形を描く</button><button id="${pre}ProfFrom">今の形から始める</button><button id="${pre}ProfReg">正多角形に戻す</button></div><canvas id="${pre}ProfCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas><div class="hint">${r[2]}</div>`; if (!((pre + 'Prof') in P)) P[pre + 'Prof'] = !!r[3]; if (!((pre + 'ProfPts') in P)) P[pre + 'ProfPts'] = r[4] ? r[4].map(q => q.slice()) : null; }
+      else if (r[0] === 'shape') { const k = r[1] + (r[5] || 'Prof'); html += `<div class="btns"><button data-t="${k}">${r[6] || '横の形を描く'}</button><button id="${k}From">今の形から始める</button><button id="${k}Reg">正多角形に戻す</button></div><canvas id="${k}Canvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas><div class="hint">${r[2]}</div>`; if (!(k in P)) P[k] = !!r[3]; if (!((k + 'Pts') in P)) P[k + 'Pts'] = r[4] ? r[4].map(q => q.slice()) : null; }
       else if (r[0] === 'canvas') { html += `<div class="btns"><button id="kneeTrap">台形に戻す</button><button id="kneeReset">正多角形に戻す</button></div><canvas id="kneeCanvas" width="224" height="130" style="display:block;background:#15171b;border:1px solid #333;border-radius:6px;margin:4px 0;cursor:crosshair"></canvas><div class="hint">正面から見た膝当ての形。左右は常に対称</div>`; if (!('kneePts' in P)) P.kneePts = null; }
     }
     flush();
@@ -2380,16 +2432,20 @@ const colProfNow = () => {
   const zt = zf - (top - yp) / Math.tan(P.col1AUd * D2R), zfb = zf - (yp - bot) * Math.tan(P.col1ALd * D2R), r = x => +x.toFixed(3);
   return [[1, 1], [r(-zt / zf), 1], [-1, r(yp / top)], [r(-zfb / zf), -1], [1, -1]];
 };
-for (const [pre, from] of [['col1', colProfNow], ['spl', () => [[1, 1], [-1, 1], [-1, -1], [1, -1]]]]) {
-  if (!document.getElementById(pre + 'ProfCanvas')) continue;
+const BOX4 = () => BOX4F.map(q => q.slice());
+const splPieceW = () => { const N = Math.max(1, P.splN | 0), Wt = P.splW, gap = N > 1 ? Math.min(P.splGap, Wt * 0.5 / (N - 1)) : 0; return (Wt - gap * (N - 1)) / N; };
+// [接頭辞, 鍵, 今の形, 表示の横の長さ]：横の形は奥行と高さ、正面の形は 1 本の幅と高さの比で見せる
+for (const [pre, key, from, across] of [['col1', 'Prof', colProfNow, () => P.col1D], ['spl', 'Prof', BOX4, () => P.splD], ['spl', 'Fr', BOX4, splPieceW]]) {
+  const k = pre + key;
+  if (!document.getElementById(k + 'Canvas')) continue;
   const reg = n => regularEye(n).map(([x, y]) => [+(x * 0.95).toFixed(3), +(y * 0.95).toFixed(3)]);
-  const draw = shapeEditor(pre + 'ProfCanvas', { pts: pre + 'ProfPts', n: pre + 'ProfN', unit: 52, def: reg,
-    scale: () => { const D = P[pre + 'D'], H = P[pre + 'H'], m = Math.max(D, H) || 1; return [D / m, H / m]; } },
-    () => ({ fill: P[pre + 'Prof'] ? ((COL && PAINT[pre]) ? '#' + PC(pre).getHexString() : '#999') : '#555' }));
+  const draw = shapeEditor(k + 'Canvas', { pts: k + 'Pts', n: k + 'N', unit: 52, def: reg,
+    scale: () => { const A = across(), H = P[pre + 'H'], m = Math.max(A, H) || 1; return [A / m, H / m]; } },
+    () => ({ fill: P[k] ? ((COL && PAINT[pre]) ? '#' + PC(pre).getHexString() : '#999') : '#555' }));
   PROF_DRAWS.push(draw);
-  document.getElementById(pre + 'ProfFrom').onclick = () => { const pts = from(); P[pre + 'ProfN'] = pts.length; P[pre + 'ProfPts'] = pts; P[pre + 'Prof'] = true; syncUI(); save(); build(); };
-  document.getElementById(pre + 'ProfReg').onclick = () => { P[pre + 'ProfPts'] = reg(P[pre + 'ProfN']); syncUI(); save(); build(); };
-  document.getElementById(pre + 'ProfN').addEventListener('input', () => { P[pre + 'ProfPts'] = reg(P[pre + 'ProfN']); save(); build(); draw(); });
+  document.getElementById(k + 'From').onclick = () => { const pts = from(); P[k + 'N'] = pts.length; P[k + 'Pts'] = pts; P[k] = true; syncUI(); save(); build(); };
+  document.getElementById(k + 'Reg').onclick = () => { P[k + 'Pts'] = reg(P[k + 'N']); syncUI(); save(); build(); };
+  document.getElementById(k + 'N').addEventListener('input', () => { P[k + 'Pts'] = reg(P[k + 'N']); save(); build(); draw(); });
 }
 const drawFace = shapeEditor('faceCanvas', { pts: 'facePts', n: 'faceN', mirror: true }, pts => ({ fill: (COL && PAINT.face) ? '#' + PC('face').getHexString() : '#999' }));
 document.getElementById('faceReset').onclick = () => { P.facePts = regularEye(P.faceN); save(); build(); drawFace(); };
