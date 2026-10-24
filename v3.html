@@ -2091,7 +2091,7 @@ function flashPart(targetId) {
 
 // ---- 配線 ----
 // 開いた時の形：柱 1 本＋コクピットカバー 1 つ（依頼主が「なにこのゴミ」と言った胸板・胸の中央・腹・腰の帯の箱積みは出さない）
-const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: true, cov1On: true, abuOn: true, ablOn: true, layoutV: 3 };
+const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: true, cov1On: true, abuOn: true, ablOn: true, layoutV: 4 };
 Object.assign(P, START);
 const DEFAULTS = JSON.parse(JSON.stringify(P));
 const KEY = 'crystal-head-knobs';
@@ -2099,7 +2099,9 @@ try {
   const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
   const renamed = { crest: 'crestKind', rotX: 'crestRotX', rotY: 'crestRotY', rotZ: 'crestRotZ', vOpen: 'crestVOpen' };   // 前の版の名前
   const oldLayout = saved.layoutV !== START.layoutV;   // 前の版の保存：部品の表示は開いた時の形に戻す
-  for (const k in saved) { const kk = renamed[k] || k; if (kk in P && !(oldLayout && kk in START)) P[kk] = saved[k]; }
+  // 柱・カバー・腹の上・腹の下の値も 1 度だけ初期値に戻す（どれも長さで決める別の部品なので、前の柱の値が残ると腹との間が空いてずれる）
+  const START_PARTS = /^(col1|cov1|abu|abl)/;
+  for (const k in saved) { const kk = renamed[k] || k; if (kk in P && !(oldLayout && (kk in START || START_PARTS.test(kk)))) P[kk] = saved[k]; }
   if ('backUnder' in saved && !('backSlope' in saved)) P.backSlope = Math.max(0, Math.min(75, 90 - saved.backUnder));
   if ('brimUnder' in saved && !('brimSlope' in saved)) P.brimSlope = Math.max(0, Math.min(75, 90 - saved.brimUnder));
   if ('eB' in saved && !('rimSlope' in saved)) P.rimSlope = Math.max(0, Math.min(70, 90 - saved.eB));
