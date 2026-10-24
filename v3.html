@@ -46,6 +46,7 @@
   .lay .eye.hid{color:#556}
   .lay .nm{flex:1}
   .lay.grp .nm{color:#9bd}
+  .lay.add .nm{color:#8a9}
   .txt{background:#1b1d22;color:#eee;border:1px solid #3a3f47;border-radius:5px;padding:3px 6px;font:inherit}
   #libList .btns button{padding:2px 6px}
   .tplknobs details{margin:2px 0;border-left:2px solid #333;padding-left:6px}
@@ -399,7 +400,7 @@ function crystal(T, planes, col0, cutters) {
     for (const pc of pieces) {
       if (!clipFaces([...pc.planes, ...C]).length) { next.push(pc); continue; }   // この削りに当たらないかけらはそのまま
       for (let i = 0; i < C.length; i++) {
-        const outside = { n: C[i].n.clone().negate(), d: -C[i].d, cut: true };
+        const outside = { n: C[i].n.clone().negate(), d: -C[i].d, cut: true, dark: !!C[i].dark };
         const inner = C.slice(0, i);
         const cand = { planes: [...pc.planes, outside, ...inner], internal: [...pc.internal, ...inner] };
         if (clipFaces(cand.planes).length) next.push(cand);
@@ -581,8 +582,8 @@ const rotPts2 = (pts, deg) => { const a = deg * D2R; return pts.map(([x, y]) => 
 function regularEye(n) { const o = []; for (let i = 0; i < n; i++) { const a = PI / 2 + i / n * 2 * PI; o.push([+Math.cos(a).toFixed(3), +Math.sin(a).toFixed(3)]); } return o; }
 
 // ---- 部位の番号（3D を押した所から左の欄を光らせるため）----
-const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, band: 40, skF: 41, skS: 42, skB: 43, crotch: 44 };
-const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-band', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch' };
+const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, band: 40, skF: 41, skS: 42, skB: 43, crotch: 44, x1: 45, x2: 46, x3: 47, x4: 48, x5: 49, x6: 50, duct: 51, skC: 52 };
+const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-band', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch', 45: 'sec-x1', 46: 'sec-x2', 47: 'sec-x3', 48: 'sec-x4', 49: 'sec-x5', 50: 'sec-x6', 51: 'sec-duct', 52: 'sec-skC' };
 const setPart = id => { M.part = id; G.part = id; };
 
 // ---- 頭 ----
@@ -1094,83 +1095,188 @@ function body() {
   if (P.coreOn) coreCrystal('core', y0, PART.chest, colOf('chest'));
 
   // 塊：胴体を前から背中まで通る（依頼主：「この胸板は実際は背中まで回ってるんだよ」）。背・上・下・正面・横の面で決める。
-  // 「半分に割る」が付く物は左右一対になり正中に割れ目が空く。胸板・胸の中央・襟・腹・腰の帯・股が同じ作り
-  const slab = (pre, part, split) => {
-    setPart(part);
-    const col = colOf(pre);
+  // 「半分に割る」が付く物は左右一対になり正中に割れ目が空く。胸板・胸の中央・襟・腹・腰の帯・股・足した塊が同じ作り
+  const slabGeo = (pre, xo = 0) => {
     const top = y0 - P[pre + 'Y'], H = P[pre + 'H'], rx = P[pre + 'W'] / 2, rz = P[pre + 'D'] / 2;
     const zm = P[pre + 'Z'], zb = zm - rz, zf = zm + rz, ym = top - H / 2;
+    return { top, H, rx, rz, zm, zb, zf, ym, xo, front: sg => plane((sg || 0) * P[pre + 'AF'], P[pre + 'FrontE'], new V(xo, ym, zf)) };
+  };
+  // くぼみ：正面を四角にくり抜く段（深さ 0 で無し）。正面の面に平行に deep だけ削る
+  const recessCutters = (pre, fr, xc, top, n = 2) => {
+    const out = [];
+    for (let k = 1; k <= n; k++) {
+      const D = P[pre + 'R' + k + 'D'] || 0; if (!(D > 0)) continue;
+      const W = P[pre + 'R' + k + 'W'], H = P[pre + 'R' + k + 'H'], yT = top - P[pre + 'R' + k + 'Y'], x = xc + P[pre + 'R' + k + 'X'];
+      out.push([{ n: fr.n.clone().negate(), d: -(fr.d - D) }, plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yT - H, 0)), plane(90, 0, new V(x + W / 2, 0, 0)), plane(-90, 0, new V(x - W / 2, 0, 0))]);
+    }
+    return out;
+  };
+  const slab = (pre, part, o = {}) => {
+    setPart(part);
+    const colMain = colOf(pre), col = f => (f.pl && f.pl.cut && f.pl.dark) ? COL.dark : colMain;
+    const g = slabGeo(pre, o.xo || 0), { top, H, rx, rz, zm, zb, zf, ym, xo } = g;
     const common = [
-      plane(180, P[pre + 'BackE'], new V(0, ym, zb)),      // 背：＋で上が前へ寄る
-      plane(0, P[pre + 'TopE'], new V(0, top, zm)),        // 上の面：90 で水平、小さいほど前へ下がる。奥行の真ん中で「高さ」になる
-      plane(0, -P[pre + 'BotE'], new V(0, top - H, zm)),   // 下の面：90 で水平、小さいほど前へ上がる
+      plane(180, P[pre + 'BackE'], new V(xo, ym, zb)),      // 背：＋で上が前へ寄る
+      plane(0, P[pre + 'TopE'], new V(xo, top, zm)),        // 上の面：90 で水平、小さいほど前へ下がる。奥行の真ん中で「高さ」になる
+      plane(0, -P[pre + 'BotE'], new V(xo, top - H, zm)),   // 下の面：90 で水平、小さいほど前へ上がる
     ];
     // 前上・前下の角の落とし：正面の上下の縁を 45 度で落とす（縁の高さは上・下の面の傾きから）
     const yTF = top - rz / Math.tan(P[pre + 'TopE'] * D2R), yBF = top - H + rz / Math.tan(P[pre + 'BotE'] * D2R);
-    if (P[pre + 'ChamT'] > 0) common.push(plane(0, 45, new V(0, yTF - P[pre + 'ChamT'], zf)));
-    if (P[pre + 'ChamB'] > 0) common.push(plane(0, -45, new V(0, yBF + P[pre + 'ChamB'], zf)));
-    // 横の面の数：1 で 1 枚、2・3 で角が落ちて丸みが出る（点は幅・奥行の楕円の上）
+    if (P[pre + 'ChamT'] > 0) common.push(plane(0, 45, new V(xo, yTF - P[pre + 'ChamT'], zf)));
+    if (P[pre + 'ChamB'] > 0) common.push(plane(0, -45, new V(xo, yBF + P[pre + 'ChamB'], zf)));
+    // 横上・横下の角の落とし：横の面と上・下の面の間を 45 度で落とす
+    const chamSide = sg => { const o2 = []; if (P[pre + 'ChamU'] > 0) o2.push(plane(sg * 90, 45, new V(xo + sg * rx, top - P[pre + 'ChamU'], zm))); if (P[pre + 'ChamL'] > 0) o2.push(plane(sg * 90, -45, new V(xo + sg * rx, top - H + P[pre + 'ChamL'], zm))); return o2; };
+    // 横の面の数：1 で 1 枚、2・3 で角が落ちて丸みが出る（点は幅・奥行の楕円の上、面は楕円に接する向き）
     const das = { 1: [0], 2: [-20, 20], 3: [-30, 0, 30] }[P[pre + 'Facets'] || 1] || [0];
-    const sidePt = (sg, da) => { const a = (P[pre + 'SideA'] + da) * D2R; return new V(sg * rx * Math.sin(a), ym, zm + rz * Math.cos(a)); };
-    const tangAz = da => { const a = (P[pre + 'SideA'] + da) * D2R; return Math.atan2(Math.sin(a) / rx, Math.cos(a) / rz) / D2R; };   // 楕円に接する面の向き
-    const sides = sg => das.map(da => plane(sg * tangAz(da), P[pre + 'SideE'], sidePt(sg, da)));
-    if (split && P[pre + 'Split']) {
-      for (const sg of [1, -1]) crystal(M, [...common,
-        plane(sg * P[pre + 'AF'], P[pre + 'FrontE'], new V(0, ym, zf)),                       // 正面：＋で上が後ろへ寄る
-        ...sides(sg),                                                                        // 横の面
-        plane(-sg * 90, 0, new V(sg * P[pre + 'Gap'] / 2, 0, 0)),                            // 割れ目に向く面
-      ], col);
+    const ellPt = (sg, aDeg) => { const a = aDeg * D2R; return new V(xo + sg * rx * Math.sin(a), ym, zm + rz * Math.cos(a)); };
+    const tangAz = aDeg => { const a = aDeg * D2R; return Math.atan2(Math.sin(a) / rx, Math.cos(a) / rz) / D2R; };
+    const sides = sg => das.map(da => plane(sg * tangAz(P[pre + 'SideA'] + da), P[pre + 'SideE'], ellPt(sg, P[pre + 'SideA'] + da)));
+    // 正面の面の数：1 で正中の折れ、3・5・7 で前が丸い（楕円に接する面）
+    const fn = P[pre + 'FrontN'] | 0, fdas = { 3: [-25, 0, 25], 5: [-40, -20, 0, 20, 40], 7: [-45, -30, -15, 0, 15, 30, 45] }[fn];
+    const fronts = sg => {   // sg = 0 で両側、±1 で片側
+      if (fdas) return fdas.filter(a => !sg || a * sg >= 0).map(a => plane(tangAz(a), P[pre + 'FrontE'], ellPt(1, a)));
+      if (sg) return [g.front(sg)];
+      const aF = P[pre + 'AF']; if (aF < 1) return [g.front(0)];
+      return [plane(aF, P[pre + 'FrontE'], new V(xo, ym, zf)), plane(-aF, P[pre + 'FrontE'], new V(xo, ym, zf))];
+    };
+    const extra = o.cutters || [];
+    if (o.split && P[pre + 'Split']) {
+      for (const sg of [1, -1]) {
+        const fr = g.front(sg);
+        crystal(M, [...common, ...chamSide(sg), ...fronts(sg), ...sides(sg), plane(-sg * 90, 0, new V(sg * P[pre + 'Gap'] / 2, 0, 0))], col,
+          [...extra, ...recessCutters(pre, fr, xo, top).map((c, i) => c)].filter(c => c));
+      }
     } else {
-      crystal(M, [...common, ...fp0(P[pre + 'AF'], P[pre + 'FrontE'], new V(0, ym, zf)), ...sides(1), ...sides(-1)], col);
+      const fr = fdas ? plane(0, P[pre + 'FrontE'], new V(xo, ym, zf)) : g.front(0);
+      crystal(M, [...common, ...chamSide(1), ...chamSide(-1), ...fronts(0), ...sides(1), ...sides(-1)], col, [...extra, ...recessCutters(pre, fr, xo, top)]);
     }
   };
-  if (P.collarOn) slab('collar', PART.collar, false);
-  if (P.plateOn) slab('plate', PART.plate, true);
-  if (P.centerOn) slab('center', PART.center, false);
-  if (P.abdOn) slab('abd', PART.abd, false);
-  if (P.bandOn) slab('band', PART.band, false);
-  if (P.crotchOn) slab('crotch', PART.crotch, false);
 
-  // 管：前の付け根から体の横を回って後ろの付け根へ（動力の管）。左右一対。節ごとに六角の筒で、曲線は 3 次ベジエ
+  // 口（ダクト）：胸板の正面をくり抜いた穴に横の羽を入れ、枠を立てる。左右一対。溝ではなく深さのある開口
+  const ductCutters = () => {
+    if (!P.ductOn || !P.plateOn) return [];
+    const g = slabGeo('plate'), out = [];
+    for (const sg of [1, -1]) {
+      const fr = P.plateSplit ? g.front(sg) : (P.plateFrontN > 1 ? plane(0, P.plateFrontE, new V(0, g.ym, g.zf)) : g.front(0));
+      const yT = g.top - P.ductY, x = sg * P.ductX;
+      const c = [{ n: fr.n.clone().negate(), d: -(fr.d - P.ductD), dark: true }, plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yT - P.ductH, 0)), plane(90, 0, new V(x + P.ductW / 2, 0, 0)), plane(-90, 0, new V(x - P.ductW / 2, 0, 0))];
+      for (const pl of c) pl.dark = true;
+      out.push(c);
+    }
+    return out;
+  };
+  const ductParts = () => {
+    if (!P.ductOn || !P.plateOn) return;
+    setPart(PART.duct);
+    const g = slabGeo('plate'), col = colOf('duct'), N = Math.max(0, P.ductN | 0), e = (90 - P.ductTilt) * D2R, nf = new V(0, Math.sin(e), Math.cos(e));
+    for (const sg of [1, -1]) {
+      const fr = P.plateSplit ? g.front(sg) : (P.plateFrontN > 1 ? plane(0, P.plateFrontE, new V(0, g.ym, g.zf)) : g.front(0));
+      const yT = g.top - P.ductY, yB = yT - P.ductH, x = sg * P.ductX, hw = P.ductW / 2;
+      const inBox = [plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yB, 0)), plane(90, 0, new V(x + hw, 0, 0)), plane(-90, 0, new V(x - hw, 0, 0))];
+      // 羽：穴の中に N 枚、傾けて並ぶ薄い板。前は正面の面、後ろは穴の底まで
+      for (let i = 0; i < N; i++) {
+        const yc = yT - (i + 0.5) * P.ductH / N, cpt = new V(x, yc, 0);
+        const dmid = nf.dot(cpt);
+        crystal(M, [...inBox, { n: fr.n.clone(), d: fr.d }, { n: fr.n.clone().negate(), d: -(fr.d - P.ductD) }, { n: nf.clone(), d: dmid + P.ductFT / 2 }, { n: nf.clone().negate(), d: -dmid + P.ductFT / 2 }], COL.dark);
+      }
+      // 枠：穴の縁に立つ額縁。正面の面から枠の出だけ前へ、少し中へ食い込ませて継ぎ目を埋める
+      if (P.ductF > 0 && P.ductFW > 0) {
+        const t = P.ductFW;
+        const outer = [{ n: fr.n.clone(), d: fr.d + P.ductF }, { n: fr.n.clone().negate(), d: -(fr.d - 0.02) }, plane(0, 90, new V(0, yT + t, 0)), plane(0, -90, new V(0, yB - t, 0)), plane(90, 0, new V(x + hw + t, 0, 0)), plane(-90, 0, new V(x - hw - t, 0, 0))];
+        crystal(M, outer, col, [inBox]);
+      }
+    }
+  };
+
+  if (P.coreOn) coreCrystal('core', y0, PART.chest, colOf('chest'));
+  // 襟：箱か、首を囲む円筒の輪
+  if (P.collarOn) {
+    if (P.collarKind === 'ring') {
+      setPart(PART.collar);
+      const col = colOf('collar'), top = y0 - P.collarY, N = Math.max(6, P.collarNg | 0), Ro = P.collarW / 2, Ri = Math.min(P.collarRi / 2, Ro - 0.02), c = new V(0, 0, P.collarZ);
+      const ring = R => { const o = []; for (let k = 0; k < N; k++) { const a = (k + 0.5) * 2 * PI / N, n = new V(Math.sin(a), 0, Math.cos(a)); o.push({ n, d: n.dot(c) + R }); } return o; };
+      crystal(M, [plane(0, 90, new V(0, top, 0)), plane(0, -90, new V(0, top - P.collarH, 0)), ...ring(Ro)], col, Ri > 0 ? [ring(Ri)] : undefined);
+    } else slab('collar', PART.collar);
+  }
+  if (P.plateOn) slab('plate', PART.plate, { split: true, cutters: ductCutters() });
+  ductParts();
+  if (P.centerOn) slab('center', PART.center);
+  if (P.abdOn) slab('abd', PART.abd);
+  if (P.bandOn) slab('band', PART.band);
+  if (P.crotchOn) slab('crotch', PART.crotch);
+  // 足した塊：左右の位置と左右対称を持つ塊。足りない形はこれで置く（依頼主：「対象になる部位に形が存在しない場合、オブジェクトを足していきました」）
+  for (let i = 1; i <= 6; i++) {
+    const pre = 'x' + i; if (!P[pre + 'Use'] || !P[pre + 'On']) continue;
+    for (const sg of (P[pre + 'Mirror'] ? [1, -1] : [1])) slab(pre, PART[pre], { xo: sg * P[pre + 'X'] });
+  }
+
+  // 管：前の付け根から体の横を回って後ろの付け根へ（動力の管）。左右一対。節ごとに六角の筒で、曲線は 3 次ベジエ。節のふくらみで数珠のように
   if (P.pipeOn) {
     setPart(PART.pipe);
-    const col = colOf('pipe'), r = P.pipeR, N = Math.max(2, P.pipeN | 0);
+    const col = colOf('pipe'), r = P.pipeR, N = Math.max(2, P.pipeN | 0), bulge = P.pipeBulge || 1;
     for (const sg of [1, -1]) {
       const A = new V(sg * P.pipeX0, y0 - P.pipeY0, P.pipeZ0), B = new V(sg * P.pipeX1, y0 - P.pipeY1, -P.pipeZ1);
       const C1 = new V(sg * P.pipeOut, A.y - P.pipeSag, A.z * 0.3), C2 = new V(sg * P.pipeOut, B.y - P.pipeSag, B.z * 0.3);
       const bez = t => { const u = 1 - t; return new V().addScaledVector(A, u * u * u).addScaledVector(C1, 3 * u * u * t).addScaledVector(C2, 3 * u * t * t).addScaledVector(B, t * t * t); };
       const pts = []; for (let i = 0; i <= N; i++) pts.push(bez(i / N));
-      for (let i = 0; i < N; i++) {
-        const p0 = pts[i], p1 = pts[i + 1], ax = p1.clone().sub(p0).normalize();
+      const prism = (p0, p1, rad, sidesN, over) => {
+        const ax = p1.clone().sub(p0).normalize();
         const t1 = (Math.abs(ax.y) < 0.9 ? new V().crossVectors(UP, ax) : new V().crossVectors(X, ax)).normalize(), t2 = new V().crossVectors(ax, t1).normalize();
         const c = p0.clone().add(p1).multiplyScalar(0.5);
-        const pl = [{ n: ax, d: ax.dot(p1) + r * 0.1 }, { n: ax.clone().negate(), d: -ax.dot(p0) + r * 0.1 }];   // 少し重ねて継ぎ目を埋める
-        for (let k = 0; k < 6; k++) { const a = (k + 0.5) * PI / 3; const n = t1.clone().multiplyScalar(Math.cos(a)).addScaledVector(t2, Math.sin(a)); pl.push({ n, d: n.dot(c) + r }); }
+        const pl = [{ n: ax, d: ax.dot(p1) + over }, { n: ax.clone().negate(), d: -ax.dot(p0) + over }];
+        for (let k = 0; k < sidesN; k++) { const a = (k + 0.5) * 2 * PI / sidesN; const n = t1.clone().multiplyScalar(Math.cos(a)).addScaledVector(t2, Math.sin(a)); pl.push({ n, d: n.dot(c) + rad }); }
         crystal(M, pl, col);
+      };
+      for (let i = 0; i < N; i++) {
+        prism(pts[i], pts[i + 1], r, 6, r * 0.1);   // 少し重ねて継ぎ目を埋める
+        if (bulge > 1.01) { const c = pts[i].clone().add(pts[i + 1]).multiplyScalar(0.5), d = pts[i + 1].clone().sub(pts[i]).multiplyScalar(0.3); prism(c.clone().sub(d), c.clone().add(d), r * bulge, 8, 0); }   // 節
       }
     }
   }
 
-  // スカート：腰から下げる板。前・横・後ろで輪になる。張り出し（正中の軸からの距離）、開き（下が外へ振れる）、すぼまり（下へ細る）
-  const hang = (pre, part, az, split) => {
+  // スカート：腰から蝶番で下げる板（上端が軸）。前・横・後ろ・前の中央。張り出し（正中の軸からの距離）、開き（下が外へ振れる）、
+  // すぼまり（下へ細る、負で下が広い台形）、厚み、縁の面取り、曲げ（幅の方向に 3 面に折って弧に回り込む）、下の尖り（底が中央へ下がる五角形）、くぼみ
+  const hang = (pre, part, az, lo, w, sg, tin) => {
     setPart(part);
     const col = colOf(pre), a = az * D2R;
-    const top = y0 - P[pre + 'Y'], H = P[pre + 'H'], T = P[pre + 'T'], R = P[pre + 'R'], f = P[pre + 'Flare'], tp = P[pre + 'Taper'], W = P[pre + 'W'];
+    const top = y0 - P[pre + 'Y'], H = P[pre + 'H'], T = P[pre + 'T'], R = P[pre + 'R'], f = P[pre + 'Flare'], tp = P[pre + 'Taper'];
+    const bev = P[pre + 'Bevel'] || 0, fold = P[pre + 'Fold'] || 0, pt = P[pre + 'Point'] || 0;
     const u = new V(Math.sin(a), 0, Math.cos(a)), v = new V(Math.cos(a), 0, -Math.sin(a));   // u 外向き、v 板に沿う向き
-    const c = new V(0, 0, P[pre + 'Z'] || 0);
-    const pOut = c.clone().addScaledVector(u, R).setY(top);
-    const outer = plane(az, f, pOut);                                      // 外の面：開きの分だけ下が外へ
-    const base = [outer, plane(az + 180, -f, pOut.clone().addScaledVector(outer.n, -T)),   // 内の面（厚みの分だけ内へ）
-      plane(0, 90, new V(0, top, 0)),                                                     // 上
-      plane(az, -P[pre + 'BotE'], c.clone().addScaledVector(u, R).setY(top - H))];        // 下：90 で水平
-    const edge = (sg, w, e) => plane(az + sg * 90, -e, c.clone().addScaledVector(v, sg * w).setY(top));
-    if (split && P[pre + 'Split']) { for (const sg of [1, -1]) crystal(M, [...base, edge(sg, W / 2, tp), edge(-sg, -P[pre + 'Gap'] / 2, 0)], col); }
-    else crystal(M, [...base, edge(1, W / 2, tp), edge(-1, W / 2, tp)], col);
+    const c = new V(0, 0, P[pre + 'Z'] || 0).addScaledVector(v, lo);
+    const uAt = d => new V(Math.sin(a + d * D2R), 0, Math.cos(a + d * D2R));
+    const pOutAt = d => c.clone().addScaledVector(uAt(d), R).setY(top);
+    const ds = fold > 0 ? [-fold, 0, fold] : [0];
+    const outs = ds.map(d => plane(az + d, f, pOutAt(d)));
+    const ins = ds.map((d, i) => plane(az + d + 180, -f, pOutAt(d).addScaledVector(outs[i].n, -T)));
+    const nO = outs[fold > 0 ? 1 : 0].n, pOut = pOutAt(0);
+    const planes = [...outs, ...ins, plane(0, 90, new V(0, top, 0))];
+    const bottomPt = c.clone().addScaledVector(u, R).setY(top - H);
+    if (pt > 0) { const th = Math.atan2(pt, w); for (const s2 of [1, -1]) { const n = v.clone().multiplyScalar(s2 * Math.sin(th)).addScaledVector(UP, -Math.cos(th)); planes.push({ n, d: n.dot(bottomPt) }); } }
+    else planes.push(plane(az, -P[pre + 'BotE'], bottomPt));
+    for (const s2 of [1, -1]) planes.push(plane(az + s2 * 90, -(s2 === -sg ? tin : tp), c.clone().addScaledVector(v, s2 * w).setY(top)));
+    if (bev > 0) {
+      for (const s2 of [1, -1]) { const n = nO.clone().add(v.clone().multiplyScalar(s2)).normalize(); planes.push({ n, d: n.dot(pOut.clone().addScaledVector(v, s2 * (w - bev))) }); }
+      const nb = nO.clone().add(DOWN).normalize(); planes.push({ n: nb, d: nb.dot(bottomPt.clone().addScaledVector(UP, bev)) });
+    }
+    const cut = [];
+    if (P[pre + 'R1D'] > 0) {
+      const W1 = P[pre + 'R1W'], H1 = P[pre + 'R1H'], yT = top - P[pre + 'R1Y'], x = sg * P[pre + 'R1X'];
+      cut.push([{ n: nO.clone().negate(), d: -(outs[fold > 0 ? 1 : 0].d - P[pre + 'R1D']) }, plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yT - H1, 0)), { n: v.clone(), d: v.dot(c) + x + W1 / 2 }, { n: v.clone().negate(), d: -(v.dot(c) + x - W1 / 2) }]);
+    }
+    crystal(M, planes, col, cut.length ? cut : undefined);
+  };
+  const hangSet = (pre, part, az0, splitOk, azKnob) => {
+    const W = P[pre + 'W'];
+    if (splitOk && P[pre + 'Split']) {
+      const w = (W / 2 - P[pre + 'Gap'] / 2) / 2;
+      for (const sg of [1, -1]) hang(pre, part, az0 + sg * (azKnob ? P[azKnob] : 0), sg * (P[pre + 'Gap'] / 2 + w), w, sg, 0);
+    } else hang(pre, part, az0, 0, W / 2, 1, P[pre + 'Taper']);
   };
   if (P.g_skirtOn) {
-    if (P.skFOn) hang('skF', PART.skF, 0, true);
-    if (P.skSOn) { hang('skS', PART.skS, 90, false); hang('skS', PART.skS, -90, false); }
-    if (P.skBOn) hang('skB', PART.skB, 180, false);
+    if (P.skCOn) hang('skC', PART.skC, 0, 0, P.skCW / 2, 1, P.skCTaper);
+    if (P.skFOn) hangSet('skF', PART.skF, 0, true, 'skFAz');
+    if (P.skSOn) { for (const sg of [1, -1]) hang('skS', PART.skS, sg * P.skSAz, 0, P.skSW / 2, sg, P.skSTaper); }
+    if (P.skBOn) hangSet('skB', PART.skB, 180, true, null);
   }
 }
 
@@ -1239,11 +1345,11 @@ const PAINT_CHOICES = {
   guard: ['sub', 'main', 'main'], back: ['sub', 'main'], face: ['face', 'face', 'main'], chin: ['accent', 'accent', 'fin'],
   ear: ['accent', 'main', 'sub'], crest: ['fin', 'fin', 'accent'], horn: ['fin', 'accent', 'main'],
   neck: ['dark', 'dark', 'sub', 'main'],
-  chest: ['main', 'main', 'sub'], plate: ['main', 'sub', 'accent', 'main'], center: ['accent', 'sub', 'main'], band: ['sub', 'main', 'dark'], skF: ['main', 'main', 'sub'], skS: ['main', 'main', 'sub'], skB: ['main', 'main', 'sub'], crotch: ['sub', 'dark', 'main'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
+  chest: ['main', 'main', 'sub'], plate: ['main', 'sub', 'accent', 'main'], center: ['accent', 'sub', 'main'], band: ['sub', 'main', 'dark'], skF: ['main', 'main', 'sub'], skS: ['main', 'main', 'sub'], skB: ['main', 'main', 'sub'], skC: ['main', 'main', 'sub'], crotch: ['sub', 'dark', 'main'], duct: ['main', 'sub', 'dark'], x1: ['main', 'sub', 'accent'], x2: ['main', 'sub', 'accent'], x3: ['main', 'sub', 'accent'], x4: ['main', 'sub', 'accent'], x5: ['main', 'sub', 'accent'], x6: ['main', 'sub', 'accent'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
   shoulder: ['main', 'main', 'sub', 'accent'], upperarm: ['sub', 'main', 'main'], forearm: ['main', 'main', 'sub'], gauntlet: ['main', 'sub', 'accent'], hand: ['dark', 'dark', 'sub'],
   thigh: ['main', 'main', 'sub'], knee: ['sub', 'accent', 'main'], shin: ['main', 'main', 'sub'], foot: ['sub', 'main', 'dark'], pack: ['sub', 'main', 'dark'], thruster: ['dark'], tank: ['sub', 'main', 'accent'], joint: ['dark'], pipe: ['dark', 'dark', 'accent'], cannon: ['sub', 'main', 'dark'], hatch: ['accent', 'sub', 'main'], tread: ['dark', 'sub'], hull: ['sub', 'main'], ball: ['main', 'sub'], chestFront: ['accent', 'sub', 'main'], claw: ['dark', 'accent', 'main'],
 };
-const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw', 'plate', 'center', 'band', 'skF', 'skS', 'skB', 'crotch'];
+const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw', 'plate', 'center', 'band', 'skF', 'skS', 'skB', 'skC', 'crotch', 'duct', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6'];
 const colOf = part => PC(part);
 function paintMap(paintSeed) {
   const m = {};
@@ -1279,6 +1385,7 @@ controls.enableDamping = true;
 scene.add(new THREE.HemisphereLight(0xdde4f0, 0x2a2622, 0.8));
 const key = new THREE.DirectionalLight(0xffffff, 1.7); key.position.set(2, 3, 2.5); scene.add(key);
 const fillL = new THREE.DirectionalLight(0x9fb4d8, 0.45); fillL.position.set(-2.5, 0.5, -1.5); scene.add(fillL);
+const backL = new THREE.DirectionalLight(0xffffff, 0.9); backL.position.set(0.8, 1.5, -3); scene.add(backL);
 const matMetal = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.35, roughness: 0.5, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
 const matGlow = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false });
 const matLine = new THREE.LineBasicMaterial({ color: 0x0e1013, transparent: true, opacity: 0.55 });
@@ -1300,7 +1407,7 @@ function build() {
   group.add(new THREE.Mesh(G.geom(), matGlow));
   const lines = new THREE.LineSegments(M.lineGeom(), matLine); lines.name = 'edges'; lines.visible = P.edges; group.add(lines);
   { const g0 = group.children[0].geometry; g0.computeBoundingBox(); const b = g0.boundingBox; if (b && isFinite(b.min.y)) { const c = b.getCenter(new V()), sz = b.getSize(new V()); BODY_FRAME = { t: new V(0, c.y, c.z * 0.3), d: Math.max(sz.y, sz.x * 0.9, sz.z * 0.9) * 2.05 + 1 }; } }
-  scene.add(group); window.__head = () => ({ group, COL, camera, controls, eyes: EYE_CHECK });
+  scene.add(group); window.__head = () => ({ group, COL, camera, controls, eyes: EYE_CHECK, y0: ANCHOR.y + 0.12 + (P.headSink || 0) });
   if (typeof placeV2 === 'function') placeV2();
   if (EYE_CHECK.some(e => e.yaw < 15)) document.getElementById('err').textContent = '目が正面を向く平らな面に載っています（上から見て 八 の字になっていない）';
   for (const pre of COLOR_PRES) { const el = document.getElementById(pre + 'Color'); if (el && !P[pre + 'Color']) el.value = '#' + PC(pre).getHexString(); }
@@ -1343,6 +1450,8 @@ canvas.addEventListener('pointerup', e => {
 // ---- 体の欄：表から作る（つまみの id、名前、最小、最大、刻み、初期値）----
 const HEAD_KEYS = Object.keys(P).slice();
 const HEAD_SEC_IDS = new Set([...document.querySelectorAll('#ui h2[id^=sec-]')].map(h => h.id));
+// くぼみ（正面をくり抜く段）の欄。深さ 0 で無し
+const recessRows = (pre, k) => [['r', pre + 'R' + k + 'D', 'くぼみ' + k + ' 深さ', 0, 0.4, 0.01, 0], ['r', pre + 'R' + k + 'W', 'くぼみ' + k + ' 横幅', 0.05, 3, 0.01, 0.4], ['r', pre + 'R' + k + 'H', 'くぼみ' + k + ' 高さ', 0.05, 3, 0.01, 0.4], ['r', pre + 'R' + k + 'X', 'くぼみ' + k + ' 左右', -2, 2, 0.01, 0], ['r', pre + 'R' + k + 'Y', 'くぼみ' + k + ' 上端の下がり', -1, 4, 0.01, 0.2]];
 // 塊の欄（胸板・胸の中央・襟・腹・腰の帯・股に共通）
 const slabRows = (pre, d, split) => [['c', pre], ['on', pre + 'On', d.on],
   ...(split ? [['toggle', pre + 'Split', '半分に割る', !!d.split], ['r', pre + 'Gap', '割れ目の幅', 0, 0.8, 0.01, d.gap ?? 0.12]] : []),
@@ -1351,14 +1460,19 @@ const slabRows = (pre, d, split) => [['c', pre], ['on', pre + 'On', d.on],
   ['r', pre + 'TopE', '上の面の傾き', 15, 90, 1, d.TopE ?? 80], ['r', pre + 'BotE', '下の面の傾き', 15, 90, 1, d.BotE ?? 80],
   ['r', pre + 'FrontE', '正面の傾き', -45, 45, 1, d.FrontE ?? 6], ['r', pre + 'BackE', '背の傾き', -45, 45, 1, d.BackE ?? 6],
   ['r', pre + 'AF', '正中の折れ', 0, 45, 1, d.AF ?? 0], ['r', pre + 'SideA', '横の面の向き', 50, 130, 1, d.SideA ?? 90], ['r', pre + 'SideE', '横の面の傾き', -45, 45, 1, d.SideE ?? 6],
-  ['r', pre + 'Facets', '横の面の数', 1, 3, 1, d.Facets ?? 1], ['r', pre + 'ChamT', '前上の角の落とし', 0, 1, 0.01, d.ChamT ?? 0], ['r', pre + 'ChamB', '前下の角の落とし', 0, 1, 0.01, d.ChamB ?? 0]];
+  ['r', pre + 'Facets', '横の面の数', 1, 3, 1, d.Facets ?? 1], ['r', pre + 'FrontN', '正面の面の数', 1, 7, 2, d.FrontN ?? 1],
+  ['r', pre + 'ChamT', '前上の角の落とし', 0, 1, 0.01, d.ChamT ?? 0], ['r', pre + 'ChamB', '前下の角の落とし', 0, 1, 0.01, d.ChamB ?? 0], ['r', pre + 'ChamU', '横上の角の落とし', 0, 1, 0.01, d.ChamU ?? 0], ['r', pre + 'ChamL', '横下の角の落とし', 0, 1, 0.01, d.ChamL ?? 0],
+  ...recessRows(pre, 1), ...recessRows(pre, 2)];
 // スカートの板の欄
 const hangRows = (pre, d, split) => [['c', pre], ['on', pre + 'On', d.on],
   ...(split ? [['toggle', pre + 'Split', '半分に割る', !!d.split], ['r', pre + 'Gap', '割れ目の幅', 0, 0.8, 0.01, d.gap ?? 0.1]] : []),
   ['r', pre + 'W', d.wName || '幅', 0.1, 4, 0.02, d.W], ['r', pre + 'H', '高さ', 0.1, 4, 0.02, d.H], ['r', pre + 'T', '厚み', 0.03, 0.6, 0.01, d.T ?? 0.12],
   ['r', pre + 'Y', '上端の下がり', -1, 5, 0.01, d.Y], ['r', pre + 'R', '張り出し', 0.1, 3, 0.01, d.R],
   ...(d.z ? [['r', pre + 'Z', '前後のずれ', -1.5, 1.5, 0.01, 0]] : []),
-  ['r', pre + 'Flare', '開き', -30, 60, 1, d.Flare ?? 12], ['r', pre + 'Taper', 'すぼまり', -30, 45, 1, d.Taper ?? 8], ['r', pre + 'BotE', '下の面の傾き', 15, 90, 1, d.BotE ?? 85]];
+  ...(d.az ? [['r', pre + 'Az', '向き', d.az[0], d.az[1], 1, d.az[2]]] : []),
+  ['r', pre + 'Flare', '開き', -30, 60, 1, d.Flare ?? 12], ['r', pre + 'Taper', 'すぼまり', -30, 45, 1, d.Taper ?? 8], ['r', pre + 'BotE', '下の面の傾き', 15, 90, 1, d.BotE ?? 85],
+  ['r', pre + 'Bevel', '縁の面取り', 0, 0.3, 0.01, d.Bevel ?? 0], ['r', pre + 'Fold', '曲げ', 0, 40, 1, d.Fold ?? 0], ['r', pre + 'Point', '下の尖り', 0, 1, 0.01, d.Point ?? 0],
+  ...recessRows(pre, 1)];
 // グループの属性（色は下の物に継がれる。表示はレイヤーの目印で）
 const groupRows = (id, on) => [['c', 'g_' + id], ['on', on, true], ['r', 'g_' + id + 'Y', '上下のずれ', -3, 3, 0.01, 0], ['r', 'g_' + id + 'Z', '前後のずれ', -3, 3, 0.01, 0], ['r', 'g_' + id + 'S', '大きさ', 0.3, 2.5, 0.01, 1]];
 const BODY_SECS = [
@@ -1368,18 +1482,27 @@ const BODY_SECS = [
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
-  ['sec-collar', '襟', slabRows('collar', { W: 1.2, H: 0.35, D: 1.0, Y: -0.2, TopE: 85, BotE: 85, FrontE: 15, BackE: 15, SideE: 15 }, false)],
+  ['sec-collar', '襟', [['kinds', 'collar', [['box', '箱'], ['ring', '輪']], '種類', 'box'], ...slabRows('collar', { W: 1.2, H: 0.35, D: 1.0, Y: -0.2, TopE: 85, BotE: 85, FrontE: 15, BackE: 15, SideE: 15 }, false), ['r', 'collarRi', '輪の穴の径', 0, 3, 0.01, 0.8], ['r', 'collarNg', '輪の角数', 6, 24, 1, 16]]],
+  ['sec-duct', '口（ダクト）', [['c', 'duct'], ['on', 'ductOn', false], ['r', 'ductW', '横幅', 0.1, 2, 0.01, 0.47], ['r', 'ductH', '高さ', 0.05, 1.5, 0.01, 0.33], ['r', 'ductD', '深さ', 0.02, 0.8, 0.01, 0.2], ['r', 'ductX', '左右の位置', 0, 2, 0.01, 0.63], ['r', 'ductY', '上端の下がり', 0, 3, 0.01, 0.64],
+    ['r', 'ductN', '羽の数', 0, 8, 1, 3], ['r', 'ductFT', '羽の厚み', 0.01, 0.1, 0.005, 0.03], ['r', 'ductTilt', '羽の傾き', -60, 60, 1, 20], ['r', 'ductF', '枠の出', 0, 0.3, 0.01, 0.04], ['r', 'ductFW', '枠の太さ', 0, 0.3, 0.01, 0.05]]],
   ['sec-abd', '腹', slabRows('abd', { W: 1.6, H: 0.8, D: 1.5, Y: 1.55, TopE: 85, BotE: 85, FrontE: -5, BackE: 6, SideE: 5 }, false)],
   ['sec-band', '腰の帯', slabRows('band', { W: 2.2, H: 0.5, D: 1.7, Y: 2.35, TopE: 80, BotE: 80, FrontE: 6, BackE: 6, SideE: 6 }, false)],
   ['sec-pipe', '管', [['c', 'pipe'], ['on', 'pipeOn', false], ['r', 'pipeR', '太さ', 0.03, 0.3, 0.01, 0.1], ['r', 'pipeN', '節の数', 2, 16, 1, 8],
     ['r', 'pipeX0', '前の付け根の左右', 0, 2, 0.01, 0.45], ['r', 'pipeY0', '前の付け根の下がり', -1, 4, 0.01, 1.9], ['r', 'pipeZ0', '前の付け根の前への出', 0, 2, 0.01, 0.8],
     ['r', 'pipeX1', '後ろの付け根の左右', 0, 2, 0.01, 0.5], ['r', 'pipeY1', '後ろの付け根の下がり', -1, 4, 0.01, 0.5], ['r', 'pipeZ1', '後ろの付け根の後ろへの出', 0, 2, 0.01, 0.9],
-    ['r', 'pipeOut', '横への膨らみ', 0, 3, 0.01, 1.6], ['r', 'pipeSag', 'たるみ', -1, 1, 0.01, 0.2]]],
+    ['r', 'pipeOut', '横への膨らみ', 0, 3, 0.01, 1.6], ['r', 'pipeSag', 'たるみ', -1, 1, 0.01, 0.2], ['r', 'pipeBulge', '節のふくらみ', 1, 1.8, 0.01, 1]]],
   ['sec-skirt', 'スカート', groupRows('skirt', 'g_skirtOn')],
-  ['sec-skF', '前', hangRows('skF', { W: 1.6, H: 1.2, Y: 2.4, R: 0.95, split: true, gap: 0.1 }, true)],
-  ['sec-skS', '横', hangRows('skS', { W: 1.2, wName: '前後の長さ', H: 1.1, Y: 2.4, R: 1.25, z: true }, false)],
-  ['sec-skB', '後ろ', hangRows('skB', { W: 1.8, H: 1.2, Y: 2.4, R: 0.95 }, false)],
+  ['sec-skC', '前の中央', hangRows('skC', { W: 0.5, H: 1.4, Y: 2.4, R: 0.95, on: false }, false)],
+  ['sec-skF', '前', hangRows('skF', { W: 1.6, H: 1.2, Y: 2.4, R: 0.95, split: true, gap: 0.1, az: [0, 60, 0] }, true)],
+  ['sec-skS', '横', hangRows('skS', { W: 1.2, wName: '前後の長さ', H: 1.1, Y: 2.4, R: 1.25, z: true, az: [50, 130, 90] }, false)],
+  ['sec-skB', '後ろ', hangRows('skB', { W: 1.8, H: 1.2, Y: 2.4, R: 0.95, gap: 0.1 }, true)],
   ['sec-crotch', '股', slabRows('crotch', { W: 0.8, H: 0.6, D: 1.2, Y: 2.85, TopE: 85, BotE: 70, FrontE: 20, BackE: 20, SideE: -10 }, false)],
+  ['sec-x1', '塊 1', [['toggle', 'x1Use', 'この塊を使う', false], ...slabRows('x1', { W: 0.5, H: 0.5, D: 0.6, Y: 0.2, TopE: 85, BotE: 85, FrontE: 5, BackE: 5, SideE: 5 }, false), ['r', 'x1X', '左右の位置', 0, 3, 0.01, 0.9], ['toggle', 'x1Mirror', '左右対称', true]]],
+  ['sec-x2', '塊 2', [['toggle', 'x2Use', 'この塊を使う', false], ...slabRows('x2', { W: 0.5, H: 0.5, D: 0.6, Y: 0.2, TopE: 85, BotE: 85, FrontE: 5, BackE: 5, SideE: 5 }, false), ['r', 'x2X', '左右の位置', 0, 3, 0.01, 0.9], ['toggle', 'x2Mirror', '左右対称', true]]],
+  ['sec-x3', '塊 3', [['toggle', 'x3Use', 'この塊を使う', false], ...slabRows('x3', { W: 0.5, H: 0.5, D: 0.6, Y: 0.2, TopE: 85, BotE: 85, FrontE: 5, BackE: 5, SideE: 5 }, false), ['r', 'x3X', '左右の位置', 0, 3, 0.01, 0.9], ['toggle', 'x3Mirror', '左右対称', true]]],
+  ['sec-x4', '塊 4', [['toggle', 'x4Use', 'この塊を使う', false], ...slabRows('x4', { W: 0.5, H: 0.5, D: 0.6, Y: 0.2, TopE: 85, BotE: 85, FrontE: 5, BackE: 5, SideE: 5 }, false), ['r', 'x4X', '左右の位置', 0, 3, 0.01, 0.9], ['toggle', 'x4Mirror', '左右対称', true]]],
+  ['sec-x5', '塊 5', [['toggle', 'x5Use', 'この塊を使う', false], ...slabRows('x5', { W: 0.5, H: 0.5, D: 0.6, Y: 0.2, TopE: 85, BotE: 85, FrontE: 5, BackE: 5, SideE: 5 }, false), ['r', 'x5X', '左右の位置', 0, 3, 0.01, 0.9], ['toggle', 'x5Mirror', '左右対称', true]]],
+  ['sec-x6', '塊 6', [['toggle', 'x6Use', 'この塊を使う', false], ...slabRows('x6', { W: 0.5, H: 0.5, D: 0.6, Y: 0.2, TopE: 85, BotE: 85, FrontE: 5, BackE: 5, SideE: 5 }, false), ['r', 'x6X', '左右の位置', 0, 3, 0.01, 0.9], ['toggle', 'x6Mirror', '左右対称', true]]],
 ];
 {
   const colorRow = (pre, label) => `<div class="row"><label>${label || '色'}</label><input type="color" id="${pre}Color" value="#888888" style="width:40px;height:22px;padding:0;border:1px solid #444;background:#15171b"><button class="colreset" data-pre="${pre}" style="background:#2b2f37;color:#ddd;border:1px solid #444;border-radius:5px;padding:2px 6px;cursor:pointer">種の色</button></div>`;
@@ -1419,12 +1542,14 @@ let openId = null, mapMode = 'body';
 // ---- レイヤー：右の一覧はグラフィックソフトのレイヤー、欄のつまみはそのレイヤーのアピアランス（依頼主、10/24）。
 // 入れ子にでき、まとめるグループにも属性（色・表示・上下と前後のずれ・大きさ）が付く ----
 const LEAF_ON = { 'sec-muff': 'muffOn', 'sec-twin': 'twin', 'sec-mono': 'mono', 'sec-neck': 'neck', 'sec-chin': 'chin', 'sec-ear': 'ears', 'sec-back': 'back',
-  'sec-chest': 'coreOn', 'sec-plate': 'plateOn', 'sec-center': 'centerOn', 'sec-collar': 'collarOn', 'sec-abd': 'abdOn', 'sec-band': 'bandOn', 'sec-pipe': 'pipeOn', 'sec-skF': 'skFOn', 'sec-skS': 'skSOn', 'sec-skB': 'skBOn', 'sec-crotch': 'crotchOn' };
+  'sec-chest': 'coreOn', 'sec-plate': 'plateOn', 'sec-center': 'centerOn', 'sec-collar': 'collarOn', 'sec-abd': 'abdOn', 'sec-band': 'bandOn', 'sec-pipe': 'pipeOn', 'sec-skF': 'skFOn', 'sec-skS': 'skSOn', 'sec-skB': 'skBOn', 'sec-skC': 'skCOn', 'sec-crotch': 'crotchOn', 'sec-duct': 'ductOn',
+  'sec-x1': 'x1On', 'sec-x2': 'x2On', 'sec-x3': 'x3On', 'sec-x4': 'x4On', 'sec-x5': 'x5On', 'sec-x6': 'x6On' };
 const leaf = sec => ({ id: sec, sec, on: LEAF_ON[sec] });
 const TREE = { id: 'all', name: '全身', sec: 'sec-fig', children: [
   { id: 'head', name: '頭', sec: 'sec-head', on: 'headOn', xf: true, children: ['sec-body', 'sec-helmet', 'sec-occ', 'sec-brim', 'sec-muff', 'sec-guard', 'sec-back', 'sec-face', 'sec-deco', 'sec-twin', 'sec-mono', 'sec-ear', 'sec-chin', 'sec-neck', 'sec-crest', 'sec-horn'].map(leaf) },
-  { id: 'torso', name: '胴体', sec: 'sec-torso', on: 'g_torsoOn', xf: true, children: [...['sec-chest', 'sec-collar', 'sec-plate', 'sec-center', 'sec-abd', 'sec-band', 'sec-pipe'].map(leaf),
-    { id: 'skirt', name: 'スカート', sec: 'sec-skirt', on: 'g_skirtOn', xf: true, children: ['sec-skF', 'sec-skS', 'sec-skB'].map(leaf) }, leaf('sec-crotch')] },
+  { id: 'torso', name: '胴体', sec: 'sec-torso', on: 'g_torsoOn', xf: true, children: [...['sec-chest', 'sec-collar', 'sec-plate', 'sec-duct', 'sec-center', 'sec-abd', 'sec-band', 'sec-pipe'].map(leaf),
+    { id: 'skirt', name: 'スカート', sec: 'sec-skirt', on: 'g_skirtOn', xf: true, children: ['sec-skC', 'sec-skF', 'sec-skS', 'sec-skB'].map(leaf) }, leaf('sec-crotch'),
+    ...[1, 2, 3, 4, 5, 6].map(i => ({ ...leaf('sec-x' + i), use: 'x' + i + 'Use' })), { add: true }] },
 ] };
 const nameOf = node => node.name || (document.getElementById(node.sec) ? document.getElementById(node.sec).textContent.replace(/（.*）/, '') : node.sec);
 // 欄 → その欄にある部位の番号（3D の三角形の part 属性）と、色の接頭辞
@@ -1443,6 +1568,14 @@ function trisOfParts(set) { const out = []; for (const T of [M, G]) for (let i =
 function renderTree() {
   const box = document.getElementById('tree'); if (!box) return; box.textContent = '';
   const walk = (node, depth, hidden) => {
+    if (node.use && !P[node.use]) return;   // 使っていない「足した塊」は出さない
+    if (node.add) {   // ＋ 塊を足す：空いている塊を 1 つ使い始める
+      const row = document.createElement('div'); row.className = 'lay add'; row.style.paddingLeft = (6 + depth * 14) + 'px';
+      const free = [1, 2, 3, 4, 5, 6].find(i => !P['x' + i + 'Use']);
+      row.innerHTML = '<span class="tri"></span><span class="eye none"></span><span class="nm">＋ 塊を足す</span>';
+      if (free) row.onclick = () => { P['x' + free + 'Use'] = true; P['x' + free + 'On'] = true; save(); build(); syncUI(); openSec('sec-x' + free); }; else row.classList.add('off');
+      box.append(row); return;
+    }
     const k = node.on, off = hidden || (k ? !P[k] : false);
     const row = document.createElement('div');
     row.className = 'lay' + (node.sec === openId ? ' on' : '') + (node.children ? ' grp' : '') + (off ? ' off' : '');
@@ -1854,6 +1987,18 @@ window.__shotAt = async (pos, target, w = 900, h = 900, post = '') => {
   camera.position.set(pos[0], pos[1], pos[2]); controls.target.set(target[0], target[1], target[2]); controls.update(); renderer.render(scene, camera);
   const url = canvas.toDataURL('image/png');
   renderer.setPixelRatio(Math.min(2, devicePixelRatio)); resize(); camera.position.copy(keepPos); controls.target.copy(keepT); controls.update();
+  if (post) { const r = await fetch(post, { method: 'POST', body: url }); return await r.text(); }
+  return url;
+};
+// 平行投影で撮る：view 正面/横/後ろ/上、halfH は画面の半分の高さ（単位）、cy は画面の中心の高さ
+window.__shotOrtho = async (view, w, h, halfH, cy, post = '') => {
+  const asp = w / h, cam = new THREE.OrthographicCamera(-halfH * asp, halfH * asp, halfH, -halfH, 0.1, 100);
+  const t = new V(0, cy, 0);
+  if (view === 'front') cam.position.set(0, cy, 30); else if (view === 'side') cam.position.set(30, cy, 0); else if (view === 'back') cam.position.set(0, cy, -30); else if (view === 'top') { cam.position.set(0, 30, 0); cam.up.set(0, 0, -1); }
+  cam.lookAt(t); cam.updateProjectionMatrix();
+  renderer.setPixelRatio(1); renderer.setSize(w, h, false); renderer.render(scene, cam);
+  const url = canvas.toDataURL('image/png');
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio)); resize();
   if (post) { const r = await fetch(post, { method: 'POST', body: url }); return await r.text(); }
   return url;
 };
