@@ -1186,7 +1186,8 @@ function body() {
       const c = [0, 0.1, 0.25, 0.4][P.col1ChT | 0] * W / 2; if (c > 0) f.push(plane(sg * 90, 45, new V(sg * (W / 2 - c), top, 0)));
       // 上の断面：前の両角を後ろへ向ける（上から見て 八）。角の面は正面の尖りの線を通る
       const ph = [0, 10, 20, 30][P.col1Hachi | 0] * D2R, fw = [0.3, 0.5, 0.7][P.col1HachiW | 0] * W / 2;
-      if (ph > 0) { const n = new V(sg * Math.sin(ph), 0, Math.cos(ph)); f.push({ n, d: n.dot(new V(sg * (W / 2 - fw), yp, zf)) }); }
+      // 角の面は、正面の上下 2 つの面を縦の軸のまわりに後ろへ回した物（尖りの線を分ける点を通る）。縦 1 枚の面だと尖りの高さの近くしか削れない
+      if (ph > 0) { const p0 = new V(sg * (W / 2 - fw), yp, zf); for (const n0 of [nU, nL]) { const n = new V(sg * n0.z * Math.sin(ph), n0.y, n0.z * Math.cos(ph)); f.push({ n, d: n.dot(p0) }); } }
     }
     // 上の正中の欠き：上の面に沿った厚みで、正中の上を四角に欠く（板の上端が入る所）
     const cut = [];
