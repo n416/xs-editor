@@ -1255,7 +1255,7 @@ function body() {
 
 // ---- 検査：浮き と 突き抜け（送る前に 0 にする。数で合否を決める物ではなく、明らかな作りの誤りを見せないための物）----
 const BODY_SELF = new Set([PART.chest, PART.plate, PART.abd, PART.band]);   // 胴そのものの塊：「後ろまで貫通」の決まりの対象なので突き抜ける側からは除く
-function checkBody(eps = 0.02) {
+function checkBody(eps = 0.02, deep = 0.1) {   // deep：突き抜けと見なす食い込みの深さ。設計上の重なり（0.05 程度の埋め込み）は数えない
   // 凸のかけらごとに頂点を持つ（左右一対や輪のように 1 つの部位が離れた複数のかけらでできていても、かけら単位で見る）
   // 頂点だけでなく、頂点どうしの中点と重心も「中の点」の候補にする（貫く棒は中に頂点を持たない）
   const pcs = REG.filter(pc => pc.part > 16).map(pc => { const o = []; for (const f of clipFaces(pc.planes)) for (const q of f.pts) if (!o.some(r => r.distanceToSquared(q) < 1e-8)) o.push(q);
@@ -1278,12 +1278,12 @@ function checkBody(eps = 0.02) {
     const hit = new Set();
     for (const oid in byPart) { if (+oid === id || hit.has(+oid)) continue; const theirs = byPart[oid];
       for (const a of mine) {
-        const ins = a.probe.filter(p => theirs.some(b => inside(b, p, eps))); if (!ins.length) continue;
+        const ins = a.probe.filter(p => theirs.some(b => inside(b, p, deep))); if (!ins.length) continue;
         const outs = a.pts.filter(p => !theirs.some(b => near(b, p, eps))); if (outs.length < 2) continue;
         // 外の 2 点を結ぶ線分がその部位の中を通るなら、反対側へ抜けている（面の上に横たわる板は、線分が外を通るので当たらない）
         let through = false;
         for (let i = 0; i < outs.length && !through; i++) for (let j = i + 1; j < outs.length && !through; j++) {
-          for (const t of [0.25, 0.5, 0.75]) { const q = outs[i].clone().lerp(outs[j], t); if (theirs.some(b => inside(b, q, eps))) { through = true; break; } }
+          for (const t of [0.25, 0.5, 0.75]) { const q = outs[i].clone().lerp(outs[j], t); if (theirs.some(b => inside(b, q, deep))) { through = true; break; } }
         }
         if (through) { hit.add(+oid); break; }
       }
