@@ -2379,9 +2379,9 @@ function flashPart(targetId) {
 
 // ---- 配線 ----
 // 開いた時の形：モノアイの機体の胴体（依頼主：「いま（白い機体）がメインになっているのを、（モノアイの機体）メインにしてくださいな」）。
-// 左右の柱（スプリット柱）・胸の本体・胸の T 字の板・腹。白い機体の柱・コクピットカバー・腹の上・腹の下は一覧に残して切る。
+// 左右の柱（スプリット柱）・胸の本体・胸の T 字の板。腹は出さない（依頼主：「いややめましょう。見ての通り殆ど無いんですよ。腹。でも貴方が書いたような大きさは絶対ない」）。白い機体の柱・コクピットカバー・腹の上・腹の下は一覧に残して切る。
 // 依頼主が「なにこのゴミ」と言った胸板・胸の中央・腹・腰の帯の箱積みは出さない
-const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: true, layoutV: 8 };
+const START = { headOn: false, g_skirtOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: false, layoutV: 9 };
 Object.assign(P, START);
 const DEFAULTS = JSON.parse(JSON.stringify(P));
 const KEY = 'crystal-head-knobs';
