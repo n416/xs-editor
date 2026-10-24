@@ -1341,7 +1341,14 @@ function body() {
   const abuBot = P.abuOn ? tai('abu', PART.abu, P.abuFit && P.col1On ? colBot() : null) : null;
   if (P.ablOn) tai('abl', PART.abl, P.ablFit && abuBot ? abuBot : null);
   // 腹（モノアイの機体の 1 つの腹）：台の形の塊 1 つ。後ろから見て下へ少し狭まり、縦の角を落とす（依頼主：「ザクは１つ腹」「９，１０だけよ」）
-  if (P.belOn) tai('bel', PART.bel, null);
+  // 「上の端を胸の本体の底にそろえる」：腹の上の端は胸の本体の底（高さ・下の端の幅・前と背）。前は胸の本体の正面のいちばん奥（下の端の両端）にして、腹の上の面がどこからも見えない
+  // （依頼主：「斜め上のショットでおかしいのわかるでしょ」。腹の上の面が胸と柱の前に棚のように出て、柱の底との間にくさびのすき間が見えた）
+  const chbBot = () => {
+    const Wf = P.chbW, yT = y0 - P.chbY, yB = yT - P.chbH;
+    const face = chestFace(Wf, Math.min(P.chbBend, Wf * 0.49), P.chbFacets, P.chbZ, P.chbH, Math.min(P.chbBendV, P.chbH * 0.49), P.chbFacetsV, yT - P.chbH / 2);
+    return { y: yB, w: P.chbWB, zf: Math.min(face.at(P.chbWB / 2, yB).z, face.at(0, yB).z), zb: P.chbZ - P.chbD };
+  };
+  if (P.belOn) tai('bel', PART.bel, P.belFit && P.chbOn ? chbBot() : null);
   // スプリット柱：1 本の柱を左右に等分した塊（依頼主：「スプリット柱とかにしておこう」「分ける個数は設定できるようにして」「スプリットしない場合は1。デフォルトは2。奇数も偶数も許して」）。
   // 1 本の柱は、横から見た形を左右に伸ばした立体と、正面から見た形を前後に伸ばした立体の重なり（どちらも描ける、描かなければ箱）。後ろから見た形は正面と同じ。
   // 正面の形は外（体の中心から遠い側）を +1 に描き、左の柱には裏返して使う。真ん中の柱（分ける数が奇数）は両側に使う。
@@ -1912,10 +1919,10 @@ const BODY_SECS = [
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
   ['sec-collar', '襟', [['kinds', 'collar', [['box', '箱'], ['ring', '輪']], '種類', 'box'], ...slabRows('collar', { W: 1.2, H: 0.35, D: 1.0, Y: -0.2, TopE: 85, BotE: 85, FrontE: 15, BackE: 15, SideE: 15 }, false), ['r', 'collarRi', '輪の穴の径', 0, 3, 0.01, 0.8], ['r', 'collarNg', '輪の角数', 6, 24, 1, 16]]],
-  ['sec-bel', '腹', [['c', 'bel'], ['on', 'belOn', false],
+  ['sec-bel', '腹', [['c', 'bel'], ['on', 'belOn', false], ['toggle', 'belFit', '上の端を胸の本体の底にそろえる', true],
     ['r', 'belY', '上端の下がり', -1, 5, 0.01, 1.62], ['r', 'belH', '高さ', 0.05, 3, 0.01, 0.4], ['r', 'belZ', '前後の位置', -2, 2, 0.01, -0.02],
-    ['r', 'belWT', '上の端の幅', 0.1, 4, 0.01, 1.59], ['r', 'belWB', '下の端の幅', 0.1, 4, 0.01, 1.49],
-    ['r', 'belDT', '上の端の奥行', 0.1, 4, 0.01, 1.33], ['r', 'belDB', '下の端の奥行', 0.1, 4, 0.01, 1.25],
+    ['r', 'belWT', '上の端の幅', 0.1, 4, 0.01, 1.59], ['r', 'belWB', '下の端の幅', 0.1, 4, 0.01, 1.25],
+    ['r', 'belDT', '上の端の奥行', 0.1, 4, 0.01, 1.33], ['r', 'belDB', '下の端の奥行', 0.1, 4, 0.01, 1.05],
     ['r', 'belCh', '縦の角の落とし', 0, 0.6, 0.01, 0.1]]],
   ['sec-abd', '腹（箱）', slabRows('abd', { W: 1.6, H: 0.8, D: 1.5, Y: 1.55, TopE: 85, BotE: 85, FrontE: -5, BackE: 6, SideE: 5 }, false)],
   ['sec-band', '腰の帯', slabRows('band', { W: 2.2, H: 0.5, D: 1.7, Y: 2.35, TopE: 80, BotE: 80, FrontE: 6, BackE: 6, SideE: 6 }, false)],
@@ -2473,7 +2480,7 @@ function syncUI() {
   for (const el of document.querySelectorAll('input[type=color][id^=g_]')) el.value = P[el.id] || '#888888';
   for (const el of document.querySelectorAll('.wv')) { const w = WORD[el.dataset.w]; if (w) el.textContent = w.fmt(P[el.dataset.w]); }
   for (const b of document.querySelectorAll('button[data-t]')) b.classList.toggle('on', !!P[b.dataset.t]);
-  for (const [t, keys] of [['abuFit', ['abuY', 'abuZ', 'abuWT', 'abuDT']], ['ablFit', ['ablY', 'ablZ', 'ablWT', 'ablDT']]]) for (const k of keys) { const el = document.getElementById(k); if (el) { const row = el.closest('.row'); row.style.opacity = P[t] ? 0.35 : ''; for (const x of row.querySelectorAll('input')) x.disabled = !!P[t]; } }
+  for (const [t, keys] of [['abuFit', ['abuY', 'abuZ', 'abuWT', 'abuDT']], ['ablFit', ['ablY', 'ablZ', 'ablWT', 'ablDT']], ['belFit', ['belY', 'belZ', 'belWT', 'belDT']]]) for (const k of keys) { const el = document.getElementById(k); if (el) { const row = el.closest('.row'); row.style.opacity = P[t] ? 0.35 : ''; for (const x of row.querySelectorAll('input')) x.disabled = !!P[t]; } }
   if (typeof renderTree === 'function') renderTree();
   for (const b of document.querySelectorAll('button[data-kind]')) b.classList.toggle('on', P[b.dataset.pre + 'Kind'] === b.dataset.kind);
   for (const b of document.querySelectorAll('button[data-side]')) b.classList.toggle('on', P[b.dataset.pre + 'Side'] === b.dataset.side);
