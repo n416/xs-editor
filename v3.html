@@ -1268,7 +1268,7 @@ function body() {
   // どの塊も前から背中まで通る。丸み：縦の角・上の縁・下の縁を、半径と面の数で丸める（依頼主：「丸みオプションが欲しいね」）。面の数 1 で角を斜めに落とす
   if (P.splOn) {
     setPart(PART.spl);
-    const col = colOf('spl'), N = Math.max(1, P.splN | 0), Wt = P.splW, gap = N > 1 ? Math.min(P.splGap, Wt * 0.9) : 0, w = (Wt - gap * (N - 1)) / N;
+    const col = colOf('spl'), N = Math.max(1, P.splN | 0), Wt = P.splW, gap = N > 1 ? Math.min(P.splGap, Wt * 0.5 / (N - 1)) : 0, w = (Wt - gap * (N - 1)) / N;
     const yT = y0 - P.splY, H = P.splH, yB = yT - H, zc = P.splZ, D = P.splD, nf = Math.max(1, P.splFn | 0);
     const ax = { X: new V(1, 0, 0), Y: new V(0, 1, 0), Z: new V(0, 0, 1) };
     for (let i = 0; i < N; i++) {
