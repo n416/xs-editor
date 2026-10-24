@@ -586,8 +586,8 @@ const rotPts2 = (pts, deg) => { const a = deg * D2R; return pts.map(([x, y]) => 
 function regularEye(n) { const o = []; for (let i = 0; i < n; i++) { const a = PI / 2 + i / n * 2 * PI; o.push([+Math.cos(a).toFixed(3), +Math.sin(a).toFixed(3)]); } return o; }
 
 // ---- 部位の番号（3D を押した所から左の欄を光らせるため）----
-const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, band: 40, skF: 41, skS: 42, skB: 43, crotch: 44, x1: 45, x2: 46, x3: 47, x4: 48, x5: 49, x6: 50, skC: 52, col1: 53, cov1: 54, abu: 55, abl: 56 };
-const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-band', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch', 45: 'sec-x1', 46: 'sec-x2', 47: 'sec-x3', 48: 'sec-x4', 49: 'sec-x5', 50: 'sec-x6', 52: 'sec-skC', 53: 'sec-col1', 54: 'sec-cov1', 55: 'sec-abu', 56: 'sec-abl' };
+const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, band: 40, skF: 41, skS: 42, skB: 43, crotch: 44, x1: 45, x2: 46, x3: 47, x4: 48, x5: 49, x6: 50, skC: 52, col1: 53, cov1: 54, abu: 55, abl: 56, spl: 57 };
+const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-band', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch', 45: 'sec-x1', 46: 'sec-x2', 47: 'sec-x3', 48: 'sec-x4', 49: 'sec-x5', 50: 'sec-x6', 52: 'sec-skC', 53: 'sec-col1', 54: 'sec-cov1', 55: 'sec-abu', 56: 'sec-abl', 57: 'sec-spl' };
 const setPart = id => { M.part = id; G.part = id; };
 
 // ---- 頭 ----
@@ -1264,6 +1264,29 @@ function body() {
   };
   const abuBot = P.abuOn ? tai('abu', PART.abu, P.abuFit && P.col1On ? colBot() : null) : null;
   if (P.ablOn) tai('abl', PART.abl, P.ablFit && abuBot ? abuBot : null);
+  // スプリット柱：1 本の柱（箱）を左右に等分した塊（依頼主：「スプリット柱とかにしておこう」「分ける個数は設定できるようにして」）。2 つで左右の柱。
+  // どの塊も前から背中まで通る。丸み：縦の角・上の縁・下の縁を、半径と面の数で丸める（依頼主：「丸みオプションが欲しいね」）。面の数 1 で角を斜めに落とす
+  if (P.splOn) {
+    setPart(PART.spl);
+    const col = colOf('spl'), N = Math.max(1, P.splN | 0), Wt = P.splW, gap = N > 1 ? Math.min(P.splGap, Wt * 0.9) : 0, w = (Wt - gap * (N - 1)) / N;
+    const yT = y0 - P.splY, H = P.splH, yB = yT - H, zc = P.splZ, D = P.splD, nf = Math.max(1, P.splFn | 0);
+    const ax = { X: new V(1, 0, 0), Y: new V(0, 1, 0), Z: new V(0, 0, 1) };
+    for (let i = 0; i < N; i++) {
+      const x0 = -Wt / 2 + i * (w + gap), x1 = x0 + w, cx = (x0 + x1) / 2;
+      const ext = { X: w / 2, Y: H / 2, Z: D / 2 }, ctr = new V(cx, yT - H / 2, zc);
+      const f = [plane(90, 0, new V(x1, 0, 0)), plane(-90, 0, new V(x0, 0, 0)), plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yB, 0)), plane(0, 0, new V(0, 0, zc + D / 2)), plane(180, 0, new V(0, 0, zc - D / 2))];
+      // 縁の丸み：2 つの面（向き a, b）の間の縁を半径 r の円柱に接する nf 枚の面で丸める
+      const round = (A, sa, B, sb, r) => {
+        r = Math.min(r, ext[A] * 0.999, ext[B] * 0.999); if (!(r > 0)) return;
+        const a = ax[A].clone().multiplyScalar(sa), b = ax[B].clone().multiplyScalar(sb);
+        const c = ctr.clone().addScaledVector(a, ext[A] - r).addScaledVector(b, ext[B] - r);   // 丸みの中心の線の上の点
+        for (let k = 0; k < nf; k++) { const t = Math.PI / 2 * (2 * k + 1) / (2 * nf), m = a.clone().multiplyScalar(Math.cos(t)).addScaledVector(b, Math.sin(t)); f.push({ n: m, d: m.dot(c) + r }); }
+      };
+      for (const sx of [1, -1]) for (const sz of [1, -1]) round('X', sx, 'Z', sz, P.splRV);
+      for (const [B, sb] of [['X', 1], ['X', -1], ['Z', 1], ['Z', -1]]) { round('Y', 1, B, sb, P.splRT); round('Y', -1, B, sb, P.splRB); }
+      crystal(M, f, col);
+    }
+  }
   // 襟：箱か、首を囲む円筒の輪
   if (P.collarOn) {
     if (P.collarKind === 'ring') {
@@ -1476,11 +1499,11 @@ const PAINT_CHOICES = {
   guard: ['sub', 'main', 'main'], back: ['sub', 'main'], face: ['face', 'face', 'main'], chin: ['accent', 'accent', 'fin'],
   ear: ['accent', 'main', 'sub'], crest: ['fin', 'fin', 'accent'], horn: ['fin', 'accent', 'main'],
   neck: ['dark', 'dark', 'sub', 'main'],
-  chest: ['main', 'main', 'sub'], plate: ['main', 'sub', 'accent', 'main'], center: ['accent', 'sub', 'main'], band: ['sub', 'main', 'dark'], skF: ['main', 'main', 'sub'], skS: ['main', 'main', 'sub'], skB: ['main', 'main', 'sub'], skC: ['main', 'main', 'sub'], crotch: ['sub', 'dark', 'main'], col1: ['main', 'sub', 'accent'], cov1: ['sub', 'main', 'accent'], abu: ['main', 'main', 'sub'], abl: ['main', 'main', 'sub'], x1: ['main', 'sub', 'accent'], x2: ['main', 'sub', 'accent'], x3: ['main', 'sub', 'accent'], x4: ['main', 'sub', 'accent'], x5: ['main', 'sub', 'accent'], x6: ['main', 'sub', 'accent'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
+  chest: ['main', 'main', 'sub'], plate: ['main', 'sub', 'accent', 'main'], center: ['accent', 'sub', 'main'], band: ['sub', 'main', 'dark'], skF: ['main', 'main', 'sub'], skS: ['main', 'main', 'sub'], skB: ['main', 'main', 'sub'], skC: ['main', 'main', 'sub'], crotch: ['sub', 'dark', 'main'], col1: ['main', 'sub', 'accent'], cov1: ['sub', 'main', 'accent'], abu: ['main', 'main', 'sub'], abl: ['main', 'main', 'sub'], spl: ['main', 'sub', 'accent'], x1: ['main', 'sub', 'accent'], x2: ['main', 'sub', 'accent'], x3: ['main', 'sub', 'accent'], x4: ['main', 'sub', 'accent'], x5: ['main', 'sub', 'accent'], x6: ['main', 'sub', 'accent'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
   shoulder: ['main', 'main', 'sub', 'accent'], upperarm: ['sub', 'main', 'main'], forearm: ['main', 'main', 'sub'], gauntlet: ['main', 'sub', 'accent'], hand: ['dark', 'dark', 'sub'],
   thigh: ['main', 'main', 'sub'], knee: ['sub', 'accent', 'main'], shin: ['main', 'main', 'sub'], foot: ['sub', 'main', 'dark'], pack: ['sub', 'main', 'dark'], thruster: ['dark'], tank: ['sub', 'main', 'accent'], joint: ['dark'], pipe: ['dark', 'dark', 'accent'], cannon: ['sub', 'main', 'dark'], hatch: ['accent', 'sub', 'main'], tread: ['dark', 'sub'], hull: ['sub', 'main'], ball: ['main', 'sub'], chestFront: ['accent', 'sub', 'main'], claw: ['dark', 'accent', 'main'],
 };
-const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw', 'plate', 'center', 'band', 'skF', 'skS', 'skB', 'skC', 'crotch', 'col1', 'cov1', 'abu', 'abl', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6'];
+const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw', 'plate', 'center', 'band', 'skF', 'skS', 'skB', 'skC', 'crotch', 'col1', 'cov1', 'abu', 'abl', 'spl', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6'];
 const colOf = part => PC(part);
 function paintMap(paintSeed) {
   const m = {};
@@ -1656,6 +1679,12 @@ const BODY_SECS = [
     ['r', 'ablWT', '上の端の幅', 0.1, 4, 0.01, 1.3], ['r', 'ablWB', '下の端の幅', 0.1, 4, 0.01, 1.48],
     ['r', 'ablDT', '上の端の奥行', 0.1, 4, 0.01, 1.01], ['r', 'ablDB', '下の端の奥行', 0.1, 4, 0.01, 1.01],
     ['r', 'ablCh', '縦の角の落とし', 0, 0.6, 0.01, 0.1]]],
+  ['sec-spl', 'スプリット柱', [['c', 'spl'], ['on', 'splOn', false],
+    ['r', 'splN', '分ける数', 1, 6, 1, 2], ['r', 'splGap', '割れ目の幅', 0, 4, 0.01, 1.17],
+    ['r', 'splW', '幅（全体）', 0.2, 6, 0.01, 2.21], ['r', 'splH', '高さ', 0.1, 4, 0.01, 1.46], ['r', 'splD', '奥行', 0.1, 4, 0.01, 1.6],
+    ['r', 'splY', '上端の下がり', -1, 4, 0.01, 0.17], ['r', 'splZ', '前後の位置', -2, 2, 0.01, 0],
+    ['r', 'splRV', '縦の角の丸み（半径）', 0, 1, 0.01, 0.2], ['r', 'splRT', '上の縁の丸み（半径）', 0, 1, 0.01, 0.12], ['r', 'splRB', '下の縁の丸み（半径）', 0, 1, 0.01, 0.12],
+    ['r', 'splFn', '丸みの面の数', 1, 6, 1, 3]]],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
   ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
@@ -1718,12 +1747,12 @@ let openId = null, mapMode = 'body';
 // ---- レイヤー：右の一覧はグラフィックソフトのレイヤー、欄のつまみはそのレイヤーのアピアランス（依頼主、10/24）。
 // 入れ子にでき、まとめるグループにも属性（色・表示・上下と前後のずれ・大きさ）が付く ----
 const LEAF_ON = { 'sec-muff': 'muffOn', 'sec-twin': 'twin', 'sec-mono': 'mono', 'sec-neck': 'neck', 'sec-chin': 'chin', 'sec-ear': 'ears', 'sec-back': 'back',
-  'sec-chest': 'coreOn', 'sec-plate': 'plateOn', 'sec-center': 'centerOn', 'sec-collar': 'collarOn', 'sec-abd': 'abdOn', 'sec-band': 'bandOn', 'sec-pipe': 'pipeOn', 'sec-skF': 'skFOn', 'sec-skS': 'skSOn', 'sec-skB': 'skBOn', 'sec-skC': 'skCOn', 'sec-crotch': 'crotchOn', 'sec-col1': 'col1On', 'sec-cov1': 'cov1On', 'sec-abu': 'abuOn', 'sec-abl': 'ablOn',
+  'sec-chest': 'coreOn', 'sec-plate': 'plateOn', 'sec-center': 'centerOn', 'sec-collar': 'collarOn', 'sec-abd': 'abdOn', 'sec-band': 'bandOn', 'sec-pipe': 'pipeOn', 'sec-skF': 'skFOn', 'sec-skS': 'skSOn', 'sec-skB': 'skBOn', 'sec-skC': 'skCOn', 'sec-crotch': 'crotchOn', 'sec-col1': 'col1On', 'sec-cov1': 'cov1On', 'sec-abu': 'abuOn', 'sec-abl': 'ablOn', 'sec-spl': 'splOn',
   'sec-x1': 'x1On', 'sec-x2': 'x2On', 'sec-x3': 'x3On', 'sec-x4': 'x4On', 'sec-x5': 'x5On', 'sec-x6': 'x6On' };
 const leaf = sec => ({ id: sec, sec, on: LEAF_ON[sec] });
 const TREE = { id: 'all', name: '全身', sec: 'sec-fig', children: [
   { id: 'head', name: '頭', sec: 'sec-head', on: 'headOn', xf: true, children: ['sec-body', 'sec-helmet', 'sec-occ', 'sec-brim', 'sec-muff', 'sec-guard', 'sec-back', 'sec-face', 'sec-deco', 'sec-twin', 'sec-mono', 'sec-ear', 'sec-chin', 'sec-neck', 'sec-crest', 'sec-horn'].map(leaf) },
-  { id: 'torso', name: '胴体', sec: 'sec-torso', on: 'g_torsoOn', xf: true, children: [...['sec-col1', 'sec-cov1', 'sec-abu', 'sec-abl', 'sec-chest', 'sec-collar', 'sec-plate', 'sec-center', 'sec-abd', 'sec-band', 'sec-pipe'].map(leaf),
+  { id: 'torso', name: '胴体', sec: 'sec-torso', on: 'g_torsoOn', xf: true, children: [...['sec-col1', 'sec-cov1', 'sec-abu', 'sec-abl', 'sec-spl', 'sec-chest', 'sec-collar', 'sec-plate', 'sec-center', 'sec-abd', 'sec-band', 'sec-pipe'].map(leaf),
     { id: 'skirt', name: 'スカート', sec: 'sec-skirt', on: 'g_skirtOn', xf: true, children: ['sec-skC', 'sec-skF', 'sec-skS', 'sec-skB'].map(leaf) }, leaf('sec-crotch'),
     ...[1, 2, 3, 4, 5, 6].map(i => ({ ...leaf('sec-x' + i), use: 'x' + i + 'Use' })), { add: true }] },
 ] };
