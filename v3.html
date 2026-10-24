@@ -1175,7 +1175,7 @@ function body() {
     const aU = P.col1AU * D2R, aL = P.col1AL * D2R;
     const zt = zf - (top - yp) / Math.tan(aU);              // 上の面の前の縁：尖りから上の面の傾きで上がった所
     const zfb = zf - (yp - bot) * Math.tan(aL);              // 底の前の縁：尖りから下の面の倒れで下がった所
-    const nU = new V(0, zf - zt, top - yp).normalize(), nL = new V(0, -(yp - bot), zf - zfb).normalize();
+    const nU = new V(0, zf - zt, top - yp).normalize(), nL = new V(0, -(zf - zfb), yp - bot).normalize();   // 面の向き：縁の向き (dy, dz) に直交する (−dz, dy)
     const f = [plane(0, 90, new V(0, top, 0)), plane(0, -90, new V(0, bot, 0)), plane(180, 0, new V(0, 0, zb)),
       { n: nU, d: nU.dot(new V(0, yp, zf)) }, { n: nL, d: nL.dot(new V(0, yp, zf)) }];
     // 正面：横の面は上半分が垂直、下半分は斜めにつないで細る
