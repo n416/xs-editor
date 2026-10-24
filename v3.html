@@ -1097,7 +1097,7 @@ function body() {
   // 「半分に割る」が付く物は左右一対になり正中に割れ目が空く。胸板・胸の中央・襟・腹・腰の帯・股が同じ作り
   const slab = (pre, part, split) => {
     setPart(part);
-    const colMain = colOf(pre), col = f => (f.pl && f.pl.cut) ? COL.dark : colMain;   // 削った面（口の中）は暗い色
+    const col = colOf(pre);
     const top = y0 - P[pre + 'Y'], H = P[pre + 'H'], rx = P[pre + 'W'] / 2, rz = P[pre + 'D'] / 2;
     const zm = P[pre + 'Z'], zb = zm - rz, zf = zm + rz, ym = top - H / 2;
     const common = [
@@ -1114,25 +1114,14 @@ function body() {
     const sidePt = (sg, da) => { const a = (P[pre + 'SideA'] + da) * D2R; return new V(sg * rx * Math.sin(a), ym, zm + rz * Math.cos(a)); };
     const tangAz = da => { const a = (P[pre + 'SideA'] + da) * D2R; return Math.atan2(Math.sin(a) / rx, Math.cos(a) / rz) / D2R; };   // 楕円に接する面の向き
     const sides = sg => das.map(da => plane(sg * tangAz(da), P[pre + 'SideE'], sidePt(sg, da)));
-    // 口（スリット）：正面に横長の溝を上から並べて削る。左右対称
-    const vents = sg => {
-      const n = P[pre + 'VentN'] | 0; if (!n) return [];
-      const fr = plane(sg * P[pre + 'AF'], P[pre + 'FrontE'], new V(0, ym, zf));
-      const out = [];
-      for (let i = 0; i < n; i++) {
-        const yT = top - P[pre + 'VentY'] - i * (P[pre + 'VentH'] + P[pre + 'VentGap']), yB = yT - P[pre + 'VentH'], xC = sg * P[pre + 'VentX'];
-        out.push([{ n: fr.n.clone().negate(), d: -(fr.d - P[pre + 'VentD']) }, plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yB, 0)), plane(90, 0, new V(xC + P[pre + 'VentW'] / 2, 0, 0)), plane(-90, 0, new V(xC - P[pre + 'VentW'] / 2, 0, 0))]);
-      }
-      return out;
-    };
     if (split && P[pre + 'Split']) {
       for (const sg of [1, -1]) crystal(M, [...common,
         plane(sg * P[pre + 'AF'], P[pre + 'FrontE'], new V(0, ym, zf)),                       // 正面：＋で上が後ろへ寄る
         ...sides(sg),                                                                        // 横の面
         plane(-sg * 90, 0, new V(sg * P[pre + 'Gap'] / 2, 0, 0)),                            // 割れ目に向く面
-      ], col, vents(sg));
+      ], col);
     } else {
-      crystal(M, [...common, ...fp0(P[pre + 'AF'], P[pre + 'FrontE'], new V(0, ym, zf)), ...sides(1), ...sides(-1)], col, [...vents(1), ...vents(-1)]);
+      crystal(M, [...common, ...fp0(P[pre + 'AF'], P[pre + 'FrontE'], new V(0, ym, zf)), ...sides(1), ...sides(-1)], col);
     }
   };
   if (P.collarOn) slab('collar', PART.collar, false);
@@ -1362,8 +1351,7 @@ const slabRows = (pre, d, split) => [['c', pre], ['on', pre + 'On', d.on],
   ['r', pre + 'TopE', '上の面の傾き', 15, 90, 1, d.TopE ?? 80], ['r', pre + 'BotE', '下の面の傾き', 15, 90, 1, d.BotE ?? 80],
   ['r', pre + 'FrontE', '正面の傾き', -45, 45, 1, d.FrontE ?? 6], ['r', pre + 'BackE', '背の傾き', -45, 45, 1, d.BackE ?? 6],
   ['r', pre + 'AF', '正中の折れ', 0, 45, 1, d.AF ?? 0], ['r', pre + 'SideA', '横の面の向き', 50, 130, 1, d.SideA ?? 90], ['r', pre + 'SideE', '横の面の傾き', -45, 45, 1, d.SideE ?? 6],
-  ['r', pre + 'Facets', '横の面の数', 1, 3, 1, d.Facets ?? 1], ['r', pre + 'ChamT', '前上の角の落とし', 0, 1, 0.01, d.ChamT ?? 0], ['r', pre + 'ChamB', '前下の角の落とし', 0, 1, 0.01, d.ChamB ?? 0],
-  ...(d.vents ? [['r', pre + 'VentN', '口の数', 0, 5, 1, 0], ['r', pre + 'VentW', '口の横幅', 0.1, 2, 0.01, 0.7], ['r', pre + 'VentH', '口の高さ', 0.02, 0.4, 0.01, 0.08], ['r', pre + 'VentGap', '口の間隔', 0.02, 0.5, 0.01, 0.1], ['r', pre + 'VentD', '口の深さ', 0.02, 0.6, 0.01, 0.12], ['r', pre + 'VentY', '口の上端の下がり', 0, 3, 0.01, 0.4], ['r', pre + 'VentX', '口の左右の位置', 0, 2, 0.01, 0.7]] : [])];
+  ['r', pre + 'Facets', '横の面の数', 1, 3, 1, d.Facets ?? 1], ['r', pre + 'ChamT', '前上の角の落とし', 0, 1, 0.01, d.ChamT ?? 0], ['r', pre + 'ChamB', '前下の角の落とし', 0, 1, 0.01, d.ChamB ?? 0]];
 // スカートの板の欄
 const hangRows = (pre, d, split) => [['c', pre], ['on', pre + 'On', d.on],
   ...(split ? [['toggle', pre + 'Split', '半分に割る', !!d.split], ['r', pre + 'Gap', '割れ目の幅', 0, 0.8, 0.01, d.gap ?? 0.1]] : []),
@@ -1378,7 +1366,7 @@ const BODY_SECS = [
   ['sec-head', '頭', groupRows('head', 'headOn')],
   ['sec-torso', '胴体', groupRows('torso', 'g_torsoOn')],
   ['sec-chest', '芯', [['c', 'chest'], ['on', 'coreOn', true], ['r', 'coreW', '幅', 0.8, 4, 0.02, 2.4], ['r', 'coreD', '奥行', 0.6, 3, 0.02, 1.5], ['r', 'coreH', '高さ', 0.6, 5, 0.02, 2.9], ['r', 'coreYw', '広い所の高さ', 0.05, 0.95, 0.01, 0.3], ['r', 'coreEU', '上のすぼまり', 0, 85, 1, 35], ['r', 'coreEL', '下のすぼまり', 0, 85, 1, 18], ['r', 'coreAF', '正中の折れ', 0, 45, 1, 15], ['r', 'coreFacets', '面の数', 1, 3, 1, 1]]],
-  ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6, vents: true }, true)],
+  ['sec-plate', '胸板', slabRows('plate', { W: 2.6, H: 1.4, D: 1.8, Y: 0.15, TopE: 70, BotE: 80, FrontE: 6, BackE: 12, SideE: 6 }, true)],
   ['sec-center', '胸の中央', slabRows('center', { W: 0.7, H: 1.2, D: 2.0, Y: 0.1, TopE: 70, BotE: 80, FrontE: 10, BackE: 12, SideE: 4 }, false)],
   ['sec-collar', '襟', slabRows('collar', { W: 1.2, H: 0.35, D: 1.0, Y: -0.2, TopE: 85, BotE: 85, FrontE: 15, BackE: 15, SideE: 15 }, false)],
   ['sec-abd', '腹', slabRows('abd', { W: 1.6, H: 0.8, D: 1.5, Y: 1.55, TopE: 85, BotE: 85, FrontE: -5, BackE: 6, SideE: 5 }, false)],
