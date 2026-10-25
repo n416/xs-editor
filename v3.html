@@ -1760,12 +1760,6 @@ function body() {
   // コの字（上面の板と、前・外・後ろの 3 枚のスカート。角の曲げは角度で）・丸い肩当て（とげと丸い出っ張り。中に肩の箱）・シールド（上の端が内へ曲がり、支えで肩の箱に付く）
   if (P.g_armOn) {
     const W3 = (sx, u, y, z) => new V(sx * u, y, z), N3 = (sx, nu, ny, nz) => new V(sx * nu, ny, nz).normalize();
-    const hull2 = pts => {   // x-z の凸包（左回り）
-      const q = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], hi = [];
-      for (const r of q) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], r) <= 1e-9) lo.pop(); lo.push(r); }
-      for (const r of q.slice().reverse()) { while (hi.length >= 2 && cr(hi[hi.length - 2], hi[hi.length - 1], r) <= 1e-9) hi.pop(); hi.push(r); }
-      return lo.slice(0, -1).concat(hi.slice(0, -1));
-    };
     const prismAlong = (p0, p1, r, n, rot = 0) => {   // p0 から p1 への n 角柱
       const ax = p1.clone().sub(p0).normalize(), t1 = (Math.abs(ax.y) < 0.9 ? new V().crossVectors(UP, ax) : new V().crossVectors(new V(1, 0, 0), ax)).normalize(), t2 = new V().crossVectors(ax, t1).normalize();
       const c = p0.clone().add(p1).multiplyScalar(0.5), pl = [{ n: ax, d: ax.dot(p1) }, { n: ax.clone().negate(), d: -ax.dot(p0) }];
@@ -1810,7 +1804,6 @@ function body() {
           const n = N3(sx, pt.n2[0] * Math.cos(fl), Math.sin(fl), pt.n2[1] * Math.cos(fl)); pt.out = { n, d: n.dot(W3(sx, pt.t0[0], ySk, pt.t0[1] + zc)) };
           pt.inn = { n: pt.out.n.clone().negate(), d: -(pt.out.d - (pt.key === 'O' ? (P[a + 'STO'] ?? P[a + 'ST']) : P[a + 'ST'])) };
         }
-        const top = [];
         // 角ごとの落とし（前から見た輪郭の角）：内の上・外の上は上面の板とスカート、内の下・外の下は前と後ろのスカート。外の下は縦の長さを別に決める（外の縁が下ほど内へ寄る）
         const uInE = plates[1].t1[0], Hb = P[a + 'HF'], slb = P[a + 'Sl'];
         const chamUY = (cu, cy, nu, ny, legU, legY) => { const n = N3(sx, nu * legY, ny * legU, 0); return { n, d: n.dot(W3(sx, cu, cy, 0)) - legU * legY / Math.hypot(legU, legY) }; };
@@ -1819,33 +1812,34 @@ function body() {
         const chIB = P[a + 'ChIB'] > 0 ? chamUY(uInE, ySk - Hb - slb / 2, -1, -1, P[a + 'ChIB'], P[a + 'ChIB']) : null;
         const chOB = P[a + 'ChOB'] > 0 ? chamUY(uO, ySk - Hb + slb / 2, 1, -1, P[a + 'ChOB'], P[a + 'ChOBv'] > 0 ? P[a + 'ChOBv'] : P[a + 'ChOB']) : null;
         plates.forEach((pt, i) => {
+          pt.end = pt.key === 'O' ? null : (() => { const dv = W3(sx, pt.t1[0] - pt.t0[0], 0, pt.t1[1] - pt.t0[1]).normalize(); return { n: dv, d: dv.dot(W3(sx, pt.t1[0], 0, pt.t1[1] + zc)) }; })();
+        });
+        // 縁の落としは、同じ縁を作る面の組ごとに 1 つの面で決め、その縁にかかる塊（上面の板とスカート）すべてで同じ面を使う（塊ごとに別々に落とすと継ぎ目で段になる：依頼主「縁の落としを行うとガタガタになりますね」）
+        const BE = (x, y) => (bev > 0 && x && y ? bevelEdge(x, y, bev, bev) : null);
+        const [PO, PF, PB] = plates, cornF = BE(PF.out, PO.out), cornB = BE(PB.out, PO.out);
+        plates.forEach((pt, i) => {
           const f = [pt.out, pt.inn, plane(0, 90, new V(0, ySk + 0.002, 0))];
           // 下の縁：前・後ろは内側の端ほど、外は前の端ほど「傾き」だけ下がる
           const m0 = W3(sx, (pt.t0[0] + pt.t1[0]) / 2, ySk - pt.H, (pt.t0[1] + pt.t1[1]) / 2 + zc), tv = W3(sx, pt.t0[0] - pt.t1[0], 0, pt.t0[1] - pt.t1[1]), L = tv.length(); tv.normalize();
           const k = pt.key === 'O' ? -pt.sl / L : pt.sl / L, bn = new V(tv.x * k, -1, tv.z * k).normalize(); const bot = { n: bn, d: bn.dot(m0) }; f.push(bot);
           // 角：外の板とのあいだは 2 つの外の面の間の向き。前と後ろの内側の端は板に直角
           if (pt.key === 'O') for (const j of [1, 2]) { const o = plates[j].out, nn = o.n.clone().sub(pt.out.n), Ln = nn.length(); f.push({ n: nn.multiplyScalar(1 / Ln), d: (o.d - pt.out.d) / Ln }); }
-          else {
-            const o = plates[0].out, nn = o.n.clone().sub(pt.out.n), Ln = nn.length(); f.push({ n: nn.multiplyScalar(1 / Ln), d: (o.d - pt.out.d) / Ln });
-            const dv = W3(sx, pt.t1[0] - pt.t0[0], 0, pt.t1[1] - pt.t0[1]).normalize(); f.push({ n: dv, d: dv.dot(W3(sx, pt.t1[0], 0, pt.t1[1] + zc)) });
-          }
+          else { const o = PO.out, nn = o.n.clone().sub(pt.out.n), Ln = nn.length(); f.push({ n: nn.multiplyScalar(1 / Ln), d: (o.d - pt.out.d) / Ln }); f.push(pt.end); }
           const chs = (pt.key === 'O' ? [chOT] : [chIT, chOT, chIB, chOB]).filter(Boolean); f.push(...chs);
-          // 縁の落とし：外の面と、下の縁・内側の端・角の落としとの縁（外から見える縁すべて。スカートどうしの継ぎ目は落とさない）
-          if (bev > 0) for (const e2 of [bot, ...(pt.key === 'O' ? [] : [f[f.length - 1 - chs.length]]), ...chs]) { const e = bevelEdge(pt.out, e2, bev, bev); if (e) f.push(e); }
+          // 縁の落とし：外の面と下の縁・内側の端・角の落とし、外の角（前・後ろと外の板の間）
+          f.push(...[BE(pt.out, bot), pt.end && BE(pt.out, pt.end), ...chs.map(c2 => BE(pt.out, c2)), pt.key !== 'B' && cornF, pt.key !== 'F' && cornB].filter(Boolean));
           const cuts = [];
           if (pt.key === 'O' && P[a + 'ThD'] > 0) {   // スラスターのくぼみ（外の板の上の方）
             const tw = P[a + 'ThW'] / 2, tt = ySk - P[a + 'ThY'];
             cuts.push([{ n: pt.out.n.clone().negate(), d: -(pt.out.d - P[a + 'ThD']) }, plane(0, 90, new V(0, tt, 0)), plane(0, -90, new V(0, tt - P[a + 'ThH'], 0)), plane(0, 0, new V(0, 0, zc + tw)), plane(180, 0, new V(0, 0, zc - tw))]);
           }
           crystal(M, f, col, cuts.length ? cuts : undefined);
-          for (const fc of clipFaces(f)) for (const q of fc.pts) if (Math.abs(q.y - ySk - 0.002) < 1e-4) top.push([q.x, q.z]);
         });
-        // 上面の板：スカートの上の端を囲む形（体の側の端は前と後ろのスカートの内側の端まで）
-        top.push([sx * uInE, zc + d2], [sx * uInE, zc - d2]);
-        const hl = hull2(top), f = [plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, ySk, 0))];
-        for (let i = 0; i < hl.length; i++) { const p0 = hl[i], p1 = hl[(i + 1) % hl.length], n = new V(p1[1] - p0[1], 0, -(p1[0] - p0[0])).normalize(); f.push({ n, d: n.x * p0[0] + n.z * p0[1] }); }
-        const sides = f.slice(2), tch = [chIT, chOT].filter(Boolean); f.push(...tch);
-        if (bev > 0) { for (const e of [...sides, ...tch]) { const c2 = bevelEdge(f[0], e, bev, bev); if (c2) f.push(c2); } for (const e of tch) for (const sd of sides) { const c2 = bevelEdge(e, sd, bev, bev); if (c2) f.push(c2); } }
+        // 上面の板：横の面はスカートの外の面そのもの（同じ面なので継ぎ目で段にならない）、体の側は前と後ろのスカートの内側の端とその間
+        const topP = plane(0, 90, new V(0, yT, 0)), cap = { n: N3(sx, -1, 0, 0), d: -uInE };
+        const tch = [chIT, chOT].filter(Boolean), f = [topP, plane(0, -90, new V(0, ySk, 0)), PO.out, PF.out, PB.out, PF.end, PB.end, cap, ...tch];
+        f.push(...[...[PO.out, PF.out, PB.out, PF.end, PB.end, cap, ...tch].map(e => BE(topP, e)), BE(PF.out, PF.end), BE(PB.out, PB.end),
+          ...tch.flatMap(c2 => [BE(PF.out, c2), BE(PB.out, c2)]), chOT && BE(PO.out, chOT), cornF, cornB].filter(Boolean));
         crystal(M, f, col);
       } else if (kind === 'dome') {
         // 丸い肩当て：楕円の上半分を、角の数の平らな面で張った鉢。下の縁はまっすぐ（下の面）、体の側は切る（胴体に入らない）。中に肩の箱
