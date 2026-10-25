@@ -1756,7 +1756,7 @@ function body() {
     } else hang(pre, part, az0, 0, W / 2, 1, P[pre + 'Taper']);
   };
   // 肩と上腕（依頼主：「肩と腕と手足もやっちゃおうか」「その読みで肩を作って」）。左右一対で、体の右（-x）と左（+x）。u は体の中心から外への長さ。
-  // 関節（多角柱）が胴体から肩の箱へ通り、肩の箱の下から上腕が下がる。肩アーマーは右と左で別に選べる（モノアイの機体は右がシールド、左が丸い肩当て）：
+  // 関節（球と軸受け）が胸のすぐ横から肩の箱へ通り、肩の箱の下から上腕が下がる。肩アーマーは右と左で別に選べる（モノアイの機体は右がシールド、左が丸い肩当て）：
   // コの字（上面の板と、前・外・後ろの 3 枚のスカート。角の曲げは角度で）・丸い肩当て（とげと丸い出っ張り。中に肩の箱）・シールド（上の端が内へ曲がり、支えで肩の箱に付く）
   if (P.g_armOn) {
     const W3 = (sx, u, y, z) => new V(sx * u, y, z), N3 = (sx, nu, ny, nz) => new V(sx * nu, ny, nz).normalize();
@@ -1769,20 +1769,27 @@ function body() {
     for (const sx of [-1, 1]) {
       const U = P.shX, yc = y0 - P.shY, zc = P.shZ, bw = P.shbW / 2, bh = P.shbH / 2, bd = P.shbD / 2, bTop = yc + bh, bBot = yc - bh;
       // 腕の動き（Ver2 と同じ：腕は肩の関節の中心のまわりに回り、肩アーマーは腕の骨に付いて一緒に動く。依頼主「ver2は何のためにあるんだよ」）。
-      // 回る中心は肩の箱の真ん中。前後の振りは横の軸（前へ＋）、横の上げは前後の軸（外へ＋）。肩の箱・上腕・肩アーマーが一緒に回る
-      // （「横の上げで肩アーマーも上がる」を切ると、横の上げでは肩アーマーと肩の箱は残り、上腕だけが上がる）。関節の多角柱は胴体の側なので回らない
-      const pv = W3(sx, U, yc, zc), qS = new THREE.Quaternion().setFromAxisAngle(new V(1, 0, 0), -(P.armSwing || 0) * D2R), qR = new THREE.Quaternion().setFromAxisAngle(new V(0, 0, 1), sx * (P.armRaise || 0) * D2R);
+      // 回る中心は胸のすぐ横（Ver2 の肩関節の球の中心）：肩の箱の体の側の面から「回る中心のずれ」だけ外。前後の振りは横の軸（前へ＋）、横の上げは前後の軸（外へ＋）。
+      // 肩の箱・上腕・肩アーマーが一緒に回る（「横の上げで肩アーマーも上がる」を切ると、横の上げでは肩アーマーと肩の箱は残り、上腕だけが上がる）。
+      // 関節（胴体の側の球と軸受けの多角柱）は回らない。肩の箱と肩アーマーの体の側の下は斜めに開ける（Ver2：腕を回しても胸と軸受けに当たらない）
+      const uP = U - bw + (P.shPv || 0), pv = W3(sx, uP, yc, zc), qS = new THREE.Quaternion().setFromAxisAngle(new V(1, 0, 0), -(P.armSwing || 0) * D2R), qR = new THREE.Quaternion().setFromAxisAngle(new V(0, 0, 1), sx * (P.armRaise || 0) * D2R);
       const qA = qR.clone().multiply(qS), qK = P.armRaiseArmor ? qA : qS;
       const XF = q => pls => pls.map(pl => { const n = pl.n.clone().applyQuaternion(q), p0 = pl.n.clone().multiplyScalar(pl.d).sub(pv).applyQuaternion(q).add(pv); return { ...pl, n, d: n.dot(p0) }; });
-      const crA = (pls, c, cuts) => crystal(M, XF(qK)(pls), c, cuts && cuts.length ? cuts.map(XF(qK)) : undefined);
+      // 体の側の下の開け：回る中心から「開けの始まり」だけ外・上の点を通り、下ほど外へ「開けの角度」（水平から）で下がる線より、体の側の下を除く
+      const oa = (P.shOpenA ?? 78) * D2R, opn = (() => { const n = N3(sx, -Math.sin(oa), -Math.cos(oa), 0); return { n, d: n.dot(W3(sx, uP + (P.shOpenU || 0), yc + (P.shOpenY || 0), zc)) }; })();
+      const crA = (pls, c, cuts) => crystal(M, XF(qK)([...pls, opn]), c, cuts && cuts.length ? cuts.map(XF(qK)) : undefined);
       // 関節：胴体の中から肩の箱の真ん中まで、外へ向く n 角柱
-      if (P.shjOn) { setPart(PART.shj); crystal(M, prismAlong(W3(sx, U - bw - P.shjL, yc, zc), W3(sx, U, yc, zc), P.shjR, Math.max(3, P.shjN | 0)), colOf('shj')); }
+      if (P.shjOn) {   // 関節：胴体の中から回る中心までの軸受け（n 角柱）と、回る中心の球（Ver2 の肩関節）。胴体の側なので回らない
+        setPart(PART.shj);
+        crystal(M, prismAlong(W3(sx, uP - P.shjL, yc, zc), W3(sx, uP, yc, zc), P.shjR, Math.max(3, P.shjN | 0)), colOf('shj'));
+        if (P.shjBall > 0) { const r = P.shjBall, f = []; for (const eD of [-60, -30, 0, 30, 60]) for (let k = 0; k < 10; k++) { const e = eD * D2R, az = (k + (eD % 60 ? 0.5 : 0)) * PI / 5, n = new V(Math.cos(e) * Math.cos(az), Math.sin(e), Math.cos(e) * Math.sin(az)); f.push({ n, d: n.dot(pv) + r }); } f.push({ n: UP.clone(), d: pv.y + r }, { n: new V(0, -1, 0), d: -pv.y + r }); crystal(M, f, colOf('shj')); }
+      }
       // 肩の箱：関節に付く四角い塊。縦の角を落とす
       if (P.shbOn) {
         setPart(PART.shb);
         const f = [{ n: N3(sx, 1, 0, 0), d: U + bw }, { n: N3(sx, -1, 0, 0), d: -(U - bw) }, plane(0, 90, new V(0, bTop, 0)), plane(0, -90, new V(0, bBot, 0)), plane(0, 0, new V(0, 0, zc + bd)), plane(180, 0, new V(0, 0, zc - bd))];
         const c = P.shbCh; if (c > 0) for (const su of [1, -1]) for (const sz of [1, -1]) { const n = N3(sx, su, 0, sz), q = W3(sx, U + su * bw, yc, zc + sz * bd); f.push({ n, d: n.dot(q) - c * 0.7071 }); }
-        crystal(M, XF(qK)(f), colOf('shb'));
+        crystal(M, XF(qK)([...f, opn]), colOf('shb'));
       }
       // 上腕：肩の箱の下から下がる箱。縦の角を落とす
       if (P.uarOn) {
@@ -2308,10 +2315,12 @@ const BODY_SECS = [
     ['r', 'pipeX0', '前の付け根の左右', 0, 2, 0.01, 0.45], ['r', 'pipeY0', '前の付け根の下がり', -1, 4, 0.01, 1.9], ['r', 'pipeZ0', '前の付け根の前への出', 0, 2, 0.01, 0.8],
     ['r', 'pipeX1', '後ろの付け根の左右', 0, 2, 0.01, 0.5], ['r', 'pipeY1', '後ろの付け根の下がり', -1, 4, 0.01, 0.5], ['r', 'pipeZ1', '後ろの付け根の後ろへの出', 0, 2, 0.01, 0.9],
     ['r', 'pipeOut', '横への膨らみ', 0, 3, 0.01, 1.6], ['r', 'pipeSag', 'たるみ', -1, 1, 0.01, 0.2], ['r', 'pipeBulge', '節のふくらみ', 1, 1.8, 0.01, 1]]],
-  ['sec-arm', '腕', [...groupRows('arm', 'g_armOn'), ['r', 'armSwing', '試し：前後の振り（°、前へ＋。肩の箱・肩アーマー・上腕が一緒に回る）', -180, 180, 1, 0], ['r', 'armRaise', '試し：横の上げ（°、外へ＋）', -30, 120, 1, 0],
+  ['sec-arm', '腕', [...groupRows('arm', 'g_armOn'), ['r', 'armSwing', '試し：前後の振り（°、前へ＋。肩の箱・肩アーマー・上腕が一緒に回る）', -180, 180, 1, 0], ['r', 'armRaise', '試し：横の上げ（°、外へ＋。Ver2 は外へ 28°・内へ 71° まで）', -75, 120, 1, 0],
     ['toggle', 'armRaiseArmor', '横の上げで肩アーマーも上がる（Ver2 と同じ。切ると上腕だけ）', true]]],
   ['sec-shj', '肩の関節', [['c', 'shj'], ['on', 'shjOn', false], ['r', 'shX', '肩の位置：体の中心から外へ', 0, 4, 0.01, 1.55], ['r', 'shY', '肩の位置：下がり', -1, 4, 0.01, 0.55], ['r', 'shZ', '肩の位置：前後', -2, 2, 0.01, 0],
-    ['r', 'shjR', '太さ（半径）', 0.02, 1, 0.005, 0.2], ['r', 'shjN', '角の数', 3, 24, 1, 8], ['r', 'shjL', '肩の箱から体の側へ出る長さ', 0, 2, 0.01, 0.35]]],
+    ['r', 'shPv', '回る中心のずれ（肩の箱の体の側の面から外へ）', -1, 1, 0.005, 0.02], ['r', 'shjBall', '回る中心の球の半径（0 で無し）', 0, 1, 0.005, 0.2],
+    ['r', 'shjR', '軸受けの太さ（半径）', 0.02, 1, 0.005, 0.14], ['r', 'shjN', '軸受けの角の数', 3, 24, 1, 8], ['r', 'shjL', '軸受けの長さ（回る中心から体の側へ）', 0, 2, 0.01, 0.3],
+    ['r', 'shOpenA', '体の側の下の開け：角度（°、水平から。90 で縦）', 20, 90, 0.5, 78], ['r', 'shOpenU', '体の側の下の開け：始まりの外へのずれ（回る中心から）', -1, 1, 0.005, 0], ['r', 'shOpenY', '体の側の下の開け：始まりの上へのずれ', -1, 1, 0.005, 0]]],
   ['sec-shb', '肩の箱', [['c', 'shb'], ['on', 'shbOn', false], ['r', 'shbW', '幅', 0.05, 3, 0.01, 0.64], ['r', 'shbH', '高さ', 0.05, 3, 0.01, 0.65], ['r', 'shbD', '奥行', 0.05, 3, 0.01, 0.62], ['r', 'shbCh', '縦の角の落とし', 0, 0.5, 0.005, 0.05]]],
   ['sec-shR', '右の肩アーマー', [['c', 'shR'], ['on', 'shROn', false],
     ['kinds', 'shR', [['cu', 'コの字'], ['dome', '丸い肩当て'], ['shield', 'シールド']], '種類', 'shield'],
@@ -2569,7 +2578,7 @@ window.__hl = { probeTris, diffTris, hlMutFor, show: showHL, clear: clearHL, mes
 const BASES = {};
 // 白い機体：胴体（柱・コクピットカバー・腹の上と下）と腰。股の塊がいちばん前に出て（前の面は上の段が倒れ出て、折れて下の段が下がる）、背は後ろの板と並び、その両脇から前・後ろの左右の板が蝶番で下がり、横の板に厚い塊、前の板に四角いパネル。
 // 寸法は見本（白い機体の正面・横・後ろ）から：見本の線を胸の幅で倍率を決め、腹の下の端の高さで重ねて、腰の外形が正面・横・後ろで線に乗るように決めた（out/v3/_ov.py）（依頼主：「その読みで白い機体の腰を作って」）
-const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.38, "skKY": 2.27, "skKH": 1.02, "skKZF": 0.62, "skKZB": 0.595, "skKFE": 29, "skKBE": 20, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.03, "skKTopW": 0.398, "skKTopH": 0.45, "skKSlotD": 0.03, "skKSlotW": 0.167, "skKSlotH": 0.45, "skKSlotY": 0.234, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.398, "skFW": 1.675, "skFH": 0.732, "skFT": 0.2, "skFY": 2.3, "skFR": 0.5, "skFAz": 0, "skFFlare": 6, "skFTaper": -2, "skFBotE": 85, "skFSlant": 0.261, "skFBevel": 0.03, "skFHinge": true, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.407, "skFBoxH": 0.45, "skFBoxY": 0.1, "skFBoxX": 0.078, "skFBoxBev": 0.03, "skSOn": true, "skSW": 0.74, "skSH": 0.702, "skST": 0.1, "skSY": 2.27, "skSR": 0.852, "skSZ": -0.27, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.4, "skSBoxH": 0.513, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.398, "skBW": 1.458, "skBH": 0.813, "skBT": 0.2, "skBY": 2.3, "skBR": 0.575, "skBFlare": 20, "skBTaper": 0, "skBBotE": 85, "skBSlant": 0.261, "skBBevel": 0.03, "skBHinge": true, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0, "skFBendA": 0, "skBBendH": 0, "skBBendA": 0, "skFYaw": 15, "skBYaw": 5.0, "skKFold": 0.45, "skKFE2": -3, "skKBFold": 0.45, "skKBE2": 20, "skFHingeR": 0.07, "skBHingeR": 0.07, "skSHingeR": 0.035, "skSHinge": true, "skSOpen": 0, "skSYaw": 0, "col1W": 1.68, "col1H": 0.937, "col1Y": 0.544, "col1D": 1.362, "abuH": 0.383, "ablH": 0.326, "cov1Y": 0.747, "cov1H": 1.438, "cov1WT": 0.605, "cov1WK": 0.571, "cov1WB": 0.47, "cov1Z": 0.957, "cov1D": 0.92, "cov1LowD": 32, "cov1Pt": 0.54, "g_armOn": true, "shjOn": true, "shbOn": true, "shROn": true, "shLOn": true, "uarOn": true, "shLSame": true, "shX": 1.13, "shY": 0.82, "shZ": 0, "shjR": 0.16, "shjN": 8, "shjL": 0.3, "shbW": 0.5, "shbH": 0.55, "shbD": 0.55, "shbCh": 0.04, "uarW": 0.48, "uarD": 0.48, "uarL": 0.57, "uarCh": 0.05, "shRKind": "cu", "shRT": 0.11, "shRUp": 0.11, "shRIn": 0.23, "shRW": 0.8, "shRD": 0.83, "shRCorner": 90, "shRST": 0.14, "shRHF": 0.8, "shRHO": 0.24, "shRFlare": 4, "shRSl": 0.09, "shRSlO": 0, "shRThD": 0.03, "shRThW": 0.5, "shRThH": 0.12, "shRThY": 0.05, "shRBev": 0.07, "shRSTO": 0.06, "shRChIT": 0.08, "shRChOT": 0.08, "shRChIB": 0.08, "shRChOB": 0.07, "shRChOBv": 0.55} }];
+const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.38, "skKY": 2.27, "skKH": 1.02, "skKZF": 0.62, "skKZB": 0.595, "skKFE": 29, "skKBE": 20, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.03, "skKTopW": 0.398, "skKTopH": 0.45, "skKSlotD": 0.03, "skKSlotW": 0.167, "skKSlotH": 0.45, "skKSlotY": 0.234, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.398, "skFW": 1.675, "skFH": 0.732, "skFT": 0.2, "skFY": 2.3, "skFR": 0.5, "skFAz": 0, "skFFlare": 6, "skFTaper": -2, "skFBotE": 85, "skFSlant": 0.261, "skFBevel": 0.03, "skFHinge": true, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.407, "skFBoxH": 0.45, "skFBoxY": 0.1, "skFBoxX": 0.078, "skFBoxBev": 0.03, "skSOn": true, "skSW": 0.74, "skSH": 0.702, "skST": 0.1, "skSY": 2.27, "skSR": 0.852, "skSZ": -0.27, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.4, "skSBoxH": 0.513, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.398, "skBW": 1.458, "skBH": 0.813, "skBT": 0.2, "skBY": 2.3, "skBR": 0.575, "skBFlare": 20, "skBTaper": 0, "skBBotE": 85, "skBSlant": 0.261, "skBBevel": 0.03, "skBHinge": true, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0, "skFBendA": 0, "skBBendH": 0, "skBBendA": 0, "skFYaw": 15, "skBYaw": 5.0, "skKFold": 0.45, "skKFE2": -3, "skKBFold": 0.45, "skKBE2": 20, "skFHingeR": 0.07, "skBHingeR": 0.07, "skSHingeR": 0.035, "skSHinge": true, "skSOpen": 0, "skSYaw": 0, "col1W": 1.68, "col1H": 0.937, "col1Y": 0.544, "col1D": 1.362, "abuH": 0.383, "ablH": 0.326, "cov1Y": 0.747, "cov1H": 1.438, "cov1WT": 0.605, "cov1WK": 0.571, "cov1WB": 0.47, "cov1Z": 0.957, "cov1D": 0.92, "cov1LowD": 32, "cov1Pt": 0.54, "g_armOn": true, "shjOn": true, "shbOn": true, "shROn": true, "shLOn": true, "uarOn": true, "shLSame": true, "shX": 1.13, "shY": 0.82, "shZ": 0, "shjR": 0.12, "shjN": 8, "shjL": 0.25, "shbW": 0.5, "shbH": 0.55, "shbD": 0.55, "shbCh": 0.04, "uarW": 0.48, "uarD": 0.48, "uarL": 0.57, "uarCh": 0.05, "shRKind": "cu", "shRT": 0.11, "shRUp": 0.11, "shRIn": 0.23, "shRW": 0.8, "shRD": 0.83, "shRCorner": 90, "shRST": 0.14, "shRHF": 0.8, "shRHO": 0.24, "shRFlare": 4, "shRSl": 0.09, "shRSlO": 0, "shRThD": 0.03, "shRThW": 0.5, "shRThH": 0.12, "shRThY": 0.05, "shRBev": 0.07, "shRSTO": 0.06, "shRChIT": 0.08, "shRChOT": 0.08, "shRChIB": 0.08, "shRChOB": 0.07, "shRChOBv": 0.55, "shPv": 0.02, "shjBall": 0.16, "shOpenA": 78, "shOpenU": 0, "shOpenY": 0} }];
 // [SAMPLES-END]
 function sampleValues(sm) { const b = sm.base ? BASES[sm.base] || {} : {}; return { ...b, ...(sm.v || {}) }; }
 function openSample(i) {
