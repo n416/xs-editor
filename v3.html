@@ -1772,8 +1772,9 @@ function body() {
       // 回る中心は胸のすぐ横（Ver2 の肩関節の球の中心）：肩の箱の体の側の面から「回る中心のずれ」だけ外。前後の振りは横の軸（前へ＋）、横の上げは前後の軸（外へ＋）。
       // 肩の箱・上腕・肩アーマーが一緒に回る（「横の上げで肩アーマーも上がる」を切ると、横の上げでは肩アーマーと肩の箱は残り、上腕だけが上がる）。
       // 関節（胴体の側の球と軸受けの多角柱）は回らない。肩の箱と肩アーマーの体の側の下は斜めに開ける（Ver2：腕を回しても胸と軸受けに当たらない）
-      const uP = U - bw + (P.shPv || 0), pv = W3(sx, uP, yc, zc), qS = new THREE.Quaternion().setFromAxisAngle(new V(1, 0, 0), -(P.armSwing || 0) * D2R), qR = new THREE.Quaternion().setFromAxisAngle(new V(0, 0, 1), sx * (P.armRaise || 0) * D2R);
-      const qA = qR.clone().multiply(qS), qK = P.armRaiseArmor ? qA : qS;
+      // 姿勢はゲームの腕の骨と同じ回し方（Euler YXZ：横の上げ→前後の振り→縦の軸のひねりの順）。左右それぞれの欄（R は体の右、L は左）
+      const sd = sx < 0 ? 'R' : 'L', sw = (P['armSw' + sd] || 0) * D2R, ra = (P['armRa' + sd] || 0) * D2R, tw = (P['armTw' + sd] || 0) * D2R;
+      const uP = U - bw + (P.shPv || 0), pv = W3(sx, uP, yc, zc), qA = new THREE.Quaternion().setFromEuler(new THREE.Euler(-sw, tw, sx * ra, 'YXZ')), qK = P.armRaiseArmor ? qA : new THREE.Quaternion().setFromEuler(new THREE.Euler(-sw, tw, 0, 'YXZ'));
       const XF = q => pls => pls.map(pl => { const n = pl.n.clone().applyQuaternion(q), p0 = pl.n.clone().multiplyScalar(pl.d).sub(pv).applyQuaternion(q).add(pv); return { ...pl, n, d: n.dot(p0) }; });
       // 体の側の下の開け：回る中心から「開けの始まり」だけ外・上の点を通り、下ほど外へ「開けの角度」（水平から）で下がる線より、体の側の下を除く
       const oa = (P.shOpenA ?? 78) * D2R, opn = (() => { const n = N3(sx, -Math.sin(oa), -Math.cos(oa), 0); return { n, d: n.dot(W3(sx, uP + (P.shOpenU || 0), yc + (P.shOpenY || 0), zc)) }; })();
@@ -2008,6 +2009,7 @@ function checkBody(eps = 0.02, allow = []) {   // allow：設計どおりの重�
   return { floating, pierce, coplanar };
 }
 window.__check = checkBody; window.__REG = () => REG; window.__clipFaces = clipFaces;
+window.__pose = o => { Object.assign(P, o); build(); };   // 検査の道具が姿勢の欄を変えて組み直す（tools/v3jointcheck.mjs）
 
 // ---- グループの「上下のずれ・前後のずれ・大きさ」：そのグループに属する部位の三角形と線に掛ける。内側のグループから ----
 function partsUnder(node) {
@@ -2317,7 +2319,7 @@ const BODY_SECS = [
     ['r', 'pipeX0', '前の付け根の左右', 0, 2, 0.01, 0.45], ['r', 'pipeY0', '前の付け根の下がり', -1, 4, 0.01, 1.9], ['r', 'pipeZ0', '前の付け根の前への出', 0, 2, 0.01, 0.8],
     ['r', 'pipeX1', '後ろの付け根の左右', 0, 2, 0.01, 0.5], ['r', 'pipeY1', '後ろの付け根の下がり', -1, 4, 0.01, 0.5], ['r', 'pipeZ1', '後ろの付け根の後ろへの出', 0, 2, 0.01, 0.9],
     ['r', 'pipeOut', '横への膨らみ', 0, 3, 0.01, 1.6], ['r', 'pipeSag', 'たるみ', -1, 1, 0.01, 0.2], ['r', 'pipeBulge', '節のふくらみ', 1, 1.8, 0.01, 1]]],
-  ['sec-arm', '腕', [...groupRows('arm', 'g_armOn'), ['r', 'armSwing', '試し：前後の振り（°、前へ＋。肩の箱・肩アーマー・上腕が一緒に回る）', -180, 180, 1, 0], ['r', 'armRaise', '試し：横の上げ（°、外へ＋。Ver2 は外へ 28°・内へ 71° まで）', -75, 120, 1, 0],
+  ['sec-arm', '腕', [...groupRows('arm', 'g_armOn'), ...[['R', '右'], ['L', '左']].flatMap(([k, n]) => [['r', 'armSw' + k, '試し：' + n + '腕の前後の振り（°、前へ＋。Ver2 は −39〜212）', -60, 220, 1, 0], ['r', 'armRa' + k, '試し：' + n + '腕の横の上げ（°、外へ＋。Ver2 は内へ 71°・外へ 28° まで）', -75, 120, 1, 0], ['r', 'armTw' + k, '試し：' + n + '腕のひねり（°、縦の軸、上から見て左回り＋）', -90, 90, 1, 0]]),
     ['toggle', 'armRaiseArmor', '横の上げで肩アーマーも上がる（Ver2 と同じ。切ると上腕だけ）', true]]],
   ['sec-shj', '肩の関節', [['c', 'shj'], ['on', 'shjOn', false], ['r', 'shX', '肩の位置：体の中心から外へ', 0, 4, 0.01, 1.55], ['r', 'shY', '肩の位置：下がり', -1, 4, 0.01, 0.55], ['r', 'shZ', '肩の位置：前後', -2, 2, 0.01, 0],
     ['r', 'shPv', '回る中心のずれ（肩の箱の体の側の面から外へ）', -1, 1, 0.005, 0.02], ['r', 'shjBall', '回る中心の球の半径（0 で無し）', 0, 1, 0.005, 0.2],
