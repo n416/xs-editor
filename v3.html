@@ -1673,15 +1673,26 @@ function body() {
     }
     // 蝶番の軸：板の厚みの真ん中、上の端から「軸の下がり」の所を、板に沿う向き v に通る。試しの「開き」の角だけ、板を軸のまわりに回して描く（下の端が外へ）
     const hg = hinge[pre] && P[pre + 'Hinge'] ? hinge[pre] : null;
-    let axisA = null, rotPl = pl => pl;
+    let axisA = null, rotPl = pl => pl, yawPl = pl => pl, yawPt = q => q;
     if (hg) {
       const tdown = new V().crossVectors(nO, v); if (tdown.y > 0) tdown.negate(); tdown.normalize();
       axisA = pOut.clone().addScaledVector(nO, -T / 2).addScaledVector(tdown, P[pre + 'HD'] / Math.max(0.2, -tdown.y));
-      const th0 = (P[pre + 'Open'] || 0) * D2R;
-      if (th0) {
-        const kd = new V().crossVectors(v, DOWN), th = kd.dot(u) >= 0 ? th0 : -th0, q = new THREE.Quaternion().setFromAxisAngle(v, th);
-        rotPl = pl => { const n = pl.n.clone().applyQuaternion(q), p0 = pl.n.clone().multiplyScalar(pl.d).sub(axisA).applyQuaternion(q).add(axisA); return { ...pl, n, d: n.dot(p0) }; };
+      // 横へ向ける（依頼主：「前後は横に向けて傾けられるようにしたい」）：板の内側の端（ピンの所）を通る縦の軸のまわりに回す。前の板は外の端が後ろへ、後ろの板は外の端が前へ
+      const yw = (P[pre + 'Yaw'] || 0) * D2R;
+      if (yw) {
+        // 軸は内側の端の、体の側（裏の面）の角を通る：外の端を横へ回しても、どの角も真ん中の塊の方へ入らない
+        const Q = axisA.clone().addScaledVector(v, v.dot(c) - sg * w - v.dot(axisA)).addScaledVector(nO, -T / 2), qy = new THREE.Quaternion().setFromAxisAngle(UP, sg * yw);
+        yawPt = q => q.clone().sub(Q).applyQuaternion(qy).add(Q);
+        yawPl = pl => { const n = pl.n.clone().applyQuaternion(qy), p0 = yawPt(pl.n.clone().multiplyScalar(pl.d)); return { ...pl, n, d: n.dot(p0) }; };
+        // 内側の端の切り口は、閉じた姿勢で真ん中の塊の側面と平行のまま（回した後の向きで決める）：前の角が塊から離れてくさびのすき間が開き、ピンが見えないように
+        const qi = qy.clone().invert(), nW = v.clone().multiplyScalar(-sg), sIn = nW.dot(c.clone().addScaledVector(v, -sg * w));
+        const nL = nW.clone().applyQuaternion(qi), pL = Q.clone().add(nW.clone().multiplyScalar(sIn - nW.dot(Q)).applyQuaternion(qi));
+        const k = planes.indexOf(ends[-sg]), endIn = { n: nL, d: nL.dot(pL) };
+        if (k >= 0) { planes[k] = endIn; ends[-sg] = endIn; }
       }
+      const th0 = (P[pre + 'Open'] || 0) * D2R;
+      const q = th0 ? new THREE.Quaternion().setFromAxisAngle(v, new V().crossVectors(v, DOWN).dot(u) >= 0 ? th0 : -th0) : null;
+      rotPl = pl => { let r = pl; if (q) { const n = r.n.clone().applyQuaternion(q), p0 = r.n.clone().multiplyScalar(r.d).sub(axisA).applyQuaternion(q).add(axisA); r = { ...r, n, d: n.dot(p0) }; } return yawPl(r); };
     }
     // 曲げた面は 1 面ずつ別の塊にし、隣の面との境は 2 つの面の間の向きの面（外の面どうしと裏の面どうしの交わりを両方通る）で切り分ける。
     // まとめて 1 つの塊にすると、大きく曲げた時に真ん中の面が隣の面の裏の面で削られて消える
@@ -1710,7 +1721,7 @@ function body() {
         }
         crystal(M, f2.map(rotPl), col, cut.length ? cut.map(cc => cc.map(rotPl)) : undefined);
         // 骨盤の塊の外形のために、板の上の面の角の点を集める（閉じた姿勢で）
-        if (hangRim && r === 0) for (const fc of clipFaces(f2)) for (const q of fc.pts) if (Math.abs(q.y - top) < 1e-5) hangRim.push([q.x, q.z]);
+        if (hangRim && r === 0) for (const fc of clipFaces(f2)) for (const q0 of fc.pts) if (Math.abs(q0.y - top) < 1e-5) { const q = yawPt(q0); hangRim.push([q.x, q.z]); }
       }
     });
     // 板の外の塊：真ん中の面の上に載る四角い塊（白い機体の横の板の厚い塊、前の板の四角いパネル）。板の幅の真ん中から「左右のずれ」、上の端から「上端の下がり」
@@ -1731,7 +1742,7 @@ function body() {
       const t1 = new V().crossVectors(v, UP).normalize(), t2 = new V().crossVectors(v, t1).normalize(), cc = pA.clone().add(pB).multiplyScalar(0.5);
       const pl = [{ n: v.clone(), d: Math.max(v.dot(pA), v.dot(pB)) }, { n: v.clone().negate(), d: -Math.min(v.dot(pA), v.dot(pB)) }];
       for (let k = 0; k < n8; k++) { const a8 = (k + 0.5) * 2 * PI / n8, nk = t1.clone().multiplyScalar(Math.cos(a8)).addScaledVector(t2, Math.sin(a8)); pl.push({ n: nk, d: nk.dot(cc) + r }); }
-      crystal(M, pl, COL.dark);
+      crystal(M, pl.map(yawPl), COL.dark);
       setPart(part);
     }
   };
@@ -2049,7 +2060,8 @@ const hangRows = (pre, d, split) => [['c', pre], ['on', pre + 'On', d.on],
   ['r', pre + 'Slant', '下の縁の傾き（内側の端ほど下がる長さ）', -1, 1, 0.01, d.Slant ?? 0],
   ...(d.hinge ? [['toggle', pre + 'Hinge', '蝶番（真ん中の板の脇のピンのまわりに回る）', true], ['r', pre + 'HD', '蝶番：軸の上の端からの下がり', 0, 0.5, 0.005, d.HD ?? 0.06],
     ['r', pre + 'PinR', '蝶番：ピンの太さ（半径）', 0.01, 0.2, 0.005, d.PinR ?? 0.045], ['r', pre + 'PinIn', '蝶番：ピンが板に入る長さ', 0.01, 0.6, 0.01, d.PinIn ?? 0.15],
-    ['r', pre + 'PinOut', '蝶番：ピンが真ん中の板に入る長さ（すき間を含む）', 0.01, 0.6, 0.01, d.PinOut ?? 0.12], ['r', pre + 'Open', '試し：開き（°、押されて開いた姿勢で描く）', 0, 80, 1, 0]] : []),
+    ['r', pre + 'PinOut', '蝶番：ピンが真ん中の板に入る長さ（すき間を含む）', 0.01, 0.6, 0.01, d.PinOut ?? 0.12],
+    ['r', pre + 'Yaw', '横へ向ける（°、内側の端を軸に外の端を横の板の方へ）', -60, 60, 0.5, d.Yaw ?? 0], ['r', pre + 'Open', '試し：開き（°、押されて開いた姿勢で描く）', 0, 80, 1, 0]] : []),
   ['r', pre + 'BendH', '上下の折れ：位置（上の端から、0 で無し）', 0, 3, 0.01, d.BendH ?? 0], ['r', pre + 'BendA', '上下の折れ：下の段の起き（°、上の段より立てる）', -60, 60, 0.5, d.BendA ?? 0],
   ['r', pre + 'BoxD', '外の塊：出っ張り（0 で無し）', 0, 0.6, 0.005, d.BoxD ?? 0], ['r', pre + 'BoxW', '外の塊：幅', 0.02, 3, 0.01, d.BoxW ?? 0.4], ['r', pre + 'BoxH', '外の塊：高さ', 0.02, 3, 0.01, d.BoxH ?? 0.4],
   ['r', pre + 'BoxY', '外の塊：上端の下がり（板の上の端から）', 0, 3, 0.01, d.BoxY ?? 0.1], ['r', pre + 'BoxX', '外の塊：左右のずれ（内側へ）', -1.5, 1.5, 0.01, d.BoxX ?? 0], ['r', pre + 'BoxBev', '外の塊：縁の落とし', 0, 0.3, 0.005, d.BoxBev ?? 0.02],
@@ -2377,7 +2389,7 @@ window.__hl = { probeTris, diffTris, hlMutFor, show: showHL, clear: clearHL, mes
 const BASES = {};
 // 白い機体：胴体（柱・コクピットカバー・腹の上と下）と腰。腰は股の塊（前の上の塊・背のくぼみ）の両脇から前・後ろの左右の板が蝶番で下がり、横の板に厚い塊、前の板に四角いパネル。
 // 寸法は見本（白い機体の正面・横・後ろ）から：腰の横幅は胸の幅とほぼ同じ（見本 412 px と 413 px）、横から見た腰の奥行は胴体（背中の箱を除く）の約 1.26 倍、高さは腹の下の端で合わせた（依頼主：「その読みで白い機体の腰を作って」）
-const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.41, "skKY": 2.27, "skKH": 1.21, "skKZF": 0.76, "skKZB": 1.0, "skKFE": 0, "skKBE": 0, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.06, "skKTopW": 0.45, "skKTopH": 0.54, "skKSlotD": 0.03, "skKSlotW": 0.18, "skKSlotH": 0.5, "skKSlotY": 0.26, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.48, "skFW": 1.81, "skFH": 0.88, "skFT": 0.2, "skFY": 2.3, "skFR": 0.78, "skFAz": 0, "skFFlare": 29, "skFTaper": -6, "skFBotE": 85, "skFSlant": 0.33, "skFBevel": 0.03, "skFHinge": true, "skFHD": 0.06, "skFPinR": 0.045, "skFPinIn": 0.15, "skFPinOut": 0.08, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.44, "skFBoxH": 0.4, "skFBoxY": 0.08, "skFBoxX": 0.05, "skFBoxBev": 0.03, "skSOn": true, "skSW": 1.05, "skSH": 0.78, "skST": 0.1, "skSY": 2.27, "skSR": 0.92, "skSZ": -0.2, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.49, "skSBoxH": 0.57, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.48, "skBW": 1.62, "skBH": 0.87, "skBT": 0.2, "skBY": 2.3, "skBR": 0.84, "skBFlare": 30, "skBTaper": -6, "skBBotE": 85, "skBSlant": 0.29, "skBBevel": 0.03, "skBHinge": true, "skBHD": 0.06, "skBPinR": 0.045, "skBPinIn": 0.15, "skBPinOut": 0.08, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0.5, "skFBendA": 29, "skBBendH": 0.5, "skBBendA": 28} }];
+const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.41, "skKY": 2.27, "skKH": 1.21, "skKZF": 0.76, "skKZB": 1.0, "skKFE": 0, "skKBE": 0, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.06, "skKTopW": 0.43, "skKTopH": 0.54, "skKSlotD": 0.03, "skKSlotW": 0.18, "skKSlotH": 0.5, "skKSlotY": 0.26, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.43, "skFW": 1.899699388058039, "skFH": 0.88, "skFT": 0.2, "skFY": 2.3, "skFR": 0.78, "skFAz": 0, "skFFlare": 29, "skFTaper": -6, "skFBotE": 85, "skFSlant": 0.33, "skFBevel": 0.03, "skFHinge": true, "skFHD": 0.06, "skFPinR": 0.045, "skFPinIn": 0.15, "skFPinOut": 0.08, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.44, "skFBoxH": 0.4, "skFBoxY": 0.08, "skFBoxX": 0.08442484701450977, "skFBoxBev": 0.03, "skSOn": true, "skSW": 1.05, "skSH": 0.78, "skST": 0.1, "skSY": 2.27, "skSR": 0.92, "skSZ": -0.2, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.49, "skSBoxH": 0.57, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.43, "skBW": 1.5812034326712243, "skBH": 0.87, "skBT": 0.2, "skBY": 2.3, "skBR": 0.84, "skBFlare": 30, "skBTaper": -6, "skBBotE": 85, "skBSlant": 0.29, "skBBevel": 0.03, "skBHinge": true, "skBHD": 0.06, "skBPinR": 0.045, "skBPinIn": 0.15, "skBPinOut": 0.08, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0.5, "skFBendA": 29, "skBBendH": 0.5, "skBBendA": 28, "skFYaw": 25.0, "skBYaw": 8.0} }];
 // [SAMPLES-END]
 function sampleValues(sm) { const b = sm.base ? BASES[sm.base] || {} : {}; return { ...b, ...(sm.v || {}) }; }
 function openSample(i) {
