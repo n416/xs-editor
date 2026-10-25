@@ -1630,42 +1630,38 @@ function body() {
     // 折れ：「曲げ」は体の軸のまわりの円に接する 3 面（折れ目の位置は角で決まる）。「内側の折れ」「外側の折れ」は、真ん中の面の内側の端の側・外側の端の側の
     // 折れ目の位置（真ん中から）と曲げの角を別々に決める（見本の横の板：前の折れ目で約 45°、後ろで約 57°、真ん中の面は短い）。内側は -sg の向き（割った板では体の真ん中、横の板では前）
     const fI = P[pre + 'FoldI'] || 0, fO = P[pre + 'FoldO'] || 0, pOut = pOutAt(0);
-    let outs, rimPts;
+    let outs;
     const foldEnd = {};   // 折れた端：その面の向き・折れ目の点・折れ目の位置
     if (fI > 0 || fO > 0) {
       const mid = plane(az, f, pOut), lst = [[0, mid, pOut]];
       if (fI > 0) { const at = P[pre + 'FoldIAt'], pf = pOut.clone().addScaledVector(v, -sg * at); lst.push([-sg, plane(az - sg * fI, f, pf), pf]); foldEnd[-sg] = { azE: az - sg * fI, pf, at }; }
       if (fO > 0) { const at = P[pre + 'FoldOAt'], pf = pOut.clone().addScaledVector(v, sg * at); lst.push([sg, plane(az + sg * fO, f, pf), pf]); foldEnd[sg] = { azE: az + sg * fO, pf, at }; }
       lst.sort((a, b) => a[0] - b[0]);
-      outs = lst.map(x => x[1]); rimPts = lst.map(x => x[2]);
+      outs = lst.map(x => x[1]);
     } else {
       const ds = fold > 0 ? [-fold, 0, fold] : [0];
-      outs = ds.map(d => plane(az + d, f, pOutAt(d))); rimPts = ds.map(d => pOutAt(d));
+      outs = ds.map(d => plane(az + d, f, pOutAt(d)));
     }
     const ins = outs.map(o => ({ n: o.n.clone().negate(), d: -(o.d - T) }));
     const nO = outs[(outs.length - 1) >> 1].n;
-    // 付け根の帯の外形：板の上の端の外の面を、上の端を通る鉛直の面にした物
-    if (hangRim) outs.forEach((o, i) => { const nh = new V(o.n.x, 0, o.n.z).normalize(); hangRim.push({ n: nh, d: nh.dot(rimPts[i]) }); });
-    const planes = [plane(0, 90, new V(0, top, 0))];
+
+    const planes = [plane(0, 90, new V(0, top, 0))], bots = [], ends = {};
     const bottomPt = c.clone().addScaledVector(u, R).setY(top - H);
-    if (pt > 0) { const th = Math.atan2(pt, w); for (const s2 of [1, -1]) { const n = v.clone().multiplyScalar(s2 * Math.sin(th)).addScaledVector(UP, -Math.cos(th)); planes.push({ n, d: n.dot(bottomPt) }); } }
+    if (pt > 0) { const th = Math.atan2(pt, w); for (const s2 of [1, -1]) { const n = v.clone().multiplyScalar(s2 * Math.sin(th)).addScaledVector(UP, -Math.cos(th)); bots.push({ n, d: n.dot(bottomPt) }); } }
     else {
       // 下の縁の傾き：内側（-sg の向き）の端が外側の端より「傾き」の長さだけ下がる（依頼主の見本：前の左右の板は真ん中ほど低く、後ろの左右の板は合わせて V）
       const nb = plane(az, -P[pre + 'BotE'], bottomPt), sl = P[pre + 'Slant'] || 0;
       if (sl) { nb.n = nb.n.clone().addScaledVector(v, sg * sl / (2 * w) * -nb.n.y).normalize(); nb.d = nb.n.dot(bottomPt); }
-      planes.push(nb);
+      bots.push(nb);
     }
     for (const s2 of [1, -1]) {
       const tap = -(s2 === -sg ? tin : tp), fe = foldEnd[s2];
-      if (!fe) { planes.push(plane(az + s2 * 90, tap, c.clone().addScaledVector(v, s2 * w).setY(top))); continue; }
+      if (!fe) { ends[s2] = plane(az + s2 * 90, tap, c.clone().addScaledVector(v, s2 * w).setY(top)); continue; }
       // 折れた端：折れた面に直角な切り口。折れ目から面に沿って（幅の半分 − 折れ目の位置）の所
       const vE = new V(Math.cos(fe.azE * D2R), 0, -Math.sin(fe.azE * D2R));
-      planes.push(plane(fe.azE + s2 * 90, tap, fe.pf.clone().addScaledVector(vE, s2 * Math.max(0.01, w - fe.at))));
+      ends[s2] = plane(fe.azE + s2 * 90, tap, fe.pf.clone().addScaledVector(vE, s2 * Math.max(0.01, w - fe.at)));
     }
-    if (bev > 0) {
-      for (const s2 of [1, -1]) { const n = nO.clone().add(v.clone().multiplyScalar(s2)).normalize(); planes.push({ n, d: n.dot(pOut.clone().addScaledVector(v, s2 * (w - bev))) }); }
-      const nb = nO.clone().add(DOWN).normalize(); planes.push({ n: nb, d: nb.dot(bottomPt.clone().addScaledVector(UP, bev)) });
-    }
+    planes.push(...bots, ends[1], ends[-1]);
     const cut = [];
     if (P[pre + 'R1D'] > 0) {
       const W1 = P[pre + 'R1W'], H1 = P[pre + 'R1H'], yT = top - P[pre + 'R1Y'], x = sg * P[pre + 'R1X'];
@@ -1679,7 +1675,14 @@ function body() {
         const n = outs[j].n.clone().sub(outs[i].n), L = n.length();
         f2.push({ n: n.multiplyScalar(1 / L), d: (outs[j].d - outs[i].d) / L });
       }
+      // 縁の面取り：外の面と下の縁（傾けた縁・尖りもそのまま）の間、外の面と端の切り口（折れた端はその面の切り口）の間を平らな面 1 枚で落とす
+      if (bev > 0) {
+        for (const b of bots) { const e = bevelEdge(outs[i], b, bev, bev); if (e) f2.push(e); }
+        for (const [s2, k] of [[-1, 0], [1, outs.length - 1]]) if (i === k) { const e = bevelEdge(outs[i], ends[s2], bev, bev); if (e) f2.push(e); }
+      }
       crystal(M, f2, col, cut.length ? cut : undefined);
+      // 付け根の帯の外形のために、板の上の面の角の点を集める
+      if (hangRim) for (const fc of clipFaces(f2)) for (const q of fc.pts) if (Math.abs(q.y - top) < 1e-5) hangRim.push([q.x, q.z]);
     }
   };
   const hangSet = (pre, part, az0, splitOk, azKnob) => {
@@ -1701,8 +1704,17 @@ function body() {
     // どの板の上の端も帯の底に付く（依頼主：「スカート部分は、ver2の仕組みでほぼ構わない」）
     if (P.skWOn && rim.length >= 3) {
       setPart(PART.skW);
-      const yT = y0 - P.skWY;
-      crystal(M, [plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yT - P.skWH, 0)), ...rim], colOf('skW'));
+      // 外形は板の上の面の角の点を囲む凸の多角形（板の向きを変えても、板の上の端の外の縁で囲んだ形になる）
+      const pts = rim.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+      const lo = [], hi = [];
+      for (const q of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 1e-9) lo.pop(); lo.push(q); }
+      for (const q of pts.slice().reverse()) { while (hi.length >= 2 && cr(hi[hi.length - 2], hi[hi.length - 1], q) <= 1e-9) hi.pop(); hi.push(q); }
+      const hull = lo.slice(0, -1).concat(hi.slice(0, -1)), yT = y0 - P.skWY, f = [plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, yT - P.skWH, 0))];
+      for (let i = 0; i < hull.length; i++) {
+        const a = hull[i], b = hull[(i + 1) % hull.length], n = new V(b[1] - a[1], 0, -(b[0] - a[0])).normalize();   // x-z の左回りの外向き
+        f.push({ n, d: n.x * a[0] + n.z * a[1] });
+      }
+      crystal(M, f, colOf('skW'));
     }
   }
 }
@@ -2068,11 +2080,11 @@ const BODY_SECS = [
     ['r', 'pipeOut', '横への膨らみ', 0, 3, 0.01, 1.6], ['r', 'pipeSag', 'たるみ', -1, 1, 0.01, 0.2], ['r', 'pipeBulge', '節のふくらみ', 1, 1.8, 0.01, 1]]],
   ['sec-skirt', 'スカート', groupRows('skirt', 'g_skirtOn')],
   ['sec-skW', '付け根の帯', [['c', 'skW'], ['on', 'skWOn', false], ['r', 'skWY', '上端の下がり', -1, 5, 0.01, 1.98], ['r', 'skWH', '高さ', 0.01, 1, 0.01, 0.08]]],
-  ['sec-skC', '前の中央（前掛け）', hangRows('skC', { W: 0.54, H: 1.83, Y: 1.98, R: 0.57, on: false, Flare: 12, Taper: -1 }, false)],
-  ['sec-skF', '前', hangRows('skF', { W: 1.36, H: 1.44, Y: 2.06, R: 0.45, split: true, gap: 0.5, az: [0, 60, 0], Flare: 13, Taper: -9, Slant: 0.23 }, true)],
-  ['sec-skS', '横', hangRows('skS', { W: 1.2, wName: '前後の長さ', H: 1.32, Y: 2.06, R: 0.97, z: true, Z: -0.22, az: [50, 130, 90], Flare: 18, Taper: 0, FoldI: 45, FoldIAt: 0.34, FoldO: 57, FoldOAt: 0.38 }, false)],
-  ['sec-skB', '後ろ', hangRows('skB', { W: 1.24, H: 1.64, Y: 2.06, R: 0.8, split: true, gap: 0, Flare: 13, Taper: -8, Slant: 0.27 }, true)],
-  ['sec-skT', '後ろ腰の板', hangRows('skT', { W: 0.4, H: 0.63, Y: 2.06, R: 0.92, on: false, Flare: 13, Taper: 0 }, false)],
+  ['sec-skC', '前の中央（前掛け）', hangRows('skC', { W: 0.54, H: 1.83, Y: 1.98, R: 0.65, T: 0.18, on: false, Flare: 12, Taper: -1, Bevel: 0.04 }, false)],
+  ['sec-skF', '前', hangRows('skF', { W: 1.36, H: 1.44, Y: 2.06, R: 0.45, split: true, gap: 0.5, az: [0, 60, 25], Flare: 18, Taper: -9, Slant: 0.23, Bevel: 0.04 }, true)],
+  ['sec-skS', '横', hangRows('skS', { W: 1.2, wName: '前後の長さ', H: 1.32, Y: 2.06, R: 0.97, z: true, Z: -0.22, az: [50, 130, 90], Flare: 18, Taper: 0, FoldI: 45, FoldIAt: 0.34, FoldO: 57, FoldOAt: 0.38, Bevel: 0.03 }, false)],
+  ['sec-skB', '後ろ', hangRows('skB', { W: 1.24, H: 1.58, Y: 2.06, R: 0.8, split: true, gap: 0, Flare: 13, Taper: -8, Slant: 0.27, Bevel: 0.04 }, true)],
+  ['sec-skT', '後ろ腰の板', hangRows('skT', { W: 0.4, H: 0.63, Y: 2.06, R: 0.9, T: 0.1, on: false, Flare: 13, Taper: 0, Bevel: 0.03 }, false)],
   ['sec-crotch', '股', slabRows('crotch', { W: 0.8, H: 0.6, D: 1.2, Y: 2.85, TopE: 85, BotE: 70, FrontE: 20, BackE: 20, SideE: -10 }, false)],
   ['sec-x1', '塊 1', [['toggle', 'x1Use', 'この塊を使う', false], ...slabRows('x1', { W: 0.5, H: 0.5, D: 0.6, Y: 0.2, TopE: 85, BotE: 85, FrontE: 5, BackE: 5, SideE: 5 }, false), ['r', 'x1X', '左右の位置', 0, 3, 0.01, 0.9], ['toggle', 'x1Mirror', '左右対称', true]]],
   ['sec-x2', '塊 2', [['toggle', 'x2Use', 'この塊を使う', false], ...slabRows('x2', { W: 0.5, H: 0.5, D: 0.6, Y: 0.2, TopE: 85, BotE: 85, FrontE: 5, BackE: 5, SideE: 5 }, false), ['r', 'x2X', '左右の位置', 0, 3, 0.01, 0.9], ['toggle', 'x2Mirror', '左右対称', true]]],
@@ -2520,7 +2532,7 @@ function flashPart(targetId) {
 // 左右の柱（スプリット柱）・胸の本体・胸の T 字の板・腹。腹は胸の本体の底にそろえて内へ縮めた低い塊（依頼主：「見ての通り殆ど無いんですよ。腹」「T字の胸よりは小さい」「胸より小さい塩梅で戻して」）。
 // 比は見本から：上の端の前は柱の前より約 0.48 奥、背は胸と同じ、高さは柱全体の幅の約 0.15、下の端は上の端の約 0.92 倍の幅。幅は見本の腹の真ん中の面（胸の本体とほぼ同じ幅）に合わせて胸より小さく。白い機体の柱・コクピットカバー・腹の上・腹の下は一覧に残して切る。
 // 依頼主が「なにこのゴミ」と言った胸板・胸の中央・腹・腰の帯の箱積みは出さない
-const START = { headOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: true, mpcOn: true, mppOn: true, g_skirtOn: true, skWOn: true, skCOn: true, skFOn: true, skSOn: true, skBOn: true, skTOn: true, layoutV: 13 };
+const START = { headOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: true, mpcOn: true, mppOn: true, g_skirtOn: true, skWOn: true, skCOn: true, skFOn: true, skSOn: true, skBOn: true, skTOn: true, layoutV: 14 };
 Object.assign(P, START);
 const DEFAULTS = JSON.parse(JSON.stringify(P));
 const KEY = 'crystal-head-knobs';
