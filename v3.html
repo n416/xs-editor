@@ -2012,14 +2012,17 @@ function body() {
   const LEGPTS = { 1: [], [-1]: [] };
   if (P.g_legOn) {
     const rotAbout = (q, c) => pls => pls.map(pl => { const n = pl.n.clone().applyQuaternion(q), p0 = pl.n.clone().multiplyScalar(pl.d).sub(c).applyQuaternion(q).add(c); return { ...pl, n, d: n.dot(p0) }; });
-    const X1 = new V(1, 0, 0), k = P.lgK, kx = P.lgKX;
+    // 大きさは部位ごと：太もも（と股関節・脚の台）は kT・kxT、すね（ひざの節を含む）は k・kxS、足は kF・kxS。どれも縦と前後は同じ倍（関節の軸は横）
+    const X1 = new V(1, 0, 0), k = P.lgK, kT = P.lgKT ?? k, kF = P.lgKF ?? k, kxT = P.lgKXT ?? P.lgKX, kxS = P.lgKX;
     const KEY = { [PART.hpj]: 'hpj', [PART.thg]: 'thg', [PART.knl]: 'knl', [PART.kgd]: 'kgd', [PART.shn]: 'shn', [PART.ftt]: 'ftt' };
     const colFor = (part, c) => (c === 'm' ? colOf(KEY[part]) : c === 'a' ? (COL.accent || colOf(KEY[part])) : COL.dark);
     for (const sx of [-1, 1]) {
-      const sd = sx < 0 ? 'R' : 'L', H = new V(sx * P.lgX, y0 - P.lgY, P.lgZ), K = H.clone().add(new V(0, -0.46 * k, 0));
+      const sd = sx < 0 ? 'R' : 'L', H = new V(sx * P.lgX, y0 - P.lgY, P.lgZ), K = H.clone().add(new V(0, -0.46 * kT, 0));
       const P1 = K.clone().add(new V(0, 0.04 * k, 0)), P2 = K.clone().add(new V(0, -0.16 * k, 0)), A = K.clone().add(new V(0, -0.87 * k, 0));
       // Ver2 の面 [a, b, c, d]（原点 K、+x が外）→ V3 の面
-      const place = (pl, org) => pl.map(([a, b, c, d]) => { const n = new V(sx * a / kx, b / k, c / k), L = n.length(), dd = (d + n.dot(org)) / L; return { n: n.multiplyScalar(1 / L), d: dd }; });
+      // Ver2 の点 q（原点 K）→ V3 の点 p = pv + S (q − qv)（pv は V3 の、qv は Ver2 の、拡大の中心）
+      const place = (pl, pv, qv, sxk, sk) => pl.map(([a, b, c, d]) => { const n = new V(sx * a / sxk, b / sk, c / sk), L = n.length(), dd = (d - (a * qv[0] + b * qv[1] + c * qv[2]) + n.dot(pv)) / L; return { n: n.multiplyScalar(1 / L), d: dd }; });
+      const SC = { hips: [H, [0, 0.46, 0], kxT, kT], leg: [K, [0, 0, 0], kxT, kT], knee: [K, [0, 0, 0], kxS, k], shin: [K, [0, 0, 0], kxS, k], foot: [A, [0, -0.87, 0], kxS, kF] };
       const sw = (P['legSw' + sd] || 0) * D2R, ra = (P['legRa' + sd] || 0) * D2R, tw = (P['legTw' + sd] || 0) * D2R, th = Math.max(0, (P['knee' + sd] || 0) * D2R), first = (P.kFirst ?? 82) * D2R;
       const qLeg = new THREE.Quaternion().setFromEuler(new THREE.Euler(-sw, tw, sx * ra, 'YXZ'));
       const XT = rotAbout(qLeg, H);
@@ -2034,7 +2037,7 @@ function body() {
         const def = V2_LEGS[id]; if (!def) return;
         for (const pc of def.pc) {
           const part = partFor(pc.b); setPart(part);
-          const w = (XB[pc.b] || XT)(place(pc.p, org)); crystal(M, w, colFor(part, pc.c));
+          const [pv, qv, sxk, sk] = org === H ? [H, [0, 0, 0], kxT, kT] : SC[pc.b] || SC.leg, w =   /* 股関節と脚の台の部品は原点が股関節の中心 */ (XB[pc.b] || XT)(place(pc.p, pv, qv, sxk, sk)); crystal(M, w, colFor(part, pc.c));
           if (keep && pc.b !== 'foot' && pc.b !== 'hips') for (const fc of clipFaces(w)) for (const q of fc.pts) LEGPTS[sx].push(q);
         }
       };
@@ -2043,6 +2046,16 @@ function body() {
       if (P.kgdOn && P.lgKnKind !== 'none') draw(P.lgKnKind, K, () => PART.kgd, true);
       if (P.shnOn) draw(P.lgShKind, K, b => PB[b] || PART.shn, true);
       if (P.fttOn) draw(P.lgFtKind, K, () => PART.ftt, false);
+    }
+    // 股の芯（Ver2 の腰 parts/lower/mass.js の「股の芯」）：腰（骨盤の塊）の下の面から下がり、左右の股関節の内への軸が刺さる暗い塊。
+    // 幅は太ももの内側より内（Ver2 の 0.085 ＝ 股関節の中心から 0.09 内）、前後は Ver2 の 0.15、下の端は股関節の中心から Ver2 の 0.15 下で丸い
+    if (P.hpjOn) {
+      setPart(PART.hpj);
+      const Hy = y0 - P.lgY, hw = Math.max(0.05, P.lgX - 0.09 * kxT), rz = 0.15 * kT, rb = 0.15 * kT, top = y0 - P.skWY - P.skWH + 0.02, zc = P.lgZ;
+      const c = new V(0, Hy, zc), f = [{ n: UP.clone(), d: top }];
+      for (let i = 0; i < 12; i++) { const t = (i + 0.5) * 2 * PI / 12, n = new V(Math.cos(t), 0, Math.sin(t)); f.push({ n, d: n.dot(c) + Math.hypot(hw * n.x, rz * n.z) }); }
+      for (const bD of [30, 55, 80]) for (let i = 0; i < 12; i++) { const t = i * 2 * PI / 12, be = bD * D2R, n = new V(Math.cos(t) * Math.sin(be), -Math.cos(be), Math.sin(t) * Math.sin(be)); f.push({ n, d: n.dot(c) + Math.hypot(hw * n.x, rb * n.y, rz * n.z) }); }
+      crystal(M, f, COL.dark);
     }
   }
   // 腹の関節（Ver2 の「腰の関節」：腰の骨の縦の柱。上半身はこの中心のまわりに回る。腹の中に入って外からは見えない）
@@ -2281,6 +2294,194 @@ const key = new THREE.DirectionalLight(0xffffff, 1.7); key.position.set(2, 3, 2.
 const fillL = new THREE.DirectionalLight(0x9fb4d8, 0.45); fillL.position.set(-2.5, 0.5, -1.5); scene.add(fillL);
 const backL = new THREE.DirectionalLight(0xffffff, 0.9); backL.position.set(0.8, 1.5, -3); scene.add(backL);
 const matMetal = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.35, roughness: 0.5, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+// ---- テクスチャ（依頼主：「あ、あとテクスチャわすれないようにね」）：ゲームの装甲のテクスチャ（client/src/mechtex.ts をそのまま移した物：パネルの線・ボルト・ハッチ・
+// 排気口・注意書き・塗装のはげ・汚れ）を、ゲーム（client/src/xsskin.ts skinArmour）と同じく三方向から貼る。部品は自分の色のまま、テクスチャは暗くするだけ。
+// 1 枚の大きさはゲームの 6 m（TILE_M）、V3 の 1 の長さをゲームの「テクスチャの尺度」m として。姿勢を変えると、この画面では線が部品の上を動く（ゲームは骨を動かす前の形に貼る）
+const MECH_N = 1024;
+const TILE_M = 6; // metres per texture tile
+
+let cached = null;
+
+function mechRng(seed) {
+  return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+}
+
+function mechTextures() {
+  if (cached) return cached;
+  const r = mechRng(7);
+  const mk = () => { const c = document.createElement("canvas"); c.width = c.height = MECH_N; return c; };
+  const hC = mk(), aC = mk(), rC = mk();
+  const h = hC.getContext("2d"), a = aC.getContext("2d"), ro = rC.getContext("2d");
+  h.fillStyle = "#808080"; h.fillRect(0, 0, MECH_N, MECH_N);
+  a.fillStyle = "#f4f4f2"; a.fillRect(0, 0, MECH_N, MECH_N);
+  ro.fillStyle = "#d8d8d8"; ro.fillRect(0, 0, MECH_N, MECH_N);
+
+  // large, soft colour and roughness variation
+  for (let i = 0; i < 260; i++) {
+    const x = r() * MECH_N, y = r() * MECH_N, rad = 20 + r() * 120;
+    const g = a.createRadialGradient(x, y, 0, x, y, rad);
+    const dark = r() < 0.7;
+    g.addColorStop(0, dark ? `rgba(60,55,45,${0.02 + r() * 0.04})` : `rgba(255,255,255,${0.03 + r() * 0.04})`);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    a.fillStyle = g; a.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    const gr = ro.createRadialGradient(x, y, 0, x, y, rad);
+    const v = 170 + Math.floor(r() * 85);
+    gr.addColorStop(0, `rgba(${v},${v},${v},0.35)`); gr.addColorStop(1, `rgba(${v},${v},${v},0)`);
+    ro.fillStyle = gr; ro.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+
+  // panel layout: recursive split of the tile; lines on the tile border are drawn on both sides so it tiles
+  const rects = [];
+  const split = (x, y, w, hh, d) => {
+    if (d > 3 || (w < 340 && hh < 340) || (d > 1 && r() < 0.35)) { rects.push([x, y, w, hh]); return; }
+    if (w > hh ? r() < 0.8 : r() < 0.2) { const s = Math.round(w * (0.3 + r() * 0.4)); split(x, y, s, hh, d + 1); split(x + s, y, w - s, hh, d + 1); }
+    else { const s = Math.round(hh * (0.3 + r() * 0.4)); split(x, y, w, s, d + 1); split(x, y + s, w, hh - s, d + 1); }
+  };
+  split(0, 0, MECH_N, MECH_N, 0);
+  const groove = (x, y, w, hh, width) => {
+    h.strokeStyle = "#4a4a4a"; h.lineWidth = width; h.strokeRect(x, y, w, hh);
+    a.strokeStyle = "rgba(0,0,0,0.16)"; a.lineWidth = width + 1; a.strokeRect(x, y, w, hh);
+    ro.strokeStyle = "#f0f0f0"; ro.lineWidth = width; ro.strokeRect(x, y, w, hh);
+  };
+  for (const [x, y, w, hh] of rects) {
+    groove(x, y, w, hh, 2.5);
+    // a thin strip along one edge
+    if (r() < 0.45) {
+      const e = Math.floor(r() * 4), t = 14 + r() * 18;
+      if (e === 0) groove(x, y, w, t, 1.5); else if (e === 1) groove(x, y + hh - t, w, t, 1.5);
+      else if (e === 2) groove(x, y, t, hh, 1.5); else groove(x + w - t, y, t, hh, 1.5);
+    }
+    // slightly raised or sunk plates
+    h.fillStyle = r() < 0.5 ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)";
+    h.fillRect(x + 3, y + 3, w - 6, hh - 6);
+    // bolts along one or two edges
+    if (r() < 0.6) {
+      const along = r() < 0.5, n = Math.floor((along ? w : hh) / 28);
+      for (let i = 1; i < n; i++) {
+        const bx = along ? x + i * 28 : x + 12, by = along ? y + 12 : y + i * 28;
+        h.fillStyle = "#d8d8d8"; h.beginPath(); h.arc(bx, by, 3.5, 0, 7); h.fill();
+        a.fillStyle = "rgba(0,0,0,0.22)"; a.beginPath(); a.arc(bx, by, 3, 0, 7); a.fill();
+      }
+    }
+    // hatch with handle
+    if (w > 180 && hh > 140 && r() < 0.18) {
+      const hw = 70 + r() * 70, hh2 = 50 + r() * 60, hx = x + 20 + r() * (w - hw - 40), hy = y + 20 + r() * (hh - hh2 - 40);
+      groove(hx, hy, hw, hh2, 2);
+      h.fillStyle = "#b0b0b0"; h.fillRect(hx + hw / 2 - 14, hy + hh2 / 2 - 3, 28, 6);
+    }
+    // vent slats
+    if (w > 140 && hh > 100 && r() < 0.15) {
+      const vx = x + 20 + r() * (w - 120), vy = y + 20 + r() * (hh - 80);
+      for (let i = 0; i < 6; i++) { h.fillStyle = "#484848"; h.fillRect(vx, vy + i * 10, 90, 5); a.fillStyle = "rgba(0,0,0,0.3)"; a.fillRect(vx, vy + i * 10, 90, 5); }
+    }
+  }
+  // tile border (tiles seamlessly because the next tile draws the other half)
+  groove(0, 0, MECH_N, MECH_N, 5);
+
+  // caution markings, stencil numbers, hazard stripes
+  const words = ["CAUTION", "NO STEP", "DANGER", "RESCUE", "EXHAUST", "LIFT", "↑ FWD", "HANDHOLD", "KEEP CLEAR"];
+  a.textBaseline = "top";
+  for (let i = 0; i < 8; i++) {
+    const [x, y, w, hh] = rects[Math.floor(r() * rects.length)];
+    const tx = x + 16 + r() * Math.max(1, w - 160), ty = y + 16 + r() * Math.max(1, hh - 60);
+    if (r() < 0.2) {
+      a.font = `bold ${22 + Math.floor(r() * 12)}px monospace`;
+      a.fillStyle = "rgba(40,40,40,0.4)";
+      a.fillText(String(Math.floor(r() * 90) + 10).padStart(2, "0"), tx, ty);
+    } else {
+      a.font = `bold ${11 + Math.floor(r() * 5)}px sans-serif`;
+      a.fillStyle = r() < 0.5 ? "rgba(150,40,30,0.55)" : "rgba(40,40,40,0.55)";
+      a.fillText(words[Math.floor(r() * words.length)], tx, ty);
+    }
+  }
+  for (let i = 0; i < 3; i++) {
+    const x = r() * (MECH_N - 120), y = r() * (MECH_N - 30);
+    a.save(); a.beginPath(); a.rect(x, y, 110, 18); a.clip();
+    a.fillStyle = "rgba(190,160,70,0.55)"; a.fillRect(x, y, 110, 18);
+    a.fillStyle = "rgba(40,38,34,0.6)";
+    for (let s = -20; s < 130; s += 16) { a.beginPath(); a.moveTo(x + s, y + 18); a.lineTo(x + s + 8, y + 18); a.lineTo(x + s + 26, y); a.lineTo(x + s + 18, y); a.fill(); }
+    a.restore();
+  }
+
+  // paint chips and scratches (bare metal: darker, smoother)
+  for (let i = 0; i < 380; i++) {
+    const [x, y, w, hh] = rects[Math.floor(r() * rects.length)];
+    const edge = Math.floor(r() * 4);
+    const px = edge === 0 ? x + r() * w : edge === 1 ? x + w - r() * 10 : edge === 2 ? x + r() * w : x + r() * 10;
+    const py = edge === 0 ? y + r() * 10 : edge === 1 ? y + r() * hh : edge === 2 ? y + hh - r() * 10 : y + r() * hh;
+    const s = 1 + r() * 4;
+    a.fillStyle = `rgba(120,118,112,${0.2 + r() * 0.3})`; a.beginPath(); a.ellipse(px, py, s, s * (0.5 + r()), r() * 3, 0, 7); a.fill();
+    ro.fillStyle = "rgba(120,120,120,0.8)"; ro.beginPath(); ro.ellipse(px, py, s, s, 0, 0, 7); ro.fill();
+  }
+  for (let i = 0; i < 120; i++) {
+    const x = r() * MECH_N, y = r() * MECH_N, l = 10 + r() * 50, t = r() * 3;
+    a.strokeStyle = `rgba(210,210,205,${0.15 + r() * 0.2})`; a.lineWidth = 1;
+    a.beginPath(); a.moveTo(x, y); a.lineTo(x + Math.cos(t) * l, y + Math.sin(t) * l); a.stroke();
+    ro.strokeStyle = "rgba(140,140,140,0.6)"; ro.beginPath(); ro.moveTo(x, y); ro.lineTo(x + Math.cos(t) * l, y + Math.sin(t) * l); ro.stroke();
+  }
+  // rain streaks / grime running down
+  for (let i = 0; i < 160; i++) {
+    const x = r() * MECH_N, y = r() * MECH_N, l = 30 + r() * 140;
+    const g = a.createLinearGradient(x, y, x, y + l);
+    g.addColorStop(0, `rgba(60,52,40,${0.05 + r() * 0.06})`); g.addColorStop(1, "rgba(60,52,40,0)");
+    a.fillStyle = g; a.fillRect(x, y, 1.5 + r() * 3, l);
+  }
+
+  // height -> tangent-space normal map
+  const hd = h.getImageData(0, 0, MECH_N, MECH_N).data;
+  const nC = mk(), n = nC.getContext("2d"), img = n.createImageData(MECH_N, MECH_N);
+  const H = (x, y) => hd[(((y + MECH_N) % MECH_N) * MECH_N + ((x + MECH_N) % MECH_N)) * 4] / 255;
+  const k = 2.2;
+  for (let y = 0; y < MECH_N; y++) for (let x = 0; x < MECH_N; x++) {
+    const dx = (H(x + 1, y) - H(x - 1, y)) * k, dy = (H(x, y + 1) - H(x, y - 1)) * k;
+    const len = Math.hypot(dx, dy, 1), i = (y * MECH_N + x) * 4;
+    img.data[i] = (-dx / len * 0.5 + 0.5) * 255;
+    img.data[i + 1] = (dy / len * 0.5 + 0.5) * 255;
+    img.data[i + 2] = (1 / len * 0.5 + 0.5) * 255;
+    img.data[i + 3] = 255;
+  }
+  n.putImageData(img, 0, 0);
+
+  const tex = (c, srgb) => {
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  cached = { map: tex(aC, true), normalMap: tex(nC, false), roughnessMap: tex(rC, false) };
+  return cached;
+}
+
+const SKIN = { on: { value: 1 }, scale: { value: 0.42 } };
+function skinArmour(m) {
+  const t = mechTextures();
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uSkin = SKIN.scale; sh.uniforms.uSkinOn = SKIN.on; sh.uniforms.uSkinMap = { value: t.map }; sh.uniforms.uSkinRough = { value: t.roughnessMap };
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nuniform float uSkin;\nvarying vec3 vSkinP;\nvarying vec3 vSkinN;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSkinP = position * uSkin;\nvSkinN = normal;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", `#include <common>
+uniform sampler2D uSkinMap;
+uniform sampler2D uSkinRough;
+uniform float uSkinOn;
+varying vec3 vSkinP;
+varying vec3 vSkinN;
+vec3 skinOf(sampler2D tex) {
+  vec3 w = pow(abs(normalize(vSkinN)), vec3(6.0));
+  w /= w.x + w.y + w.z;
+  vec3 sg = sign(vSkinN);
+  return texture2D(tex, vec2(-vSkinP.z * sg.x, vSkinP.y)).rgb * w.x + texture2D(tex, vec2(vSkinP.x * sg.y, vSkinP.z)).rgb * w.y + texture2D(tex, vec2(vSkinP.x * sg.z, vSkinP.y)).rgb * w.z;
+}`)
+      .replace("#include <color_fragment>", "#include <color_fragment>\nif (uSkinOn > 0.5) diffuseColor.rgb *= skinOf(uSkinMap);")
+      .replace("#include <roughnessmap_fragment>", "float roughnessFactor = uSkinOn > 0.5 ? clamp(roughness * (0.55 + 0.6 * skinOf(uSkinRough).g), 0.05, 1.0) : roughness;");
+  };
+  m.customProgramCacheKey = () => 'xs-skin';
+  m.needsUpdate = true;
+}
+skinArmour(matMetal);
+
 const matGlow = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false });
 const matLine = new THREE.LineBasicMaterial({ color: 0x0e1013, transparent: true, opacity: 0.55 });
 let group = null;
@@ -2291,6 +2492,7 @@ function build() {
   rnd = rng(P.seed * 7919 + 17); JT = {}; REG = [];
   COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed); grpColors();
   M = new Tris(); G = new Tris();
+  SKIN.on.value = P.texOn === false ? 0 : 1; SKIN.scale.value = (P.texM || 2.5) / 6;
   // 腰のひねり：腹の関節の中心（体の中心、上端からの下がり wsY・前後 wsZ）のまわりに、ゲームの胴の骨と同じ回し方（Euler YXZ）。
   // 腰の骨に付く物（腰・股の塊・スカート・腹の関節の柱）は回らず、ほか（胸・腹・柱・肩と腕・頭・パイプ）は回る（Ver2：腹は上半身の部品、腹の関節の柱は腰の部品）
   {
@@ -2392,7 +2594,7 @@ const WORD = {};   // 言葉の欄：鍵 → { min, max, step, fmt }
 const SLOPE = v => (v <= 25 ? '緩い' : v <= 40 ? 'やや緩い' : v <= 55 ? '中くらい' : v <= 70 ? 'やや急' : '急') + `（${v}°）`;
 const LEAN = v => (v === 0 ? 'まっすぐ' : v <= 15 ? '少し倒す' : v <= 35 ? '倒す' : '大きく倒す') + `（${v}°）`;
 const BODY_SECS = [
-  ['sec-fig', '全身', []],
+  ['sec-fig', '全身', [['toggle', 'texOn', 'テクスチャ（ゲームの装甲の線・ボルト・汚れ）', true], ['r', 'texM', 'テクスチャの尺度（V3 の 1 の長さが何 m か。ゲームの 1 枚は 6 m）', 0.5, 8, 0.05, 2.5]]],
   ['sec-head', '頭', groupRows('head', 'headOn')],
   ['sec-torso', '胴体', groupRows('torso', 'g_torsoOn')],
   ['sec-col1', '柱（胸）', [['c', 'col1'], ['on', 'col1On', false],
@@ -2494,7 +2696,8 @@ const BODY_SECS = [
     ...[['R', '右'], ['L', '左']].flatMap(([k, n]) => [['r', 'legSw' + k, '試し：' + n + '脚の前後の振り（°、前へ＋）', -60, 120, 1, 0], ['r', 'legRa' + k, '試し：' + n + '脚の横の上げ（°、外へ＋）', -30, 60, 1, 0], ['r', 'legTw' + k, '試し：' + n + '脚のひねり（°）', -60, 60, 1, 0], ['r', 'knee' + k, '試し：' + n + 'ひざの曲げ（°、後ろへ。Ver2 は 0〜165）', 0, 170, 1, 0]])]],
   ['sec-hpj', '股関節と脚の台', [['c', 'hpj'], ['on', 'hpjOn', false], ['kinds', 'lgHb', [['none', '無し'], ['hipbase', '脚の台'], ['hipbasebox', '脚の台（箱）']], '脚の台', 'hipbasebox'],
     ['r', 'lgX', '脚の位置：体の中心から外へ（股関節の軸）', 0, 3, 0.01, 0.45], ['r', 'lgY', '脚の位置：股関節の下がり', 0, 8, 0.01, 2.43], ['r', 'lgZ', '脚の位置：前後', -2, 2, 0.01, 0],
-    ['r', 'lgK', '大きさ（縦と前後、Ver2 の脚の倍）', 0.5, 5, 0.01, 2.19], ['r', 'lgKX', '横の大きさ（Ver2 の脚の倍）', 0.5, 5, 0.01, 2.2]]],
+    ['r', 'lgKT', '太ももの大きさ（縦と前後、Ver2 の倍）', 0.5, 5, 0.01, 2.19], ['r', 'lgKXT', '太ももの横の大きさ', 0.5, 5, 0.01, 2.5],
+    ['r', 'lgK', 'すねの大きさ（縦と前後、Ver2 の倍）', 0.5, 5, 0.01, 2.19], ['r', 'lgKX', 'すねと足の横の大きさ', 0.5, 5, 0.01, 3.0], ['r', 'lgKF', '足の大きさ（縦と前後）', 0.5, 5, 0.01, 2.19]]],
   ['sec-thg', '太もも', [['c', 'thg'], ['on', 'thgOn', false], ['kinds', 'lgTh', [['thigh', '太もも（角ばった）'], ['thighround', '太もも（丸い）'], ['thigharmor', '太もも（前の装甲）'], ['thighframe', '太もも（フレームとシリンダー）'], ['thighvent', '太もも（前に排気口）']], '種類', 'thighround']]],
   ['sec-knl', 'ひざの関節', [['c', 'knl'], ['on', 'knlOn', false], ['r', 'kFirst', '下の軸が先に曲がる角（°、Ver2 は 82）', 0, 170, 1, 82]]],
   ['sec-kgd', 'ひざ当て', [['c', 'kgd'], ['on', 'kgdOn', false], ['kinds', 'lgKn', [['none', '無し'], ['knee', 'ひざ当て（縦長）・すねに付く'], ['kneeshield', 'ひざ当て（大きな盾）・すねに付く'], ['kneesmall', 'ひざ当て（小さい）・すねに付く'], ['kneepad', 'ひざ当て（丸みのある暗い板）・すねに付く'], ['kneespike', 'ひざ当て（とがった）・すねに付く'], ['kneeblade', 'ひざ当て（長い板・先が差し色）・すねに付く'], ['kneeaccent', 'ひざ当て（差し色）・すねに付く']], '種類', 'kneeshield']]],
@@ -2786,7 +2989,7 @@ window.__hl = { probeTris, diffTris, hlMutFor, show: showHL, clear: clearHL, mes
 const BASES = {};
 // 白い機体：胴体（柱・コクピットカバー・腹の上と下）と腰。股の塊がいちばん前に出て（前の面は上の段が倒れ出て、折れて下の段が下がる）、背は後ろの板と並び、その両脇から前・後ろの左右の板が蝶番で下がり、横の板に厚い塊、前の板に四角いパネル。
 // 寸法は見本（白い機体の正面・横・後ろ）から：見本の線を胸の幅で倍率を決め、腹の下の端の高さで重ねて、腰の外形が正面・横・後ろで線に乗るように決めた（out/v3/_ov.py）（依頼主：「その読みで白い機体の腰を作って」）
-const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.38, "skKY": 2.27, "skKH": 1.02, "skKZF": 0.62, "skKZB": 0.595, "skKFE": 29, "skKBE": 20, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.03, "skKTopW": 0.398, "skKTopH": 0.45, "skKSlotD": 0.03, "skKSlotW": 0.167, "skKSlotH": 0.45, "skKSlotY": 0.234, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.398, "skFW": 1.675, "skFH": 0.732, "skFT": 0.2, "skFY": 2.3, "skFR": 0.5, "skFAz": 0, "skFFlare": 6, "skFTaper": -2, "skFBotE": 85, "skFSlant": 0.261, "skFBevel": 0.03, "skFHinge": true, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.407, "skFBoxH": 0.45, "skFBoxY": 0.1, "skFBoxX": 0.078, "skFBoxBev": 0.03, "skSOn": true, "skSW": 0.74, "skSH": 0.702, "skST": 0.1, "skSY": 2.27, "skSR": 0.852, "skSZ": -0.27, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.4, "skSBoxH": 0.513, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.398, "skBW": 1.458, "skBH": 0.813, "skBT": 0.2, "skBY": 2.3, "skBR": 0.575, "skBFlare": 20, "skBTaper": 0, "skBBotE": 85, "skBSlant": 0.261, "skBBevel": 0.03, "skBHinge": true, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0, "skFBendA": 0, "skBBendH": 0, "skBBendA": 0, "skFYaw": 15, "skBYaw": 5.0, "skKFold": 0.45, "skKFE2": -3, "skKBFold": 0.45, "skKBE2": 20, "skFHingeR": 0.07, "skBHingeR": 0.07, "skSHingeR": 0.035, "skSHinge": true, "skSOpen": 0, "skSYaw": 0, "col1W": 1.68, "col1H": 0.937, "col1Y": 0.544, "col1D": 1.362, "abuH": 0.383, "ablH": 0.326, "cov1Y": 0.747, "cov1H": 1.438, "cov1WT": 0.605, "cov1WK": 0.571, "cov1WB": 0.47, "cov1Z": 0.957, "cov1D": 0.92, "cov1LowD": 32, "cov1Pt": 0.54, "g_armOn": true, "shjOn": true, "shbOn": true, "shROn": true, "shLOn": true, "uarOn": true, "shLSame": true, "shX": 1.13, "shY": 0.82, "shZ": 0, "shjR": 0.12, "shjN": 8, "shjL": 0.25, "shbW": 0.5, "shbH": 0.55, "shbD": 0.55, "shbCh": 0.04, "uarW": 0.48, "uarD": 0.45, "uarL": 0.67, "uarCh": 0.05, "shRKind": "cu", "shRT": 0.11, "shRUp": 0.11, "shRIn": 0.23, "shRW": 0.8, "shRD": 0.83, "shRCorner": 90, "shRST": 0.14, "shRHF": 0.8, "shRHO": 0.24, "shRFlare": 4, "shRSl": 0.09, "shRSlO": 0, "shRThD": 0.03, "shRThW": 0.5, "shRThH": 0.12, "shRThY": 0.05, "shRBev": 0.07, "shRSTO": 0.06, "shRChIT": 0.08, "shRChOT": 0.08, "shRChIB": 0.08, "shRChOB": 0.07, "shRChOBv": 0.55, "shPv": 0.02, "shjBall": 0.16, "shOpenA": 78, "shOpenU": 0, "shOpenY": 0, "uarLean": 0, "wsjOn": true, "wsY": 1.834, "wsZ": -0.15, "wsjR": 0.3, "wsjH": 0.5, "wsjN": 12, "elbOn": true, "fraOn": true, "elAx": 0.11, "elR": 0.06, "elW": 0.14, "elFirst": 78, "elCovW": 0.41, "elCovD": 0.34, "elCovCh": 0.04, "elCapR": 0.18, "elCapT": 0.04, "fraW": 0.57, "fraD": 0.55, "fraL": 1.13, "fraTaper": 1.05, "fraCh": 0.05, "fraBev": 0.05, "fraCupR": 0.2, "fraCupW": 0.2, "fraRingN": 0, "fraNotchD": 0.06, "fraNotchW": 0.2, "fraNotchH": 0.14, "fraBkH": 0.56, "fraBkW": 0.3, "fraBkT": 0.15, "fraBkUp": 0.5, "fraBkOut": 0, "fraBkCh": 0.12, "fraWrW": 0.6, "fraWrH": 0.07, "elCovUp": 0.13, "elCovDn": 0.13, "uarChF": 0, "elCovIn": 0.23, "hndOn": true, "hndK": 3.5, "elIn": -0.13, "fraUp": -0.16, "fraTopR": 0, "uarBotR": 0, "elCovWIn": 0.3, "g_legOn": true, "hpjOn": true, "thgOn": true, "knlOn": true, "kgdOn": true, "shnOn": true, "fttOn": true, "skPush": true, "shL": 1.87, "lgX": 0.42, "lgY": 2.66, "lgZ": -0.05, "lgK": 2.24, "lgKX": 1.67, "lgThKind": "thigharmor", "lgKnKind": "knee", "lgShKind": "shin", "lgFtKind": "foot", "lgHbKind": "hipbasebox"} }];
+const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.38, "skKY": 2.27, "skKH": 1.02, "skKZF": 0.62, "skKZB": 0.595, "skKFE": 29, "skKBE": 20, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.03, "skKTopW": 0.398, "skKTopH": 0.45, "skKSlotD": 0.03, "skKSlotW": 0.167, "skKSlotH": 0.45, "skKSlotY": 0.234, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.398, "skFW": 1.675, "skFH": 0.732, "skFT": 0.2, "skFY": 2.3, "skFR": 0.5, "skFAz": 0, "skFFlare": 6, "skFTaper": -2, "skFBotE": 85, "skFSlant": 0.261, "skFBevel": 0.03, "skFHinge": true, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.407, "skFBoxH": 0.45, "skFBoxY": 0.1, "skFBoxX": 0.078, "skFBoxBev": 0.03, "skSOn": true, "skSW": 0.74, "skSH": 0.702, "skST": 0.1, "skSY": 2.27, "skSR": 0.852, "skSZ": -0.27, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.4, "skSBoxH": 0.513, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.398, "skBW": 1.458, "skBH": 0.813, "skBT": 0.2, "skBY": 2.3, "skBR": 0.575, "skBFlare": 20, "skBTaper": 0, "skBBotE": 85, "skBSlant": 0.261, "skBBevel": 0.03, "skBHinge": true, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0, "skFBendA": 0, "skBBendH": 0, "skBBendA": 0, "skFYaw": 15, "skBYaw": 5.0, "skKFold": 0.45, "skKFE2": -3, "skKBFold": 0.45, "skKBE2": 20, "skFHingeR": 0.07, "skBHingeR": 0.07, "skSHingeR": 0.035, "skSHinge": true, "skSOpen": 0, "skSYaw": 0, "col1W": 1.68, "col1H": 0.937, "col1Y": 0.544, "col1D": 1.362, "abuH": 0.383, "ablH": 0.326, "cov1Y": 0.747, "cov1H": 1.438, "cov1WT": 0.605, "cov1WK": 0.571, "cov1WB": 0.47, "cov1Z": 0.957, "cov1D": 0.92, "cov1LowD": 32, "cov1Pt": 0.54, "g_armOn": true, "shjOn": true, "shbOn": true, "shROn": true, "shLOn": true, "uarOn": true, "shLSame": true, "shX": 1.13, "shY": 0.82, "shZ": 0, "shjR": 0.12, "shjN": 8, "shjL": 0.25, "shbW": 0.5, "shbH": 0.55, "shbD": 0.55, "shbCh": 0.04, "uarW": 0.48, "uarD": 0.45, "uarL": 0.67, "uarCh": 0.05, "shRKind": "cu", "shRT": 0.11, "shRUp": 0.11, "shRIn": 0.23, "shRW": 0.8, "shRD": 0.83, "shRCorner": 90, "shRST": 0.14, "shRHF": 0.8, "shRHO": 0.24, "shRFlare": 4, "shRSl": 0.09, "shRSlO": 0, "shRThD": 0.03, "shRThW": 0.5, "shRThH": 0.12, "shRThY": 0.05, "shRBev": 0.07, "shRSTO": 0.06, "shRChIT": 0.08, "shRChOT": 0.08, "shRChIB": 0.08, "shRChOB": 0.07, "shRChOBv": 0.55, "shPv": 0.02, "shjBall": 0.16, "shOpenA": 78, "shOpenU": 0, "shOpenY": 0, "uarLean": 0, "wsjOn": true, "wsY": 1.834, "wsZ": -0.15, "wsjR": 0.3, "wsjH": 0.5, "wsjN": 12, "elbOn": true, "fraOn": true, "elAx": 0.11, "elR": 0.06, "elW": 0.14, "elFirst": 78, "elCovW": 0.41, "elCovD": 0.34, "elCovCh": 0.04, "elCapR": 0.18, "elCapT": 0.04, "fraW": 0.57, "fraD": 0.55, "fraL": 1.13, "fraTaper": 1.05, "fraCh": 0.05, "fraBev": 0.05, "fraCupR": 0.2, "fraCupW": 0.2, "fraRingN": 0, "fraNotchD": 0.06, "fraNotchW": 0.2, "fraNotchH": 0.14, "fraBkH": 0.56, "fraBkW": 0.3, "fraBkT": 0.15, "fraBkUp": 0.5, "fraBkOut": 0, "fraBkCh": 0.12, "fraWrW": 0.6, "fraWrH": 0.07, "elCovUp": 0.13, "elCovDn": 0.13, "uarChF": 0, "elCovIn": 0.23, "hndOn": true, "hndK": 3.5, "elIn": -0.13, "fraUp": -0.16, "fraTopR": 0, "uarBotR": 0, "elCovWIn": 0.3, "g_legOn": true, "hpjOn": true, "thgOn": true, "knlOn": true, "kgdOn": true, "shnOn": true, "fttOn": true, "skPush": true, "shL": 1.87, "lgX": 0.42, "lgY": 2.66, "lgZ": -0.05, "lgK": 2.15, "lgKX": 2.3, "lgThKind": "thigharmor", "lgKnKind": "knee", "lgShKind": "shin", "lgFtKind": "foot", "lgHbKind": "hipbasebox", "lgKT": 2.78, "lgKXT": 1.75, "lgKF": 1.8} }];
 // [SAMPLES-END]
 function sampleValues(sm) { const b = sm.base ? BASES[sm.base] || {} : {}; return { ...b, ...(sm.v || {}) }; }
 function openSample(i) {
