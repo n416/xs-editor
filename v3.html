@@ -1619,14 +1619,14 @@ function body() {
   // すぼまり（下へ細る、負で下が広い台形）、厚み、縁の面取り、曲げ（幅の方向に 3 面に折って弧に回り込む）、下の尖り（底が中央へ下がる五角形）、くぼみ
   let hangRim = null;   // 骨盤の塊の外形を集める（前・横・後ろの板を置く間だけ）
   // 関節（依頼主：「関節なんですよ。関節。」「横も前も後ろもスカートは動く想定なんです。関節の円柱を入れておいて欲しいです」「この隙間がきになる」）：
-  // 前・横・後ろの板は、板の上の端に載る円柱のまわりに回る。円柱は骨盤の塊の下に付いて動かない（骨盤の塊の部品）。円柱の下が板の上の端（厚みの真ん中）に、
-  // 上が骨盤の塊の下に付き、塊と板の間を埋める。骨盤の塊があれば、板の上の端は塊の下から円柱の太さの 2 倍だけ下
+  // 前・横・後ろの板は円柱のまわりに回る。円柱は見せない（依頼主：「丸い棒は内側に入れて見せるなよ」）：骨盤の塊があれば、板の上の端は塊の下の面に付き（すき間なし）、
+  // 円柱（骨盤の塊の部品、動かない）は板の上の端の厚みの中を通り、上が塊の下の面に付く。円柱は板より細く短いので外から見えない。開くと板の上の角は塊の中へ少し回り込む
   const hinge = { skF: true, skS: true, skB: true };
   const hang = (pre, part, az, lo, w, sg, tin) => {
     setPart(part);
     const col = colOf(pre), a = az * D2R;
     const hingeOn = !!(hinge[pre] && P[pre + 'Hinge']), hr = P[pre + 'HingeR'] || 0;
-    const top = hingeOn && P.skWOn ? y0 - P.skWY - P.skWH - 2 * hr : y0 - P[pre + 'Y'];
+    const top = hingeOn && P.skWOn ? y0 - P.skWY - P.skWH : y0 - P[pre + 'Y'];
     const H = P[pre + 'H'], T = P[pre + 'T'], R = P[pre + 'R'], f = P[pre + 'Flare'], tp = P[pre + 'Taper'];
     const bev = P[pre + 'Bevel'] || 0, fold = P[pre + 'Fold'] || 0, pt = P[pre + 'Point'] || 0;
     const u = new V(Math.sin(a), 0, Math.cos(a)), v = new V(Math.cos(a), 0, -Math.sin(a));   // u 外向き、v 板に沿う向き
@@ -1677,9 +1677,9 @@ function body() {
     const hg = hingeOn;
     let axisA = null, rotPl = pl => pl, yawPl = pl => pl, yawPt = q => q;
     if (hg) {
-      // 円柱の真ん中：上の端の面の上で外の面と裏の面の真ん中（板が倒れていても上の端の高さ）の、円柱の太さだけ上
+      // 円柱の真ん中：上の端の面の上で外の面と裏の面の真ん中（板が倒れていても上の端の高さ）から、円柱の太さだけ下（板の厚みの中で、円柱の上が上の端＝骨盤の塊の下に付く）
       const nh = new V(nO.x, 0, nO.z), nhl = nh.length(); nh.normalize();
-      axisA = pOut.clone().addScaledVector(nh, -(T / 2) / Math.max(0.2, nhl)).addScaledVector(UP, hr);
+      axisA = pOut.clone().addScaledVector(nh, -(T / 2) / Math.max(0.2, nhl)).addScaledVector(UP, -hr);
       // 横へ向ける（依頼主：「前後は横に向けて傾けられるようにしたい」）：板の内側の端を通る縦の軸のまわりに回す。前の板は外の端が後ろへ、後ろの板は外の端が前へ。円柱も一緒に向く
       const yw = (P[pre + 'Yaw'] || 0) * D2R;
       if (yw) {
@@ -1736,7 +1736,7 @@ function body() {
       if (bv > 0) for (const e of bf.slice(2)) { const cut2 = bevelEdge(front, e, bv, bv); if (cut2) bf.push(cut2); }
       crystal(M, bf.map(rotPl), col);
     }
-    // 関節の円柱：軸に沿って、板の上の端の幅（折れた板は真ん中の面の幅）より少し短い。骨盤の塊の部品（動かない側）。12 角
+    // 関節の円柱：軸に沿って、板の上の端の幅（折れた板は真ん中の面の幅）より少し短い。骨盤の塊の部品（動かない側）で、暗い色。12 角
     if (hg && hr > 0) {
       if (P.skWOn) setPart(PART.skW);
       const vc = v.dot(c), ins2 = Math.min(0.03, w * 0.1), vMin = vc - (foldEnd[-1] ? foldEnd[-1].at : w) + ins2, vMax = vc + (foldEnd[1] ? foldEnd[1].at : w) - ins2, va = v.dot(axisA);   // 板の幅より少し短い
@@ -1744,7 +1744,7 @@ function body() {
       const t1 = new V().crossVectors(v, UP).normalize(), t2 = new V().crossVectors(v, t1).normalize(), n12 = 12;
       const pl = [{ n: v.clone(), d: vMax }, { n: v.clone().negate(), d: -vMin }];
       for (let k = 0; k < n12; k++) { const a8 = (k + 0.5) * 2 * PI / n12, nk = t1.clone().multiplyScalar(Math.cos(a8)).addScaledVector(t2, Math.sin(a8)); pl.push({ n: nk, d: nk.dot(cc) + hr }); }
-      crystal(M, pl.map(yawPl), P.skWOn ? colOf('skW') : col);   // 骨盤の塊と同じ色（暗い色だと、すき間に見える）
+      crystal(M, pl.map(yawPl), COL.dark);
       setPart(part);
     }
   };
@@ -2067,7 +2067,7 @@ const hangRows = (pre, d, split) => [['c', pre], ['on', pre + 'On', d.on],
   ['r', pre + 'Bevel', '縁の面取り', 0, 0.3, 0.01, d.Bevel ?? 0], ['r', pre + 'Fold', '曲げ', 0, 40, 1, d.Fold ?? 0], ['r', pre + 'Point', '下の尖り', 0, 1, 0.01, d.Point ?? 0],
   ['r', pre + 'Slant', '下の縁の傾き（内側の端ほど下がる長さ）', -1, 1, 0.01, d.Slant ?? 0],
   ...(d.hinge ? [['toggle', pre + 'Hinge', '関節（上の端の円柱のまわりに回る。骨盤の塊があれば上の端は塊の下に合わせる）', true],
-    ['r', pre + 'HingeR', '関節：円柱の太さ（半径）', 0.01, 0.5, 0.005, d.HingeR ?? 0.06],
+    ['r', pre + 'HingeR', '関節：円柱の太さ（半径。板の厚みの半分より細くすると板の中に隠れる）', 0.005, 0.5, 0.005, d.HingeR ?? 0.04],
     ['r', pre + 'Yaw', '横へ向ける（°、内側の端を軸に外の端を横の板の方へ）', -60, 60, 0.5, d.Yaw ?? 0], ['r', pre + 'Open', '試し：開き（°、押されて開いた姿勢で描く）', 0, 80, 1, 0]] : []),
   ['r', pre + 'BendH', '上下の折れ：位置（上の端から、0 で無し）', 0, 3, 0.01, d.BendH ?? 0], ['r', pre + 'BendA', '上下の折れ：下の段の起き（°、上の段より立てる）', -60, 60, 0.5, d.BendA ?? 0],
   ['r', pre + 'BoxD', '外の塊：出っ張り（0 で無し）', 0, 0.6, 0.005, d.BoxD ?? 0], ['r', pre + 'BoxW', '外の塊：幅', 0.02, 3, 0.01, d.BoxW ?? 0.4], ['r', pre + 'BoxH', '外の塊：高さ', 0.02, 3, 0.01, d.BoxH ?? 0.4],
@@ -2191,9 +2191,9 @@ const BODY_SECS = [
     ['r', 'skKTopD', '前の上の塊：出っ張り（上の段の面から、0 で無し）', 0, 0.6, 0.005, 0.03], ['r', 'skKTopW', '前の上の塊：幅', 0.05, 3, 0.01, 0.56], ['r', 'skKTopH', '前の上の塊：高さ（折れの位置まで）', 0.05, 3, 0.01, 0.5],
     ['r', 'skKSlotD', '背のくぼみ：深さ（0 で無し）', 0, 0.5, 0.005, 0.03], ['r', 'skKSlotW', '背のくぼみ：幅', 0.02, 2, 0.01, 0.22], ['r', 'skKSlotH', '背のくぼみ：高さ', 0.02, 3, 0.01, 0.55], ['r', 'skKSlotY', '背のくぼみ：上端の下がり', 0, 3, 0.01, 0.25]]],
   ['sec-skC', '前の中央（前掛け）', hangRows('skC', { W: 0.54, H: 1.71, Y: 2.1, R: 0.52, T: 0.27, on: false, Flare: 18, Taper: -1, Bevel: 0.04, Point: 0.06 }, false)],
-  ['sec-skF', '前', hangRows('skF', { W: 1.36, H: 1.3, HingeR: 0.05, Y: 2.13, R: 0.45, split: true, gap: 0.58, az: [0, 60, 0], Flare: 18, Taper: -9, Slant: 0.23, Bevel: 0.04, hinge: true }, true)],
-  ['sec-skS', '横', hangRows('skS', { W: 1.2, wName: '前後の長さ', H: 1.18, HingeR: 0.05, Y: 2.1, R: 0.97, z: true, Z: -0.22, az: [50, 130, 90], Flare: 18, Taper: 0, FoldI: 45, FoldIAt: 0.34, FoldO: 57, FoldOAt: 0.38, Bevel: 0.03, hinge: true }, false)],
-  ['sec-skB', '後ろ', hangRows('skB', { W: 1.24, H: 1.44, HingeR: 0.05, Y: 2.13, R: 0.8, split: true, gap: 0.44, Flare: 13, Taper: -8, Slant: 0.2, Bevel: 0.04, hinge: true }, true)],
+  ['sec-skF', '前', hangRows('skF', { W: 1.36, H: 1.4, HingeR: 0.04, Y: 2.13, R: 0.45, split: true, gap: 0.58, az: [0, 60, 0], Flare: 18, Taper: -9, Slant: 0.23, Bevel: 0.04, hinge: true }, true)],
+  ['sec-skS', '横', hangRows('skS', { W: 1.2, wName: '前後の長さ', H: 1.28, HingeR: 0.04, Y: 2.1, R: 0.97, z: true, Z: -0.22, az: [50, 130, 90], Flare: 18, Taper: 0, FoldI: 45, FoldIAt: 0.34, FoldO: 57, FoldOAt: 0.38, Bevel: 0.03, hinge: true }, false)],
+  ['sec-skB', '後ろ', hangRows('skB', { W: 1.24, H: 1.54, HingeR: 0.04, Y: 2.13, R: 0.8, split: true, gap: 0.44, Flare: 13, Taper: -8, Slant: 0.2, Bevel: 0.04, hinge: true }, true)],
   ['sec-skT', '後ろ腰（真ん中の板）', hangRows('skT', { W: 0.4, H: 1.62, Y: 2.1, R: 0.87, T: 0.27, on: false, Flare: 13, Taper: 0, Bevel: 0.04, Point: 0.1 }, false)],
   ['sec-crotch', '股', slabRows('crotch', { W: 0.8, H: 0.6, D: 1.2, Y: 2.85, TopE: 85, BotE: 70, FrontE: 20, BackE: 20, SideE: -10 }, false)],
   ['sec-x1', '塊 1', [['toggle', 'x1Use', 'この塊を使う', false], ...slabRows('x1', { W: 0.5, H: 0.5, D: 0.6, Y: 0.2, TopE: 85, BotE: 85, FrontE: 5, BackE: 5, SideE: 5 }, false), ['r', 'x1X', '左右の位置', 0, 3, 0.01, 0.9], ['toggle', 'x1Mirror', '左右対称', true]]],
@@ -2397,7 +2397,7 @@ window.__hl = { probeTris, diffTris, hlMutFor, show: showHL, clear: clearHL, mes
 const BASES = {};
 // 白い機体：胴体（柱・コクピットカバー・腹の上と下）と腰。股の塊がいちばん前に出て（前の面は上の段が倒れ出て、折れて下の段が下がる）、背は後ろの板と並び、その両脇から前・後ろの左右の板が蝶番で下がり、横の板に厚い塊、前の板に四角いパネル。
 // 寸法は見本（白い機体の正面・横・後ろ）から：見本の線を胸の幅で倍率を決め、腹の下の端の高さで重ねて、腰の外形が正面・横・後ろで線に乗るように決めた（out/v3/_ov.py）（依頼主：「その読みで白い機体の腰を作って」）
-const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.38, "skKY": 2.27, "skKH": 1.02, "skKZF": 0.62, "skKZB": 0.595, "skKFE": 29, "skKBE": 20, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.03, "skKTopW": 0.398, "skKTopH": 0.45, "skKSlotD": 0.03, "skKSlotW": 0.167, "skKSlotH": 0.45, "skKSlotY": 0.234, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.398, "skFW": 1.675, "skFH": 0.592, "skFT": 0.2, "skFY": 2.3, "skFR": 0.5, "skFAz": 0, "skFFlare": 6, "skFTaper": -2, "skFBotE": 85, "skFSlant": 0.261, "skFBevel": 0.03, "skFHinge": true, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.407, "skFBoxH": 0.45, "skFBoxY": 0.04, "skFBoxX": 0.078, "skFBoxBev": 0.03, "skSOn": true, "skSW": 0.74, "skSH": 0.602, "skST": 0.1, "skSY": 2.27, "skSR": 0.852, "skSZ": -0.27, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.4, "skSBoxH": 0.513, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.398, "skBW": 1.458, "skBH": 0.673, "skBT": 0.2, "skBY": 2.3, "skBR": 0.575, "skBFlare": 20, "skBTaper": 0, "skBBotE": 85, "skBSlant": 0.261, "skBBevel": 0.03, "skBHinge": true, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0, "skFBendA": 0, "skBBendH": 0, "skBBendA": 0, "skFYaw": 15, "skBYaw": 5.0, "skKFold": 0.45, "skKFE2": -3, "skKBFold": 0.45, "skKBE2": 20, "skFHingeR": 0.07, "skBHingeR": 0.07, "skSHingeR": 0.05, "skSHinge": true, "skSOpen": 0, "skSYaw": 0} }];
+const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.38, "skKY": 2.27, "skKH": 1.02, "skKZF": 0.62, "skKZB": 0.595, "skKFE": 29, "skKBE": 20, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.03, "skKTopW": 0.398, "skKTopH": 0.45, "skKSlotD": 0.03, "skKSlotW": 0.167, "skKSlotH": 0.45, "skKSlotY": 0.234, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.398, "skFW": 1.675, "skFH": 0.732, "skFT": 0.2, "skFY": 2.3, "skFR": 0.5, "skFAz": 0, "skFFlare": 6, "skFTaper": -2, "skFBotE": 85, "skFSlant": 0.261, "skFBevel": 0.03, "skFHinge": true, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.407, "skFBoxH": 0.45, "skFBoxY": 0.1, "skFBoxX": 0.078, "skFBoxBev": 0.03, "skSOn": true, "skSW": 0.74, "skSH": 0.702, "skST": 0.1, "skSY": 2.27, "skSR": 0.852, "skSZ": -0.27, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.4, "skSBoxH": 0.513, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.398, "skBW": 1.458, "skBH": 0.813, "skBT": 0.2, "skBY": 2.3, "skBR": 0.575, "skBFlare": 20, "skBTaper": 0, "skBBotE": 85, "skBSlant": 0.261, "skBBevel": 0.03, "skBHinge": true, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0, "skFBendA": 0, "skBBendH": 0, "skBBendA": 0, "skFYaw": 15, "skBYaw": 5.0, "skKFold": 0.45, "skKFE2": -3, "skKBFold": 0.45, "skKBE2": 20, "skFHingeR": 0.07, "skBHingeR": 0.07, "skSHingeR": 0.035, "skSHinge": true, "skSOpen": 0, "skSYaw": 0} }];
 // [SAMPLES-END]
 function sampleValues(sm) { const b = sm.base ? BASES[sm.base] || {} : {}; return { ...b, ...(sm.v || {}) }; }
 function openSample(i) {
@@ -2644,7 +2644,7 @@ function flashPart(targetId) {
 // 左右の柱（スプリット柱）・胸の本体・胸の T 字の板・腹。腹は胸の本体の底にそろえて内へ縮めた低い塊（依頼主：「見ての通り殆ど無いんですよ。腹」「T字の胸よりは小さい」「胸より小さい塩梅で戻して」）。
 // 比は見本から：上の端の前は柱の前より約 0.48 奥、背は胸と同じ、高さは柱全体の幅の約 0.15、下の端は上の端の約 0.92 倍の幅。幅は見本の腹の真ん中の面（胸の本体とほぼ同じ幅）に合わせて胸より小さく。白い機体の柱・コクピットカバー・腹の上・腹の下は一覧に残して切る。
 // 依頼主が「なにこのゴミ」と言った胸板・胸の中央・腹・腰の帯の箱積みは出さない
-const START = { headOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: true, mpcOn: true, mppOn: true, g_skirtOn: true, skWOn: true, skCOn: true, skFOn: true, skSOn: true, skBOn: true, skTOn: true, layoutV: 16 };
+const START = { headOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: true, mpcOn: true, mppOn: true, g_skirtOn: true, skWOn: true, skCOn: true, skFOn: true, skSOn: true, skBOn: true, skTOn: true, layoutV: 18 };
 Object.assign(P, START);
 const DEFAULTS = JSON.parse(JSON.stringify(P));
 const KEY = 'crystal-head-knobs';
