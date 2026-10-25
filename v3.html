@@ -76,6 +76,7 @@
   <div class="grp"><button id="undoBtn" disabled title="Ctrl+Z">元に戻す</button><button id="redoBtn" disabled title="Ctrl+Y">やり直す</button></div>
   <div class="grp"><span class="cap">見る</span><button data-v="iso">斜め</button><button data-v="front">正面</button><button data-v="top">上から</button><button data-v="side">横</button><button data-t="edges">稜</button></div>
   <div class="grp"><button id="libBtn">保存した頭／体</button><button id="exportBtn">書き出し</button><button id="importBtn">読み込み</button><input id="importFile" type="file" accept=".json,application/json" style="display:none"></div>
+  <div class="grp" id="samples"><span style="color:#aaa;align-self:center">見本</span><select id="sampleSel" class="txt"></select><button id="sampleOpen">開く</button></div>
   <div class="grp"><button id="v2Btn">Ver2 の機体</button></div>
   <div class="grp last"><button id="reset">初期値に戻す</button></div>
   <span id="stat"></span>
@@ -89,7 +90,6 @@
 </div>
 <div id="ui">
   <div id="tree"></div>
-  <div id="samples" class="btns"><span style="color:#aaa;align-self:center">見本</span><select id="sampleSel" class="txt" style="flex:1;min-width:0"></select><button id="sampleOpen">開く</button></div>
   <div class="seedrow" data-home="sec-body"><span>形状種</span><button id="prev" class="b">前</button><input id="seed" type="number" value="1" min="0"><button id="next" class="b">次</button></div>
   <div class="row seedrow-r" data-home="sec-body"><label>揺らぎ</label><input type="range" id="jitter" min="0" max="1" step="0.01" value="0.3"><input class="val" type="number"></div>
   <div class="seedrow" data-home="sec-fig"><span>色種</span><button class="b sd" data-s="colorSeed" data-d="-1">前</button><input id="colorSeed" class="seedin" type="number" value="0" min="0"><button class="b sd" data-s="colorSeed" data-d="1">次</button></div>
