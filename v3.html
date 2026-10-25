@@ -658,8 +658,8 @@ function roundEdge(a, b, r, nf) {
 function regularEye(n) { const o = []; for (let i = 0; i < n; i++) { const a = PI / 2 + i / n * 2 * PI; o.push([+Math.cos(a).toFixed(3), +Math.sin(a).toFixed(3)]); } return o; }
 
 // ---- 部位の番号（3D を押した所から左の欄を光らせるため）----
-const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, band: 40, skF: 41, skS: 42, skB: 43, crotch: 44, x1: 45, x2: 46, x3: 47, x4: 48, x5: 49, x6: 50, skC: 52, col1: 53, cov1: 54, abu: 55, abl: 56, spl: 57, ltr: 58, chb: 59, bel: 60, mpc: 61, mpp: 62, skT: 63, skW: 64, skK: 65 };
-const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-band', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch', 45: 'sec-x1', 46: 'sec-x2', 47: 'sec-x3', 48: 'sec-x4', 49: 'sec-x5', 50: 'sec-x6', 52: 'sec-skC', 53: 'sec-col1', 54: 'sec-cov1', 55: 'sec-abu', 56: 'sec-abl', 57: 'sec-spl', 58: 'sec-ltr', 59: 'sec-chb', 60: 'sec-bel', 61: 'sec-mpc', 62: 'sec-mpp', 63: 'sec-skT', 64: 'sec-skW', 65: 'sec-skK' };
+const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, band: 40, skF: 41, skS: 42, skB: 43, crotch: 44, x1: 45, x2: 46, x3: 47, x4: 48, x5: 49, x6: 50, skC: 52, col1: 53, cov1: 54, abu: 55, abl: 56, spl: 57, ltr: 58, chb: 59, bel: 60, mpc: 61, mpp: 62, skT: 63, skW: 64, skK: 65, shj: 66, shb: 67, shR: 68, shL: 69, uar: 70 };
+const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-band', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch', 45: 'sec-x1', 46: 'sec-x2', 47: 'sec-x3', 48: 'sec-x4', 49: 'sec-x5', 50: 'sec-x6', 52: 'sec-skC', 53: 'sec-col1', 54: 'sec-cov1', 55: 'sec-abu', 56: 'sec-abl', 57: 'sec-spl', 58: 'sec-ltr', 59: 'sec-chb', 60: 'sec-bel', 61: 'sec-mpc', 62: 'sec-mpp', 63: 'sec-skT', 64: 'sec-skW', 65: 'sec-skK', 66: 'sec-shj', 67: 'sec-shb', 68: 'sec-shR', 69: 'sec-shL', 70: 'sec-uar' };
 const setPart = id => { M.part = id; G.part = id; };
 
 // ---- 頭 ----
@@ -1755,6 +1755,124 @@ function body() {
       for (const sg of [1, -1]) hang(pre, part, az0 + sg * (azKnob ? P[azKnob] : 0), sg * (P[pre + 'Gap'] / 2 + w), w, sg, 0);
     } else hang(pre, part, az0, 0, W / 2, 1, P[pre + 'Taper']);
   };
+  // 肩と上腕（依頼主：「肩と腕と手足もやっちゃおうか」「その読みで肩を作って」）。左右一対で、体の右（-x）と左（+x）。u は体の中心から外への長さ。
+  // 関節（多角柱）が胴体から肩の箱へ通り、肩の箱の下から上腕が下がる。肩アーマーは右と左で別に選べる（モノアイの機体は右がシールド、左が丸い肩当て）：
+  // コの字（上面の板と、前・外・後ろの 3 枚のスカート。角の曲げは角度で）・丸い肩当て（とげと丸い出っ張り。中に肩の箱）・シールド（上の端が内へ曲がり、支えで肩の箱に付く）
+  if (P.g_armOn) {
+    const W3 = (sx, u, y, z) => new V(sx * u, y, z), N3 = (sx, nu, ny, nz) => new V(sx * nu, ny, nz).normalize();
+    const hull2 = pts => {   // x-z の凸包（左回り）
+      const q = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], hi = [];
+      for (const r of q) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], r) <= 1e-9) lo.pop(); lo.push(r); }
+      for (const r of q.slice().reverse()) { while (hi.length >= 2 && cr(hi[hi.length - 2], hi[hi.length - 1], r) <= 1e-9) hi.pop(); hi.push(r); }
+      return lo.slice(0, -1).concat(hi.slice(0, -1));
+    };
+    const prismAlong = (p0, p1, r, n, rot = 0) => {   // p0 から p1 への n 角柱
+      const ax = p1.clone().sub(p0).normalize(), t1 = (Math.abs(ax.y) < 0.9 ? new V().crossVectors(UP, ax) : new V().crossVectors(new V(1, 0, 0), ax)).normalize(), t2 = new V().crossVectors(ax, t1).normalize();
+      const c = p0.clone().add(p1).multiplyScalar(0.5), pl = [{ n: ax, d: ax.dot(p1) }, { n: ax.clone().negate(), d: -ax.dot(p0) }];
+      for (let k = 0; k < n; k++) { const a = (k + 0.5) * 2 * PI / n + rot, nk = t1.clone().multiplyScalar(Math.cos(a)).addScaledVector(t2, Math.sin(a)); pl.push({ n: nk, d: nk.dot(c) + r }); }
+      return pl;
+    };
+    for (const sx of [-1, 1]) {
+      const U = P.shX, yc = y0 - P.shY, zc = P.shZ, bw = P.shbW / 2, bh = P.shbH / 2, bd = P.shbD / 2, bTop = yc + bh, bBot = yc - bh;
+      // 関節：胴体の中から肩の箱の真ん中まで、外へ向く n 角柱
+      if (P.shjOn) { setPart(PART.shj); crystal(M, prismAlong(W3(sx, U - bw - P.shjL, yc, zc), W3(sx, U, yc, zc), P.shjR, Math.max(3, P.shjN | 0)), colOf('shj')); }
+      // 肩の箱：関節に付く四角い塊。縦の角を落とす
+      if (P.shbOn) {
+        setPart(PART.shb);
+        const f = [{ n: N3(sx, 1, 0, 0), d: U + bw }, { n: N3(sx, -1, 0, 0), d: -(U - bw) }, plane(0, 90, new V(0, bTop, 0)), plane(0, -90, new V(0, bBot, 0)), plane(0, 0, new V(0, 0, zc + bd)), plane(180, 0, new V(0, 0, zc - bd))];
+        const c = P.shbCh; if (c > 0) for (const su of [1, -1]) for (const sz of [1, -1]) { const n = N3(sx, su, 0, sz), q = W3(sx, U + su * bw, yc, zc + sz * bd); f.push({ n, d: n.dot(q) - c * 0.7071 }); }
+        crystal(M, f, colOf('shb'));
+      }
+      // 上腕：肩の箱の下から下がる箱。縦の角を落とす
+      if (P.uarOn) {
+        setPart(PART.uar);
+        const uw = P.uarW / 2, ud = P.uarD / 2, f = [{ n: N3(sx, 1, 0, 0), d: U + uw }, { n: N3(sx, -1, 0, 0), d: -(U - uw) }, plane(0, 90, new V(0, bBot, 0)), plane(0, -90, new V(0, bBot - P.uarL, 0)), plane(0, 0, new V(0, 0, zc + ud)), plane(180, 0, new V(0, 0, zc - ud))];
+        const c = P.uarCh; if (c > 0) for (const su of [1, -1]) for (const sz of [1, -1]) { const n = N3(sx, su, 0, sz), q = W3(sx, U + su * uw, yc, zc + sz * ud); f.push({ n, d: n.dot(q) - c * 0.7071 }); }
+        crystal(M, f, colOf('uar'));
+      }
+      // 肩アーマー：右（-x）は shR、左は「右と同じ」なら shR の形を鏡に、切なら shL
+      const side = sx < 0 ? 'shR' : (P.shLSame ? 'shR' : 'shL');
+      if (!P[(sx < 0 ? 'shR' : 'shL') + 'On']) continue;
+      setPart(sx < 0 ? PART.shR : PART.shL);
+      const a = side, col = colOf(sx < 0 ? 'shR' : 'shL'), kind = P[a + 'Kind'];
+      if (kind === 'cu') {
+        // コの字：上面の板（厚み T）の下に、外・前・後ろの 3 枚のスカート。前と後ろは外の板との角で「角の曲げ」（90 で直角、小さいと内へ閉じ、大きいと開く）。
+        // スカートは下ほど外へ「開き」、下の縁は「下の縁の傾き」で内側の端ほど下がる。外の板の上には「スラスターのくぼみ」
+        const T = P[a + 'T'], yT = bTop + P[a + 'Up'], ySk = yT - T, uIn = U - P[a + 'In'], uO = uIn + P[a + 'W'], d2 = P[a + 'D'] / 2, ca = P[a + 'Corner'] * D2R, fl = P[a + 'Flare'] * D2R, bev = P[a + 'Bev'];
+        const Lf = Math.max(0.02, (uO - uIn) / Math.max(0.2, Math.sin(ca)));
+        // 2D（u, z）：外の板は u = uO、前の板は角 (uO, d2) から内へ、後ろの板は角 (uO, -d2) から内へ
+        const plates = [
+          { key: 'O', n2: [1, 0], t0: [uO, -d2], t1: [uO, d2], H: P[a + 'HO'], sl: P[a + 'SlO'] },
+          { key: 'F', n2: [-Math.cos(ca), Math.sin(ca)], t0: [uO, d2], t1: [uO - Math.sin(ca) * Lf, d2 - Math.cos(ca) * Lf], H: P[a + 'HF'], sl: P[a + 'Sl'] },
+          { key: 'B', n2: [-Math.cos(ca), -Math.sin(ca)], t0: [uO, -d2], t1: [uO - Math.sin(ca) * Lf, -d2 + Math.cos(ca) * Lf], H: P[a + 'HF'], sl: P[a + 'Sl'] },
+        ];
+        for (const pt of plates) {   // 外の面（下ほど外へ倒れる）
+          const n = N3(sx, pt.n2[0] * Math.cos(fl), Math.sin(fl), pt.n2[1] * Math.cos(fl)); pt.out = { n, d: n.dot(W3(sx, pt.t0[0], ySk, pt.t0[1] + zc)) };
+          pt.inn = { n: pt.out.n.clone().negate(), d: -(pt.out.d - P[a + 'ST']) };
+        }
+        const top = [];
+        plates.forEach((pt, i) => {
+          const f = [pt.out, pt.inn, plane(0, 90, new V(0, ySk + 0.002, 0))];
+          // 下の縁：前・後ろは内側の端ほど、外は前の端ほど「傾き」だけ下がる
+          const m0 = W3(sx, (pt.t0[0] + pt.t1[0]) / 2, ySk - pt.H, (pt.t0[1] + pt.t1[1]) / 2 + zc), tv = W3(sx, pt.t0[0] - pt.t1[0], 0, pt.t0[1] - pt.t1[1]), L = tv.length(); tv.normalize();
+          const k = pt.key === 'O' ? -pt.sl / L : pt.sl / L, bn = new V(tv.x * k, -1, tv.z * k).normalize(); const bot = { n: bn, d: bn.dot(m0) }; f.push(bot);
+          // 角：外の板とのあいだは 2 つの外の面の間の向き。前と後ろの内側の端は板に直角
+          if (pt.key === 'O') for (const j of [1, 2]) { const o = plates[j].out, nn = o.n.clone().sub(pt.out.n), Ln = nn.length(); f.push({ n: nn.multiplyScalar(1 / Ln), d: (o.d - pt.out.d) / Ln }); }
+          else {
+            const o = plates[0].out, nn = o.n.clone().sub(pt.out.n), Ln = nn.length(); f.push({ n: nn.multiplyScalar(1 / Ln), d: (o.d - pt.out.d) / Ln });
+            const dv = W3(sx, pt.t1[0] - pt.t0[0], 0, pt.t1[1] - pt.t0[1]).normalize(); f.push({ n: dv, d: dv.dot(W3(sx, pt.t1[0], 0, pt.t1[1] + zc)) });
+          }
+          if (bev > 0) { const e = bevelEdge(pt.out, bot, bev, bev); if (e) f.push(e); }
+          const cuts = [];
+          if (pt.key === 'O' && P[a + 'ThD'] > 0) {   // スラスターのくぼみ（外の板の上の方）
+            const tw = P[a + 'ThW'] / 2, tt = ySk - P[a + 'ThY'];
+            cuts.push([{ n: pt.out.n.clone().negate(), d: -(pt.out.d - P[a + 'ThD']) }, plane(0, 90, new V(0, tt, 0)), plane(0, -90, new V(0, tt - P[a + 'ThH'], 0)), plane(0, 0, new V(0, 0, zc + tw)), plane(180, 0, new V(0, 0, zc - tw))]);
+          }
+          crystal(M, f, col, cuts.length ? cuts : undefined);
+          for (const fc of clipFaces(f)) for (const q of fc.pts) if (Math.abs(q.y - ySk - 0.002) < 1e-4) top.push([q.x, q.z]);
+        });
+        // 上面の板：スカートの上の端を囲む形（体の側の端は肩の箱の内の面まで）
+        top.push([sx * (U - bw), zc + d2], [sx * (U - bw), zc - d2]);
+        const hl = hull2(top), f = [plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, ySk, 0))];
+        for (let i = 0; i < hl.length; i++) { const p0 = hl[i], p1 = hl[(i + 1) % hl.length], n = new V(p1[1] - p0[1], 0, -(p1[0] - p0[0])).normalize(); f.push({ n, d: n.x * p0[0] + n.z * p0[1] }); }
+        if (bev > 0) for (const e of f.slice(2)) { const c2 = bevelEdge(f[0], e, bev, bev); if (c2) f.push(c2); }
+        crystal(M, f, col);
+      } else if (kind === 'dome') {
+        // 丸い肩当て：楕円の上半分を、角の数の平らな面で張った鉢。下の縁はまっすぐ（下の面）、体の側は切る（胴体に入らない）。中に肩の箱
+        const c = W3(sx, U + P[a + 'DX'], yc + P[a + 'DY'], zc), rx = P[a + 'RX'], ry = P[a + 'RY'], rz = P[a + 'RZ'], n = Math.max(6, P[a + 'DN'] | 0);
+        const nrm = (e, az) => N3(sx, Math.cos(e) * Math.cos(az) / rx, Math.sin(e) / ry, Math.cos(e) * Math.sin(az) / rz);
+        const at = (e, az) => c.clone().add(W3(sx, rx * Math.cos(e) * Math.cos(az), ry * Math.sin(e), rz * Math.cos(e) * Math.sin(az)));
+        const f = [plane(0, -90, new V(0, c.y - P[a + 'DBot'], 0)), { n: N3(sx, -1, 0, 0), d: -(U - P[a + 'DIn']) }];
+        for (const eDeg of [-20, 12, 40, 66]) for (let k = 0; k < n; k++) { const e = eDeg * D2R, az = (k + (eDeg === 12 || eDeg === 66 ? 0.5 : 0)) * 2 * PI / n, q = at(e, az), nn = nrm(e, az); f.push({ n: nn, d: nn.dot(q) }); }
+        f.push(plane(0, 90, new V(0, c.y + ry, 0)));
+        crystal(M, f, col);
+        // とげ：上・外・前・後ろの順に「とげの数」本。8 角の円すい、根元は鉢に埋める
+        const spikes = [[90, 0], [10, 0], [10, 90], [10, -90]].slice(0, Math.max(0, Math.min(4, P[a + 'SpN'] | 0)));
+        for (const [eD, aD] of spikes) {
+          const e = eD * D2R, az = aD * D2R, w = (eD === 90 ? UP.clone() : nrm(e, az)), base = (eD === 90 ? c.clone().add(new V(0, ry, 0)) : at(e, az)).addScaledVector(w, -0.04);
+          const apex = base.clone().addScaledVector(w, P[a + 'SpL'] + 0.04), t1 = (Math.abs(w.y) < 0.9 ? new V().crossVectors(UP, w) : new V(1, 0, 0)).normalize(), t2 = new V().crossVectors(w, t1).normalize(), ph = Math.atan2(P[a + 'SpR'], P[a + 'SpL'] + 0.04);
+          const g = [{ n: w.clone().negate(), d: -w.dot(base) }];
+          for (let k = 0; k < 8; k++) { const t = (k + 0.5) * PI / 4, m = t1.clone().multiplyScalar(Math.cos(t)).addScaledVector(t2, Math.sin(t)), nn = m.multiplyScalar(Math.cos(ph)).addScaledVector(w, Math.sin(ph)).normalize(); g.push({ n: nn, d: nn.dot(apex) }); }
+          crystal(M, g, col);
+        }
+        // 丸い出っ張り：後ろ寄りの面の短い円柱
+        if (P[a + 'BoR'] > 0) { const e = 15 * D2R, az = -P[a + 'BoA'] * D2R, w = nrm(e, az), b0 = at(e, az).addScaledVector(w, -0.03); crystal(M, prismAlong(b0, b0.clone().addScaledVector(w, P[a + 'BoH'] + 0.03), P[a + 'BoR'], 12), col); }
+      } else if (kind === 'shield') {
+        // シールド：肩の外の縦長の厚い板（前後の幅・高さ・厚み）。縦の 4 つの角を落とす。上の端は内へ曲がって肩の上にかぶさり、支えで肩の箱に付く
+        const uo = U + P[a + 'SOut'], ui = uo - P[a + 'SThk'], yt = bTop + P[a + 'SUp'], yb = yt - P[a + 'SH'], w2 = P[a + 'SW'] / 2, zs = zc + P[a + 'SZ'], ch = P[a + 'SCh'];
+        const f = [{ n: N3(sx, 1, 0, 0), d: uo }, { n: N3(sx, -1, 0, 0), d: -ui }, plane(0, 90, new V(0, yt, 0)), plane(0, -90, new V(0, yb, 0)), plane(0, 0, new V(0, 0, zs + w2)), plane(180, 0, new V(0, 0, zs - w2))];
+        if (ch > 0) for (const sy of [1, -1]) for (const sz of [1, -1]) { const n = new V(0, sy, sz).normalize(), q = new V(0, sy > 0 ? yt : yb, zs + sz * w2); f.push({ n, d: n.dot(q) - ch * 0.7071 }); }
+        crystal(M, f, col);
+        if (P[a + 'BendL'] > 0) {   // 上の端の曲がり：シールドの上の端から内へ
+          const g = [{ n: N3(sx, 1, 0, 0), d: uo }, { n: N3(sx, -1, 0, 0), d: -(uo - P[a + 'BendL']) }, plane(0, 90, new V(0, yt, 0)), plane(0, -90, new V(0, yt - P[a + 'SThk'], 0)), plane(0, 0, new V(0, 0, zs + w2 * P[a + 'BendW'])), plane(180, 0, new V(0, 0, zs - w2 * P[a + 'BendW']))];
+          crystal(M, g, col);
+        }
+        // 支え：肩の箱の外の面からシールドの裏まで
+        const sw = P[a + 'BrW'] / 2, st = bTop - P[a + 'BrY'];
+        crystal(M, [{ n: N3(sx, 1, 0, 0), d: ui + 0.01 }, { n: N3(sx, -1, 0, 0), d: -(U + bw - 0.01) }, plane(0, 90, new V(0, st, 0)), plane(0, -90, new V(0, st - P[a + 'BrH'], 0)), plane(0, 0, new V(0, 0, zc + sw)), plane(180, 0, new V(0, 0, zc - sw))], COL.dark);
+      }
+    }
+  }
   if (P.g_skirtOn) {
     if (P.skCOn) hang('skC', PART.skC, 0, 0, P.skCW / 2, 1, P.skCTaper);
     // 股の塊（白い機体）：前から後ろまで 1 つの塊で、脚の間を通る（依頼主：「１，２，１０，１１は一つの塊です。つまりザクとは構造が違うのです」）。
@@ -1936,11 +2054,11 @@ const PAINT_CHOICES = {
   guard: ['sub', 'main', 'main'], back: ['sub', 'main'], face: ['face', 'face', 'main'], chin: ['accent', 'accent', 'fin'],
   ear: ['accent', 'main', 'sub'], crest: ['fin', 'fin', 'accent'], horn: ['fin', 'accent', 'main'],
   neck: ['dark', 'dark', 'sub', 'main'],
-  chest: ['main', 'main', 'sub'], plate: ['main', 'sub', 'accent', 'main'], center: ['accent', 'sub', 'main'], band: ['sub', 'main', 'dark'], skF: ['main', 'main', 'sub'], skS: ['main', 'main', 'sub'], skB: ['main', 'main', 'sub'], skC: ['main', 'main', 'sub'], skT: ['main', 'main', 'sub'], skW: ['sub', 'sub', 'dark'], skK: ['main', 'main', 'sub'], crotch: ['sub', 'dark', 'main'], col1: ['main', 'sub', 'accent'], cov1: ['sub', 'main', 'accent'], abu: ['main', 'main', 'sub'], abl: ['main', 'main', 'sub'], spl: ['main', 'sub', 'accent'], ltr: ['main', 'sub', 'accent'], chb: ['main', 'main', 'sub'], bel: ['main', 'main', 'sub'], mpc: ['main', 'main', 'sub'], mpp: ['sub', 'sub', 'dark'], x1: ['main', 'sub', 'accent'], x2: ['main', 'sub', 'accent'], x3: ['main', 'sub', 'accent'], x4: ['main', 'sub', 'accent'], x5: ['main', 'sub', 'accent'], x6: ['main', 'sub', 'accent'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
+  chest: ['main', 'main', 'sub'], plate: ['main', 'sub', 'accent', 'main'], center: ['accent', 'sub', 'main'], band: ['sub', 'main', 'dark'], skF: ['main', 'main', 'sub'], skS: ['main', 'main', 'sub'], skB: ['main', 'main', 'sub'], skC: ['main', 'main', 'sub'], skT: ['main', 'main', 'sub'], skW: ['sub', 'sub', 'dark'], skK: ['main', 'main', 'sub'], shj: ['dark', 'dark', 'dark'], shb: ['sub', 'sub', 'dark'], shR: ['main', 'main', 'sub'], shL: ['main', 'main', 'sub'], uar: ['sub', 'sub', 'dark'], crotch: ['sub', 'dark', 'main'], col1: ['main', 'sub', 'accent'], cov1: ['sub', 'main', 'accent'], abu: ['main', 'main', 'sub'], abl: ['main', 'main', 'sub'], spl: ['main', 'sub', 'accent'], ltr: ['main', 'sub', 'accent'], chb: ['main', 'main', 'sub'], bel: ['main', 'main', 'sub'], mpc: ['main', 'main', 'sub'], mpp: ['sub', 'sub', 'dark'], x1: ['main', 'sub', 'accent'], x2: ['main', 'sub', 'accent'], x3: ['main', 'sub', 'accent'], x4: ['main', 'sub', 'accent'], x5: ['main', 'sub', 'accent'], x6: ['main', 'sub', 'accent'], collar: ['dark', 'sub'], abd: ['dark', 'dark', 'sub', 'main'], pelvis: ['main', 'sub', 'main'], skirt: ['main', 'main', 'sub', 'accent'],
   shoulder: ['main', 'main', 'sub', 'accent'], upperarm: ['sub', 'main', 'main'], forearm: ['main', 'main', 'sub'], gauntlet: ['main', 'sub', 'accent'], hand: ['dark', 'dark', 'sub'],
   thigh: ['main', 'main', 'sub'], knee: ['sub', 'accent', 'main'], shin: ['main', 'main', 'sub'], foot: ['sub', 'main', 'dark'], pack: ['sub', 'main', 'dark'], thruster: ['dark'], tank: ['sub', 'main', 'accent'], joint: ['dark'], pipe: ['dark', 'dark', 'accent'], cannon: ['sub', 'main', 'dark'], hatch: ['accent', 'sub', 'main'], tread: ['dark', 'sub'], hull: ['sub', 'main'], ball: ['main', 'sub'], chestFront: ['accent', 'sub', 'main'], claw: ['dark', 'accent', 'main'],
 };
-const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw', 'plate', 'center', 'band', 'skF', 'skS', 'skB', 'skC', 'skT', 'skW', 'skK', 'crotch', 'col1', 'cov1', 'abu', 'abl', 'spl', 'ltr', 'chb', 'bel', 'mpc', 'mpp', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6'];
+const COLOR_PRES = ['crest', 'horn', 'muff', 'ear', 'chin', 'neck', 'helmet', 'brim', 'guard', 'back', 'face', 'chest', 'collar', 'abd', 'pelvis', 'skirt', 'shoulder', 'upperarm', 'forearm', 'gauntlet', 'hand', 'thigh', 'knee', 'shin', 'foot', 'pack', 'thruster', 'tank', 'pipe', 'cannon', 'hatch', 'tread', 'hull', 'ball', 'chestFront', 'claw', 'plate', 'center', 'band', 'skF', 'skS', 'skB', 'skC', 'skT', 'skW', 'skK', 'shj', 'shb', 'shR', 'shL', 'uar', 'crotch', 'col1', 'cov1', 'abu', 'abl', 'spl', 'ltr', 'chb', 'bel', 'mpc', 'mpp', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6'];
 const colOf = part => PC(part);
 function paintMap(paintSeed) {
   const m = {};
@@ -2179,6 +2297,43 @@ const BODY_SECS = [
     ['r', 'pipeX0', '前の付け根の左右', 0, 2, 0.01, 0.45], ['r', 'pipeY0', '前の付け根の下がり', -1, 4, 0.01, 1.9], ['r', 'pipeZ0', '前の付け根の前への出', 0, 2, 0.01, 0.8],
     ['r', 'pipeX1', '後ろの付け根の左右', 0, 2, 0.01, 0.5], ['r', 'pipeY1', '後ろの付け根の下がり', -1, 4, 0.01, 0.5], ['r', 'pipeZ1', '後ろの付け根の後ろへの出', 0, 2, 0.01, 0.9],
     ['r', 'pipeOut', '横への膨らみ', 0, 3, 0.01, 1.6], ['r', 'pipeSag', 'たるみ', -1, 1, 0.01, 0.2], ['r', 'pipeBulge', '節のふくらみ', 1, 1.8, 0.01, 1]]],
+  ['sec-arm', '腕', groupRows('arm', 'g_armOn')],
+  ['sec-shj', '肩の関節', [['c', 'shj'], ['on', 'shjOn', false], ['r', 'shX', '肩の位置：体の中心から外へ', 0, 4, 0.01, 1.55], ['r', 'shY', '肩の位置：下がり', -1, 4, 0.01, 0.55], ['r', 'shZ', '肩の位置：前後', -2, 2, 0.01, 0],
+    ['r', 'shjR', '太さ（半径）', 0.02, 1, 0.005, 0.2], ['r', 'shjN', '角の数', 3, 24, 1, 8], ['r', 'shjL', '肩の箱から体の側へ出る長さ', 0, 2, 0.01, 0.35]]],
+  ['sec-shb', '肩の箱', [['c', 'shb'], ['on', 'shbOn', false], ['r', 'shbW', '幅', 0.05, 3, 0.01, 0.64], ['r', 'shbH', '高さ', 0.05, 3, 0.01, 0.65], ['r', 'shbD', '奥行', 0.05, 3, 0.01, 0.62], ['r', 'shbCh', '縦の角の落とし', 0, 0.5, 0.005, 0.05]]],
+  ['sec-shR', '右の肩アーマー', [['c', 'shR'], ['on', 'shROn', false],
+    ['kinds', 'shR', [['cu', 'コの字'], ['dome', '丸い肩当て'], ['shield', 'シールド']], '種類', 'shield'],
+    ['r', 'shRT', 'コの字：上面の板の厚み', 0.01, 0.5, 0.005, 0.08], ['r', 'shRUp', 'コの字：上面の肩の箱の上からの高さ', -0.5, 1, 0.005, 0.08], ['r', 'shRIn', 'コの字：体の側の端（肩の箱の真ん中から内へ）', -1, 2, 0.01, 0.28],
+    ['r', 'shRW', 'コの字：上面の幅（体の側の端から外へ）', 0.1, 3, 0.01, 0.8], ['r', 'shRD', 'コの字：上面の奥行', 0.1, 3, 0.01, 0.83], ['r', 'shRCorner', 'コの字：角の曲げ（°、90 で直角）', 30, 150, 0.5, 90],
+    ['r', 'shRST', 'コの字：スカートの厚み', 0.01, 0.5, 0.005, 0.06], ['r', 'shRHF', 'コの字：前と後ろのスカートの高さ', 0.05, 3, 0.01, 0.8], ['r', 'shRHO', 'コの字：外のスカートの高さ', 0.05, 3, 0.01, 0.8],
+    ['r', 'shRFlare', 'コの字：スカートの開き（°、下ほど外へ）', -30, 45, 0.5, 4], ['r', 'shRSl', 'コの字：前と後ろの下の縁の傾き（内側の端ほど下がる）', -1, 1, 0.005, 0.09], ['r', 'shRSlO', 'コの字：外の下の縁の傾き（前の端ほど下がる）', -1, 1, 0.005, 0],
+    ['r', 'shRThD', 'コの字：スラスターのくぼみの深さ（0 で無し）', 0, 0.3, 0.005, 0.03], ['r', 'shRThW', 'コの字：スラスターの幅', 0.02, 2, 0.01, 0.5], ['r', 'shRThH', 'コの字：スラスターの高さ', 0.02, 1, 0.01, 0.12], ['r', 'shRThY', 'コの字：スラスターの上の端の下がり', 0, 1, 0.01, 0.06],
+    ['r', 'shRBev', 'コの字：縁の落とし', 0, 0.2, 0.005, 0.02],
+    ['r', 'shRDX', '丸い肩当て：真ん中の外へのずれ', -1, 1, 0.01, 0.05], ['r', 'shRDY', '丸い肩当て：真ん中の上へのずれ', -1, 1, 0.01, 0.05], ['r', 'shRRX', '丸い肩当て：横の半径', 0.1, 2, 0.01, 0.55], ['r', 'shRRY', '丸い肩当て：縦の半径', 0.1, 2, 0.01, 0.5], ['r', 'shRRZ', '丸い肩当て：前後の半径', 0.1, 2, 0.01, 0.55],
+    ['r', 'shRDN', '丸い肩当て：まわりの面の数', 6, 24, 1, 12], ['r', 'shRDBot', '丸い肩当て：下の縁の真ん中からの下がり', 0, 2, 0.01, 0.42], ['r', 'shRDIn', '丸い肩当て：体の側の切り（肩の箱の真ん中から内へ）', 0, 2, 0.01, 0.35],
+    ['r', 'shRSpN', '丸い肩当て：とげの数（上・外・前・後ろの順）', 0, 4, 1, 4], ['r', 'shRSpL', '丸い肩当て：とげの長さ', 0.02, 1.5, 0.01, 0.42], ['r', 'shRSpR', '丸い肩当て：とげの根元の半径', 0.01, 0.5, 0.005, 0.12],
+    ['r', 'shRBoR', '丸い肩当て：丸い出っ張りの半径（0 で無し）', 0, 0.5, 0.005, 0.1], ['r', 'shRBoH', '丸い肩当て：丸い出っ張りの高さ', 0.01, 0.4, 0.005, 0.05], ['r', 'shRBoA', '丸い肩当て：丸い出っ張りの向き（°、外から後ろへ）', 0, 180, 1, 70],
+    ['r', 'shRSOut', 'シールド：外の面（肩の箱の真ん中から外へ）', 0, 2, 0.01, 0.53], ['r', 'shRSThk', 'シールド：厚み', 0.02, 0.6, 0.005, 0.15], ['r', 'shRSH', 'シールド：高さ', 0.2, 5, 0.01, 2.37], ['r', 'shRSW', 'シールド：前後の幅', 0.1, 3, 0.01, 0.97],
+    ['r', 'shRSUp', 'シールド：上の端の肩の箱の上からの高さ', -1, 1, 0.01, 0.15], ['r', 'shRSZ', 'シールド：前後のずれ', -1, 1, 0.01, 0], ['r', 'shRSCh', 'シールド：角の落とし', 0, 0.5, 0.005, 0.08],
+    ['r', 'shRBendL', 'シールド：上の端の曲がりの長さ（内へ、0 で無し）', 0, 2, 0.01, 0.75], ['r', 'shRBendW', 'シールド：曲がりの幅（前後の幅の割合）', 0.1, 1, 0.01, 0.55],
+    ['r', 'shRBrW', 'シールド：支えの前後の幅', 0.02, 1, 0.01, 0.22], ['r', 'shRBrH', 'シールド：支えの高さ', 0.02, 1, 0.01, 0.2], ['r', 'shRBrY', 'シールド：支えの上の端の下がり（肩の箱の上から）', 0, 1, 0.01, 0.05]]],
+  ['sec-shL', '左の肩アーマー', [['c', 'shL'], ['on', 'shLOn', false], ['toggle', 'shLSame', '右と同じ形（鏡に）', false],
+    ['kinds', 'shL', [['cu', 'コの字'], ['dome', '丸い肩当て'], ['shield', 'シールド']], '種類', 'dome'],
+    ['r', 'shLT', 'コの字：上面の板の厚み', 0.01, 0.5, 0.005, 0.08], ['r', 'shLUp', 'コの字：上面の肩の箱の上からの高さ', -0.5, 1, 0.005, 0.08], ['r', 'shLIn', 'コの字：体の側の端（肩の箱の真ん中から内へ）', -1, 2, 0.01, 0.28],
+    ['r', 'shLW', 'コの字：上面の幅（体の側の端から外へ）', 0.1, 3, 0.01, 0.8], ['r', 'shLD', 'コの字：上面の奥行', 0.1, 3, 0.01, 0.83], ['r', 'shLCorner', 'コの字：角の曲げ（°、90 で直角）', 30, 150, 0.5, 90],
+    ['r', 'shLST', 'コの字：スカートの厚み', 0.01, 0.5, 0.005, 0.06], ['r', 'shLHF', 'コの字：前と後ろのスカートの高さ', 0.05, 3, 0.01, 0.8], ['r', 'shLHO', 'コの字：外のスカートの高さ', 0.05, 3, 0.01, 0.8],
+    ['r', 'shLFlare', 'コの字：スカートの開き（°、下ほど外へ）', -30, 45, 0.5, 4], ['r', 'shLSl', 'コの字：前と後ろの下の縁の傾き（内側の端ほど下がる）', -1, 1, 0.005, 0.09], ['r', 'shLSlO', 'コの字：外の下の縁の傾き（前の端ほど下がる）', -1, 1, 0.005, 0],
+    ['r', 'shLThD', 'コの字：スラスターのくぼみの深さ（0 で無し）', 0, 0.3, 0.005, 0.03], ['r', 'shLThW', 'コの字：スラスターの幅', 0.02, 2, 0.01, 0.5], ['r', 'shLThH', 'コの字：スラスターの高さ', 0.02, 1, 0.01, 0.12], ['r', 'shLThY', 'コの字：スラスターの上の端の下がり', 0, 1, 0.01, 0.06],
+    ['r', 'shLBev', 'コの字：縁の落とし', 0, 0.2, 0.005, 0.02],
+    ['r', 'shLDX', '丸い肩当て：真ん中の外へのずれ', -1, 1, 0.01, 0.05], ['r', 'shLDY', '丸い肩当て：真ん中の上へのずれ', -1, 1, 0.01, 0.05], ['r', 'shLRX', '丸い肩当て：横の半径', 0.1, 2, 0.01, 0.55], ['r', 'shLRY', '丸い肩当て：縦の半径', 0.1, 2, 0.01, 0.5], ['r', 'shLRZ', '丸い肩当て：前後の半径', 0.1, 2, 0.01, 0.55],
+    ['r', 'shLDN', '丸い肩当て：まわりの面の数', 6, 24, 1, 12], ['r', 'shLDBot', '丸い肩当て：下の縁の真ん中からの下がり', 0, 2, 0.01, 0.42], ['r', 'shLDIn', '丸い肩当て：体の側の切り（肩の箱の真ん中から内へ）', 0, 2, 0.01, 0.35],
+    ['r', 'shLSpN', '丸い肩当て：とげの数（上・外・前・後ろの順）', 0, 4, 1, 4], ['r', 'shLSpL', '丸い肩当て：とげの長さ', 0.02, 1.5, 0.01, 0.42], ['r', 'shLSpR', '丸い肩当て：とげの根元の半径', 0.01, 0.5, 0.005, 0.12],
+    ['r', 'shLBoR', '丸い肩当て：丸い出っ張りの半径（0 で無し）', 0, 0.5, 0.005, 0.1], ['r', 'shLBoH', '丸い肩当て：丸い出っ張りの高さ', 0.01, 0.4, 0.005, 0.05], ['r', 'shLBoA', '丸い肩当て：丸い出っ張りの向き（°、外から後ろへ）', 0, 180, 1, 70],
+    ['r', 'shLSOut', 'シールド：外の面（肩の箱の真ん中から外へ）', 0, 2, 0.01, 0.53], ['r', 'shLSThk', 'シールド：厚み', 0.02, 0.6, 0.005, 0.15], ['r', 'shLSH', 'シールド：高さ', 0.2, 5, 0.01, 2.37], ['r', 'shLSW', 'シールド：前後の幅', 0.1, 3, 0.01, 0.97],
+    ['r', 'shLSUp', 'シールド：上の端の肩の箱の上からの高さ', -1, 1, 0.01, 0.15], ['r', 'shLSZ', 'シールド：前後のずれ', -1, 1, 0.01, 0], ['r', 'shLSCh', 'シールド：角の落とし', 0, 0.5, 0.005, 0.08],
+    ['r', 'shLBendL', 'シールド：上の端の曲がりの長さ（内へ、0 で無し）', 0, 2, 0.01, 0.75], ['r', 'shLBendW', 'シールド：曲がりの幅（前後の幅の割合）', 0.1, 1, 0.01, 0.55],
+    ['r', 'shLBrW', 'シールド：支えの前後の幅', 0.02, 1, 0.01, 0.22], ['r', 'shLBrH', 'シールド：支えの高さ', 0.02, 1, 0.01, 0.2], ['r', 'shLBrY', 'シールド：支えの上の端の下がり（肩の箱の上から）', 0, 1, 0.01, 0.05]]],
+  ['sec-uar', '上腕', [['c', 'uar'], ['on', 'uarOn', false], ['r', 'uarW', '幅', 0.05, 3, 0.01, 0.5], ['r', 'uarD', '奥行', 0.05, 3, 0.01, 0.5], ['r', 'uarL', '長さ', 0.05, 4, 0.01, 0.65], ['r', 'uarCh', '縦の角の落とし', 0, 0.5, 0.005, 0.06]]],
   ['sec-skirt', 'スカート', groupRows('skirt', 'g_skirtOn')],
   ['sec-skW', '腰（骨盤の塊）', [['c', 'skW'], ['on', 'skWOn', false], ['r', 'skWY', '上端の下がり（腹の底）', -1, 5, 0.01, 1.98], ['r', 'skWH', '高さ', 0.01, 1, 0.01, 0.12],
     ['r', 'skWOut', '張り出し（板の付け根より外へ）', 0, 0.5, 0.005, 0.03], ['r', 'skWOutAt', 'いちばん外の高さ（下からの割合）', 0, 1, 0.01, 0.4], ['r', 'skWIn', '上の縁のすぼまり', 0, 1, 0.01, 0.1]]],
@@ -2243,7 +2398,7 @@ let openId = null, mapMode = 'body';
 // ---- レイヤー：右の一覧はグラフィックソフトのレイヤー、欄のつまみはそのレイヤーのアピアランス（依頼主、10/24）。
 // 入れ子にでき、まとめるグループにも属性（色・表示・上下と前後のずれ・大きさ）が付く ----
 const LEAF_ON = { 'sec-muff': 'muffOn', 'sec-twin': 'twin', 'sec-mono': 'mono', 'sec-neck': 'neck', 'sec-chin': 'chin', 'sec-ear': 'ears', 'sec-back': 'back',
-  'sec-chest': 'coreOn', 'sec-plate': 'plateOn', 'sec-center': 'centerOn', 'sec-collar': 'collarOn', 'sec-abd': 'abdOn', 'sec-band': 'bandOn', 'sec-pipe': 'pipeOn', 'sec-skF': 'skFOn', 'sec-skS': 'skSOn', 'sec-skB': 'skBOn', 'sec-skC': 'skCOn', 'sec-skT': 'skTOn', 'sec-skW': 'skWOn', 'sec-skK': 'skKOn', 'sec-crotch': 'crotchOn', 'sec-col1': 'col1On', 'sec-cov1': 'cov1On', 'sec-abu': 'abuOn', 'sec-abl': 'ablOn', 'sec-spl': 'splOn', 'sec-ltr': 'ltrOn', 'sec-chb': 'chbOn', 'sec-bel': 'belOn', 'sec-mpc': 'mpcOn', 'sec-mpp': 'mppOn',
+  'sec-chest': 'coreOn', 'sec-plate': 'plateOn', 'sec-center': 'centerOn', 'sec-collar': 'collarOn', 'sec-abd': 'abdOn', 'sec-band': 'bandOn', 'sec-pipe': 'pipeOn', 'sec-skF': 'skFOn', 'sec-skS': 'skSOn', 'sec-skB': 'skBOn', 'sec-skC': 'skCOn', 'sec-skT': 'skTOn', 'sec-skW': 'skWOn', 'sec-skK': 'skKOn', 'sec-shj': 'shjOn', 'sec-shb': 'shbOn', 'sec-shR': 'shROn', 'sec-shL': 'shLOn', 'sec-uar': 'uarOn', 'sec-crotch': 'crotchOn', 'sec-col1': 'col1On', 'sec-cov1': 'cov1On', 'sec-abu': 'abuOn', 'sec-abl': 'ablOn', 'sec-spl': 'splOn', 'sec-ltr': 'ltrOn', 'sec-chb': 'chbOn', 'sec-bel': 'belOn', 'sec-mpc': 'mpcOn', 'sec-mpp': 'mppOn',
   'sec-x1': 'x1On', 'sec-x2': 'x2On', 'sec-x3': 'x3On', 'sec-x4': 'x4On', 'sec-x5': 'x5On', 'sec-x6': 'x6On' };
 const leaf = sec => ({ id: sec, sec, on: LEAF_ON[sec] });
 const TREE = { id: 'all', name: '全身', sec: 'sec-fig', children: [
@@ -2251,6 +2406,7 @@ const TREE = { id: 'all', name: '全身', sec: 'sec-fig', children: [
   { id: 'torso', name: '胴体', sec: 'sec-torso', on: 'g_torsoOn', xf: true, children: [...['sec-col1', 'sec-cov1', 'sec-abu', 'sec-abl', 'sec-spl', 'sec-chb', 'sec-ltr', 'sec-bel', 'sec-mpc', 'sec-mpp', 'sec-chest', 'sec-collar', 'sec-plate', 'sec-center', 'sec-abd', 'sec-band', 'sec-pipe'].map(leaf),
     { id: 'skirt', name: 'スカート', sec: 'sec-skirt', on: 'g_skirtOn', xf: true, children: ['sec-skW', 'sec-skK', 'sec-skC', 'sec-skF', 'sec-skS', 'sec-skB', 'sec-skT'].map(leaf) }, leaf('sec-crotch'),
     ...[1, 2, 3, 4, 5, 6].map(i => ({ ...leaf('sec-x' + i), use: 'x' + i + 'Use' })), { add: true }] },
+  { id: 'arm', name: '腕', sec: 'sec-arm', on: 'g_armOn', xf: true, children: ['sec-shj', 'sec-shb', 'sec-shR', 'sec-shL', 'sec-uar'].map(leaf) },
 ] };
 const nameOf = node => node.name || (document.getElementById(node.sec) ? document.getElementById(node.sec).textContent.replace(/（.*）/, '') : node.sec);
 // 欄 → その欄にある部位の番号（3D の三角形の part 属性）と、色の接頭辞
@@ -2397,7 +2553,7 @@ window.__hl = { probeTris, diffTris, hlMutFor, show: showHL, clear: clearHL, mes
 const BASES = {};
 // 白い機体：胴体（柱・コクピットカバー・腹の上と下）と腰。股の塊がいちばん前に出て（前の面は上の段が倒れ出て、折れて下の段が下がる）、背は後ろの板と並び、その両脇から前・後ろの左右の板が蝶番で下がり、横の板に厚い塊、前の板に四角いパネル。
 // 寸法は見本（白い機体の正面・横・後ろ）から：見本の線を胸の幅で倍率を決め、腹の下の端の高さで重ねて、腰の外形が正面・横・後ろで線に乗るように決めた（out/v3/_ov.py）（依頼主：「その読みで白い機体の腰を作って」）
-const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.38, "skKY": 2.27, "skKH": 1.02, "skKZF": 0.62, "skKZB": 0.595, "skKFE": 29, "skKBE": 20, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.03, "skKTopW": 0.398, "skKTopH": 0.45, "skKSlotD": 0.03, "skKSlotW": 0.167, "skKSlotH": 0.45, "skKSlotY": 0.234, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.398, "skFW": 1.675, "skFH": 0.732, "skFT": 0.2, "skFY": 2.3, "skFR": 0.5, "skFAz": 0, "skFFlare": 6, "skFTaper": -2, "skFBotE": 85, "skFSlant": 0.261, "skFBevel": 0.03, "skFHinge": true, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.407, "skFBoxH": 0.45, "skFBoxY": 0.1, "skFBoxX": 0.078, "skFBoxBev": 0.03, "skSOn": true, "skSW": 0.74, "skSH": 0.702, "skST": 0.1, "skSY": 2.27, "skSR": 0.852, "skSZ": -0.27, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.4, "skSBoxH": 0.513, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.398, "skBW": 1.458, "skBH": 0.813, "skBT": 0.2, "skBY": 2.3, "skBR": 0.575, "skBFlare": 20, "skBTaper": 0, "skBBotE": 85, "skBSlant": 0.261, "skBBevel": 0.03, "skBHinge": true, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0, "skFBendA": 0, "skBBendH": 0, "skBBendA": 0, "skFYaw": 15, "skBYaw": 5.0, "skKFold": 0.45, "skKFE2": -3, "skKBFold": 0.45, "skKBE2": 20, "skFHingeR": 0.07, "skBHingeR": 0.07, "skSHingeR": 0.035, "skSHinge": true, "skSOpen": 0, "skSYaw": 0, "col1W": 1.68, "col1H": 0.937, "col1Y": 0.544, "col1D": 1.362, "abuH": 0.383, "ablH": 0.326, "cov1Y": 0.747, "cov1H": 1.438, "cov1WT": 0.605, "cov1WK": 0.571, "cov1WB": 0.47, "cov1Z": 0.957, "cov1D": 0.92, "cov1LowD": 32, "cov1Pt": 0.54} }];
+const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.38, "skKY": 2.27, "skKH": 1.02, "skKZF": 0.62, "skKZB": 0.595, "skKFE": 29, "skKBE": 20, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.03, "skKTopW": 0.398, "skKTopH": 0.45, "skKSlotD": 0.03, "skKSlotW": 0.167, "skKSlotH": 0.45, "skKSlotY": 0.234, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.398, "skFW": 1.675, "skFH": 0.732, "skFT": 0.2, "skFY": 2.3, "skFR": 0.5, "skFAz": 0, "skFFlare": 6, "skFTaper": -2, "skFBotE": 85, "skFSlant": 0.261, "skFBevel": 0.03, "skFHinge": true, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.407, "skFBoxH": 0.45, "skFBoxY": 0.1, "skFBoxX": 0.078, "skFBoxBev": 0.03, "skSOn": true, "skSW": 0.74, "skSH": 0.702, "skST": 0.1, "skSY": 2.27, "skSR": 0.852, "skSZ": -0.27, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.4, "skSBoxH": 0.513, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.398, "skBW": 1.458, "skBH": 0.813, "skBT": 0.2, "skBY": 2.3, "skBR": 0.575, "skBFlare": 20, "skBTaper": 0, "skBBotE": 85, "skBSlant": 0.261, "skBBevel": 0.03, "skBHinge": true, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0, "skFBendA": 0, "skBBendH": 0, "skBBendA": 0, "skFYaw": 15, "skBYaw": 5.0, "skKFold": 0.45, "skKFE2": -3, "skKBFold": 0.45, "skKBE2": 20, "skFHingeR": 0.07, "skBHingeR": 0.07, "skSHingeR": 0.035, "skSHinge": true, "skSOpen": 0, "skSYaw": 0, "col1W": 1.68, "col1H": 0.937, "col1Y": 0.544, "col1D": 1.362, "abuH": 0.383, "ablH": 0.326, "cov1Y": 0.747, "cov1H": 1.438, "cov1WT": 0.605, "cov1WK": 0.571, "cov1WB": 0.47, "cov1Z": 0.957, "cov1D": 0.92, "cov1LowD": 32, "cov1Pt": 0.54, "g_armOn": true, "shjOn": true, "shbOn": true, "shROn": true, "shLOn": true, "uarOn": true, "shLSame": true, "shX": 1.13, "shY": 0.82, "shZ": 0, "shjR": 0.16, "shjN": 8, "shjL": 0.3, "shbW": 0.5, "shbH": 0.55, "shbD": 0.55, "shbCh": 0.04, "uarW": 0.48, "uarD": 0.48, "uarL": 0.57, "uarCh": 0.05, "shRKind": "cu", "shRT": 0.08, "shRUp": 0.08, "shRIn": 0.23, "shRW": 0.8, "shRD": 0.83, "shRCorner": 90, "shRST": 0.06, "shRHF": 0.8, "shRHO": 0.8, "shRFlare": 4, "shRSl": 0.09, "shRSlO": 0, "shRThD": 0.03, "shRThW": 0.5, "shRThH": 0.12, "shRThY": 0.06, "shRBev": 0.02} }];
 // [SAMPLES-END]
 function sampleValues(sm) { const b = sm.base ? BASES[sm.base] || {} : {}; return { ...b, ...(sm.v || {}) }; }
 function openSample(i) {
@@ -2644,7 +2800,7 @@ function flashPart(targetId) {
 // 左右の柱（スプリット柱）・胸の本体・胸の T 字の板・腹。腹は胸の本体の底にそろえて内へ縮めた低い塊（依頼主：「見ての通り殆ど無いんですよ。腹」「T字の胸よりは小さい」「胸より小さい塩梅で戻して」）。
 // 比は見本から：上の端の前は柱の前より約 0.48 奥、背は胸と同じ、高さは柱全体の幅の約 0.15、下の端は上の端の約 0.92 倍の幅。幅は見本の腹の真ん中の面（胸の本体とほぼ同じ幅）に合わせて胸より小さく。白い機体の柱・コクピットカバー・腹の上・腹の下は一覧に残して切る。
 // 依頼主が「なにこのゴミ」と言った胸板・胸の中央・腹・腰の帯の箱積みは出さない
-const START = { headOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: true, mpcOn: true, mppOn: true, g_skirtOn: true, skWOn: true, skCOn: true, skFOn: true, skSOn: true, skBOn: true, skTOn: true, layoutV: 18 };
+const START = { headOn: false, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: true, mpcOn: true, mppOn: true, g_skirtOn: true, skWOn: true, skCOn: true, skFOn: true, skSOn: true, skBOn: true, skTOn: true, g_armOn: true, shjOn: true, shbOn: true, shROn: true, shLOn: true, uarOn: true, layoutV: 19 };
 Object.assign(P, START);
 const DEFAULTS = JSON.parse(JSON.stringify(P));
 const KEY = 'crystal-head-knobs';
@@ -2653,7 +2809,7 @@ try {
   const renamed = { crest: 'crestKind', rotX: 'crestRotX', rotY: 'crestRotY', rotZ: 'crestRotZ', vOpen: 'crestVOpen' };   // 前の版の名前
   const oldLayout = saved.layoutV !== START.layoutV;   // 前の版の保存：部品の表示は開いた時の形に戻す
   // 柱・カバー・腹の上・腹の下の値も 1 度だけ初期値に戻す（どれも長さで決める別の部品なので、前の柱の値が残ると腹との間が空いてずれる）
-  const START_PARTS = /^(col1|cov1|abu|abl|spl|chb|ltr|bel|mpc|mpp|sk[CFSBTWK]|g_skirt)/;
+  const START_PARTS = /^(col1|cov1|abu|abl|spl|chb|ltr|bel|mpc|mpp|sk[CFSBTWK]|g_skirt|sh|uar|g_arm)/;
   for (const k in saved) { const kk = renamed[k] || k; if (kk in P && !(oldLayout && (kk in START || START_PARTS.test(kk)))) P[kk] = saved[k]; }
   if ('backUnder' in saved && !('backSlope' in saved)) P.backSlope = Math.max(0, Math.min(75, 90 - saved.backUnder));
   if ('brimUnder' in saved && !('brimSlope' in saved)) P.brimSlope = Math.max(0, Math.min(75, 90 - saved.brimUnder));
