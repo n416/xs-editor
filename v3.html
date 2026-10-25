@@ -1760,10 +1760,16 @@ function body() {
     if (P.skKOn) {
       setPart(PART.skK);
       const col = colOf('skK'), w = P.skKW / 2, yT = y0 - P.skKY, yB = yT - P.skKH, zf = P.skKZF, zb = -P.skKZB;
-      const front = plane(0, P.skKFE, new V(0, yT, zf)), back = plane(180, P.skKBE, new V(0, yT, zb)), bot = plane(0, -90, new V(0, yB, 0));
-      const f = [plane(0, 90, new V(0, yT, 0)), bot, front, back, plane(90, 0, new V(w, 0, 0)), plane(-90, 0, new V(-w, 0, 0))];
-      for (const e of [front, back]) { const cc = bevelEdge(e, bot, P.skKCh, P.skKCh); if (cc) f.push(cc); }
-      const bv = P.skKBev; if (bv > 0) for (const e of [front, back]) for (const s2 of [f[4], f[5], f[0]]) { const cc = bevelEdge(e, s2, bv, bv); if (cc) f.push(cc); }
+      // 前と背の面は上の段と下の段の 2 面（依頼主：「股の塊　これが一番前に出るんです」）：上の段は上の端から下へ「倒れ」で前（背は後ろ）へ出て、
+      // 上の端から「折れの位置」で折れ、下の段は「下の段の倒れ」で下がる。下の段が上の段より起きていれば、外へ凸の 2 面なので 1 つの塊のまま
+      const fz = (z0, e, h) => z0 + h * Math.tan(e * D2R);
+      const fH = Math.min(P.skKFold, P.skKH), bH2 = Math.min(P.skKBFold, P.skKH);
+      const front = plane(0, P.skKFE, new V(0, yT, zf)), front2 = plane(0, P.skKFE2, new V(0, yT - fH, fz(zf, P.skKFE, fH)));
+      const back = plane(180, P.skKBE, new V(0, yT, zb)), back2 = plane(180, P.skKBE2, new V(0, yT - bH2, -fz(-zb, P.skKBE, bH2)));
+      const bot = plane(0, -90, new V(0, yB, 0)), sideP = plane(90, 0, new V(w, 0, 0)), sideM = plane(-90, 0, new V(-w, 0, 0)), topP = plane(0, 90, new V(0, yT, 0));
+      const f = [topP, bot, front, front2, back, back2, sideP, sideM];
+      for (const e of [front2, back2]) { const cc = bevelEdge(e, bot, P.skKCh, P.skKCh); if (cc) f.push(cc); }
+      const bv = P.skKBev; if (bv > 0) { for (const e of [front, front2, back, back2]) for (const s2 of [sideP, sideM]) { const cc = bevelEdge(e, s2, bv, bv); if (cc) f.push(cc); } for (const e of [front, back]) { const cc = bevelEdge(e, topP, bv, bv); if (cc) f.push(cc); } }
       const cuts = [];
       if (P.skKSlotD > 0) {   // 背の面の縦長のくぼみ
         const sw = P.skKSlotW / 2, st = yT - P.skKSlotY;
@@ -1771,7 +1777,7 @@ function body() {
       }
       crystal(M, f, col, cuts.length ? cuts : undefined);
       if (P.skKTopD > 0) {   // 前の上の塊：前の面から「出っ張り」だけ前へ、上の端から「高さ」まで
-        const tw = P.skKTopW / 2, fr2 = { n: front.n.clone(), d: front.d + P.skKTopD }, tb = yT - P.skKTopH;
+        const tw = P.skKTopW / 2, fr2 = { n: front.n.clone(), d: front.d + P.skKTopD }, tb = yT - Math.min(P.skKTopH, fH);
         const g2 = [fr2, { n: front.n.clone().negate(), d: -front.d + 0.002 }, plane(0, 90, new V(0, yT, 0)), plane(0, -90, new V(0, tb, 0)), plane(90, 0, new V(tw, 0, 0)), plane(-90, 0, new V(-tw, 0, 0))];
         if (bv > 0) for (const e of g2.slice(2)) { const cc = bevelEdge(fr2, e, bv, bv); if (cc) g2.push(cc); }
         crystal(M, g2, col);
@@ -2178,9 +2184,10 @@ const BODY_SECS = [
   ['sec-skK', '股の塊', [['c', 'skK'], ['on', 'skKOn', false],
     ['r', 'skKW', '幅', 0.05, 3, 0.01, 0.54], ['r', 'skKY', '上端の下がり', -1, 6, 0.01, 2.1], ['r', 'skKH', '高さ', 0.05, 4, 0.01, 1.7],
     ['r', 'skKZF', '前の面の前後の位置（上の端）', -2, 3, 0.01, 0.5], ['r', 'skKZB', '背の面の後ろへの位置（上の端）', -2, 3, 0.01, 0.8],
-    ['r', 'skKFE', '前の面の倒れ（°、下ほど前へ）', -45, 45, 0.5, 10], ['r', 'skKBE', '背の面の倒れ（°、下ほど後ろへ）', -45, 45, 0.5, 8],
+    ['r', 'skKFE', '前の面：上の段の倒れ（°、下ほど前へ）', -60, 60, 0.5, 10], ['r', 'skKFold', '前の面：折れの位置（上の端から）', 0, 4, 0.01, 0.5], ['r', 'skKFE2', '前の面：下の段の倒れ（°）', -60, 60, 0.5, 0],
+    ['r', 'skKBE', '背の面：上の段の倒れ（°、下ほど後ろへ）', -60, 60, 0.5, 8], ['r', 'skKBFold', '背の面：折れの位置（上の端から）', 0, 4, 0.01, 0.5], ['r', 'skKBE2', '背の面：下の段の倒れ（°）', -60, 60, 0.5, 0],
     ['r', 'skKCh', '底の前と後ろの角の落とし', 0, 1, 0.01, 0.12], ['r', 'skKBev', '縁の落とし', 0, 0.3, 0.005, 0.03],
-    ['r', 'skKTopD', '前の上の塊：出っ張り（0 で無し）', 0, 0.6, 0.005, 0.06], ['r', 'skKTopW', '前の上の塊：幅', 0.05, 3, 0.01, 0.56], ['r', 'skKTopH', '前の上の塊：高さ', 0.05, 3, 0.01, 0.5],
+    ['r', 'skKTopD', '前の上の塊：出っ張り（上の段の面から、0 で無し）', 0, 0.6, 0.005, 0.03], ['r', 'skKTopW', '前の上の塊：幅', 0.05, 3, 0.01, 0.56], ['r', 'skKTopH', '前の上の塊：高さ（折れの位置まで）', 0.05, 3, 0.01, 0.5],
     ['r', 'skKSlotD', '背のくぼみ：深さ（0 で無し）', 0, 0.5, 0.005, 0.03], ['r', 'skKSlotW', '背のくぼみ：幅', 0.02, 2, 0.01, 0.22], ['r', 'skKSlotH', '背のくぼみ：高さ', 0.02, 3, 0.01, 0.55], ['r', 'skKSlotY', '背のくぼみ：上端の下がり', 0, 3, 0.01, 0.25]]],
   ['sec-skC', '前の中央（前掛け）', hangRows('skC', { W: 0.54, H: 1.71, Y: 2.1, R: 0.52, T: 0.27, on: false, Flare: 18, Taper: -1, Bevel: 0.04, Point: 0.06 }, false)],
   ['sec-skF', '前', hangRows('skF', { W: 1.36, H: 1.37, Y: 2.13, R: 0.45, split: true, gap: 0.58, az: [0, 60, 0], Flare: 18, Taper: -9, Slant: 0.23, Bevel: 0.04, hinge: true }, true)],
@@ -2387,9 +2394,9 @@ window.__hl = { probeTris, diffTris, hlMutFor, show: showHL, clear: clearHL, mes
 // [SAMPLES-BEGIN]
 // 見本の機体：決め打ちの値は入れない（依頼主、2026-10-20）。家系の土台と差分の仕組みだけ残す
 const BASES = {};
-// 白い機体：胴体（柱・コクピットカバー・腹の上と下）と腰。腰は股の塊（前の上の塊・背のくぼみ）の両脇から前・後ろの左右の板が蝶番で下がり、横の板に厚い塊、前の板に四角いパネル。
+// 白い機体：胴体（柱・コクピットカバー・腹の上と下）と腰。股の塊がいちばん前と後ろに出て（前と背の面は上の段が倒れ出て、折れて下の段が下がる）、その両脇から前・後ろの左右の板が蝶番で下がり、横の板に厚い塊、前の板に四角いパネル。
 // 寸法は見本（白い機体の正面・横・後ろ）から：見本の線を胸の幅で倍率を決め、腹の下の端の高さで重ねて、腰の外形が正面・横・後ろで線に乗るように決めた（out/v3/_ov.py）（依頼主：「その読みで白い機体の腰を作って」）
-const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.38, "skKY": 2.27, "skKH": 1.02, "skKZF": 0.629, "skKZB": 0.835, "skKFE": 0, "skKBE": 0, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.06, "skKTopW": 0.398, "skKTopH": 0.486, "skKSlotD": 0.03, "skKSlotW": 0.167, "skKSlotH": 0.45, "skKSlotY": 0.234, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.398, "skFW": 1.759, "skFH": 0.702, "skFT": 0.2, "skFY": 2.3, "skFR": 0.602, "skFAz": 0, "skFFlare": 29, "skFTaper": -2, "skFBotE": 85, "skFSlant": 0.261, "skFBevel": 0.03, "skFHinge": true, "skFHD": 0.06, "skFPinR": 0.045, "skFPinIn": 0.15, "skFPinOut": 0.08, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.407, "skFBoxH": 0.378, "skFBoxY": 0.072, "skFBoxX": 0.078, "skFBoxBev": 0.03, "skSOn": true, "skSW": 0.871, "skSH": 0.702, "skST": 0.1, "skSY": 2.27, "skSR": 0.852, "skSZ": -0.18, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.413, "skSBoxH": 0.513, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.398, "skBW": 1.458, "skBH": 0.783, "skBT": 0.2, "skBY": 2.3, "skBR": 0.575, "skBFlare": 30, "skBTaper": -6, "skBBotE": 85, "skBSlant": 0.261, "skBBevel": 0.03, "skBHinge": true, "skBHD": 0.06, "skBPinR": 0.045, "skBPinIn": 0.15, "skBPinOut": 0.08, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0.45, "skFBendA": 29, "skBBendH": 0.45, "skBBendA": 28, "skFYaw": 25.0, "skBYaw": 5.0} }];
+const SAMPLES = [{ group: '見本', name: '白い機体', v: {"col1On": true, "cov1On": true, "abuOn": true, "ablOn": true, "splOn": false, "chbOn": false, "ltrOn": false, "belOn": false, "mpcOn": false, "mppOn": false, "g_skirtOn": true, "skWOn": true, "skWY": 2.19, "skWH": 0.08, "skWOut": 0.03, "skWOutAt": 0.4, "skWIn": 0.1, "skKOn": true, "skKW": 0.38, "skKY": 2.27, "skKH": 1.02, "skKZF": 0.62, "skKZB": 0.58, "skKFE": 29, "skKBE": 29, "skKCh": 0.15, "skKBev": 0.03, "skKTopD": 0.03, "skKTopW": 0.398, "skKTopH": 0.45, "skKSlotD": 0.03, "skKSlotW": 0.167, "skKSlotH": 0.45, "skKSlotY": 0.234, "skCOn": false, "skTOn": false, "skFOn": true, "skFSplit": true, "skFGap": 0.398, "skFW": 1.675, "skFH": 0.702, "skFT": 0.2, "skFY": 2.3, "skFR": 0.5, "skFAz": 0, "skFFlare": 6, "skFTaper": -2, "skFBotE": 85, "skFSlant": 0.261, "skFBevel": 0.03, "skFHinge": true, "skFHD": 0.06, "skFPinR": 0.045, "skFPinIn": 0.15, "skFPinOut": 0.08, "skFOpen": 0, "skFFoldI": 0, "skFFoldO": 0, "skFFold": 0, "skFPoint": 0, "skFBoxD": 0.08, "skFBoxW": 0.407, "skFBoxH": 0.45, "skFBoxY": 0.07, "skFBoxX": 0.078, "skFBoxBev": 0.03, "skSOn": true, "skSW": 0.74, "skSH": 0.702, "skST": 0.1, "skSY": 2.27, "skSR": 0.852, "skSZ": -0.27, "skSAz": 90, "skSFlare": 3, "skSTaper": 0, "skSBotE": 85, "skSSlant": 0, "skSBevel": 0.03, "skSFoldI": 0, "skSFoldO": 0, "skSFold": 0, "skSPoint": 0, "skSBoxD": 0.1, "skSBoxW": 0.4, "skSBoxH": 0.513, "skSBoxY": 0, "skSBoxX": 0, "skSBoxBev": 0.03, "skBOn": true, "skBSplit": true, "skBGap": 0.398, "skBW": 1.458, "skBH": 0.783, "skBT": 0.2, "skBY": 2.3, "skBR": 0.48, "skBFlare": 6, "skBTaper": 0, "skBBotE": 85, "skBSlant": 0.261, "skBBevel": 0.03, "skBHinge": true, "skBHD": 0.06, "skBPinR": 0.045, "skBPinIn": 0.15, "skBPinOut": 0.08, "skBOpen": 0, "skBFoldI": 0, "skBFoldO": 0, "skBFold": 0, "skBPoint": 0, "skBBoxD": 0, "skFBendH": 0, "skFBendA": 0, "skBBendH": 0, "skBBendA": 0, "skFYaw": 15, "skBYaw": 5.0, "skKFold": 0.45, "skKFE2": -3, "skKBFold": 0.45, "skKBE2": -3} }];
 // [SAMPLES-END]
 function sampleValues(sm) { const b = sm.base ? BASES[sm.base] || {} : {}; return { ...b, ...(sm.v || {}) }; }
 function openSample(i) {
