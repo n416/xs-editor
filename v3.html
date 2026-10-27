@@ -2685,7 +2685,7 @@ function dropHeadParts() {
 }
 // ---- 頭を胴体に載せる：胴体の上の端（頭の幅の内で一番高い所、その高さの前後の真ん中）に、頭の首のつなぎ目を合わせる。頭は下にある一番高い物に載る
 // 頭の「上下のずれ」「前後のずれ」はここからのずれ。胴体が無ければ頭はそのまま ----
-let HEADXF = null, NECK_BASE = null;
+let GXF = {}, NECK_BASE = null;
 function seatHead() {
   NECK_BASE = null;
   if (!P.headOn || !P.g_torsoOn || typeof TREE !== 'object' || !ANCHOR.neckTop) return;
@@ -2710,16 +2710,18 @@ function seatHead() {
 // 首：胴体の上の端から（中へ 0.2 埋めて）頭のつなぎ目の 0.05 上までの、上から見た多角形の筒（断面は「首」の欄で描く形）。頭を上下・前後・大きさで動かしても付いて行く
 function neckTube() {
   if (!P.neck || !P.headOn || !NECK_BASE) return;
-  const t = NECK_BASE.top.clone();
-  if (HEADXF) { const { c, sc, y, z } = HEADXF; t.set(c.x + (t.x - c.x) * sc, c.y + (t.y - c.y) * sc + y, c.z + (t.z - c.z) * sc + z); }
-  const yb = NECK_BASE.T.y - 0.2, L = t.y + 0.05 - yb;   /* 埋める深さ 0.2・頭に入る 0.05 は[独自] */
+  // まとめの移動（上下・前後・大きさ）を点に掛ける。上の端は頭→全身、下の端は胴体→全身の順（applyGroupXf と同じ順）
+  const xf = (q, id) => { const g = GXF[id]; if (!g) return q; const { c, sc, y, z } = g; return new V(c.x + (q.x - c.x) * sc, c.y + (q.y - c.y) * sc + y, c.z + (q.z - c.z) * sc + z); };
+  const k = GXF.all ? GXF.all.sc : 1;
+  const t = xf(xf(NECK_BASE.top, 'head'), 'all'), b = xf(xf(new V(0, NECK_BASE.T.y - 0.2, NECK_BASE.T.z), 'torso'), 'all');   /* 胴体に埋める深さ 0.2・頭に入る 0.05 は[独自] */
+  const L = t.y + 0.05 * k - b.y;
   if (L <= 0) return;
   setPart(PART.neck);
   if (!P.neckPts || P.neckPts.length !== P.neckN) P.neckPts = regularEye(P.neckN);
   const axis = new V(0, -1, 0), e1 = new V(1, 0, 0), e2 = new V().crossVectors(axis, e1).normalize();
-  const pts = P.neckPts.map(([a, b]) => [a * P.neckR, b * P.neckR]);
+  const pts = P.neckPts.map(([a, bb]) => [a * P.neckR * k, bb * P.neckR * k]);
   const col = P.neckColor ? new THREE.Color(P.neckColor) : PC('neck');
-  taperPlate(M, new V(t.x, t.y + 0.05, t.z), axis, e1, e2, pts, L, P.neckTaper, col);
+  taperPlate(M, new V(t.x, t.y + 0.05 * k, t.z), axis, e1, e2, pts, L, P.neckTaper, col);
 }
 function applyGroupXf() {
   if (typeof TREE !== 'object') return;
@@ -2733,7 +2735,7 @@ function applyGroupXf() {
     for (const T of [M, G]) for (let i = 0; i < T.pid.length; i++) if (set.has(T.pid[i])) b.expandByPoint(new V(T.pos[3 * i], T.pos[3 * i + 1], T.pos[3 * i + 2]));
     if (b.isEmpty()) return;
     const c = b.getCenter(new V()); if (node.id === 'all') c.y = b.min.y;   /* 全身の大きさは足の裏を中心に（地面に着いたまま） */
-    if (node.id === 'head') HEADXF = { c, sc, y, z };   /* 首の上の端を頭と一緒に動かす */
+    GXF[node.id] = { c, sc, y, z };   /* 首の両端を、頭・胴体・全身と一緒に動かす（neckTube） */
     const xf = (arr, i) => { arr[i] = c.x + (arr[i] - c.x) * sc; arr[i + 1] = c.y + (arr[i + 1] - c.y) * sc + y; arr[i + 2] = c.z + (arr[i + 2] - c.z) * sc + z; };
     for (const T of [M, G]) {
       for (let i = 0; i < T.pid.length; i++) if (set.has(T.pid[i])) xf(T.pos, 3 * i);
@@ -3035,7 +3037,7 @@ function build() {
   else { const km = M, kg = G; M = new Tris(); G = new Tris(); nf = head(); M = km; G = kg; }
   dropHeadParts();
   body();
-  HEADXF = null; seatHead();
+  GXF = {}; seatHead();
   applyGroupXf();
   neckTube();
   group = new THREE.Group();
