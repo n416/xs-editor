@@ -1173,13 +1173,15 @@ $('#bPaintGrid').onclick = () => {
 
 // ---- ゲーム用に書き出す・チェックだけする：xsengine.js（骨・LOD・材質を付けた .glb を作る、つながりと関節を調べる）を使う ----
 // 手持ちの武器はこの画面に無いので、陣営ごとの武器の 1 式（samples/weapons-a.json・weapons-b.json：いまの強襲の銃とバズーカ）を右手に持たせる
+/** Claws (parts whose name starts with 爪): hands that hold nothing, so no sample gun or bazooka is put in them */
+const clawHands = () => kept().some(it => (byId[it.part]?.pieces ?? []).some(pc => /^爪/.test(pc.name ?? '') && !pc.blockout));
 async function editorWorker() { await XS.ready(); return XS; }
 /** 機体 id（a_raid など）で書き出す → { glb (base64), report, floating（つながっていない部品）, loose（関節で外れる・めり込む）, weapons } */
 async function exportGame(id) {
   const X = await editorWorker();
   const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
   const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));   // 自由な機体が自分の武器を持っている
-  X.load({ parts: own ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
+  X.load({ parts: own || clawHands() ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
   const applied = await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
   const chk = X.check(id), out = await X.exportNow(id, true);
   return { ...out, floating: chk.floating, loose: chk.loose, depths: chk.depths, weapons: applied.weapons, own };
@@ -1234,7 +1236,7 @@ $('#bCheck').onclick = async () => {
     }
     const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
     const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));
-    X.load({ parts: own ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
+    X.load({ parts: own || clawHands() ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
     await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
     const r = X.report(id); window.__lastCheck = r;   // （確かめる道具が、めり込みの深さ r.depths を読む）
     const line = (t, ok) => `<div style="white-space:pre-line${ok ? '' : ';color:var(--warn)'}">${esc2(t)}</div>`;
@@ -1730,7 +1732,7 @@ const SHARE = initShare({
     const id = $('#gameId').value, X = await editorWorker();
     const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
     const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));
-    X.load({ parts: own ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
+    X.load({ parts: own || clawHands() ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
     await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
     const r = X.report(id);
     return { ok: r.ok, text: `${$('#gameId').selectedOptions[0].textContent} として調べました\n${r.conn}\n${r.joint}` };
@@ -1750,7 +1752,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '4c7cd22';
+const BUILD = 'e983626';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

@@ -676,6 +676,9 @@ function attachPoints(pieces) {
   const rigged = pieces.find(pc => pc.part.rig?.hand_r)?.part;
   if (!out.hand_r && rigged) { rigged.proxy.updateMatrixWorld(); out.hand_r = { pos: new THREE.Vector3(...rigged.rig.hand_r).applyMatrix4(rigged.proxy.matrixWorld), bone: 'forearm_r' }; }
   out.muzzle = find(/マズル|銃口/, null);
+  // a beam built into an arm (a weapon with mount "arm", the claw hand's): where it comes out, a part named …ビームの口 on
+  // that side's forearm (nodes arm_muzzle_l / arm_muzzle_r; client/src/models.ts muzzleOf)
+  for (const s of ['l', 'r']) { const p = find(/ビームの口/, 'forearm_' + s); if (p) out['arm_muzzle_' + s] = p; }
   // the back's two largest nozzles, one a side (docs/models.md; the game's own flames come from jet_<n>, below)
   const back = nozzlesOf(pieces).filter(n => n.bone === 'torso');
   for (const s of ['l', 'r']) { const t = back.find(n => (s === 'l' ? n.pos.x > 0.02 : n.pos.x < -0.02)); if (t) out['thruster_' + s] = { pos: t.pos, bone: 'torso' }; }
