@@ -301,7 +301,7 @@ const P = { seed: 1, colorSeed: 0, paintSeed: 0, jitter: 0.3, W: 1.0, D: 1.1, H:
   occBulge: 1.0, occDown: 0, occEU: 30, occFacets: 1,
   backY: 0, backDrop: 0.2, backW: 0.68, backOut: 0.96, backCham: 0.3, backSideAz: 135, backTilt: -10, backSlope: 30,
   neck: false, neckColor: '', neckN: 8, neckR: 0.2, neckL: 0.4, neckTaper: 1.0, neckY: 0, neckZ: 0, neckTilt: 0, neckPts: null,
-  helmetColor: '', brimColor: '', guardColor: '', backColor: '', faceColor: '', muffOn: true, helmetOn: true, occOn: true, brimOn: true, guardOn: true, faceOn: true, decoOn: true, headOn: true, v2Side: true, v2Only: false,
+  helmetColor: '', brimColor: '', guardColor: '', backColor: '', faceColor: '', packOn: false, packW: 1.38, packH: 0.85, packD: 0.45, packIn: 0.15, packY: 0.03, packBackT: 8, packSideT: 10, packTopT: 15, packBotT: 10, packCham: 0.08, packNzOn: true, packNzX: 0.36, packNzR: 0.22, packNzR0: 0.16, packNzL: 0.35, packNzA: 60, packNzZ: 0.22, packNzY: 0, packBsOn: false, packBsW: 1.22, packBsH: 0.68, packBsD: 0.5, muffOn: true, helmetOn: true, occOn: true, brimOn: true, guardOn: true, faceOn: true, decoOn: true, headOn: true, v2Side: true, v2Only: false,
   chin: false, ears: true, vents: true, back: true, edges: false };
 
 // ---- 乱数（種で決まる揺らぎ）----
@@ -689,8 +689,8 @@ function roundEdge(a, b, r, nf) {
 function regularEye(n) { const o = []; for (let i = 0; i < n; i++) { const a = PI / 2 + i / n * 2 * PI; o.push([+Math.cos(a).toFixed(3), +Math.sin(a).toFixed(3)]); } return o; }
 
 // ---- 部位の番号（3D を押した所から左の欄を光らせるため）----
-const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, band: 40, skF: 41, skS: 42, skB: 43, crotch: 44, x1: 45, x2: 46, x3: 47, x4: 48, x5: 49, x6: 50, skC: 52, col1: 53, cov1: 54, abu: 55, abl: 56, spl: 57, ltr: 58, chb: 59, bel: 60, mpc: 61, mpp: 62, skT: 63, skW: 64, skK: 65, shj: 66, shb: 67, shR: 68, shL: 69, uar: 70, wsj: 71, elb: 72, fra: 73, hnd: 74, hpj: 75, thg: 76, knl: 77, kgd: 78, shn: 79, ftt: 80, fToe: 83, fCov: 84, fHeel: 85, fUp: 86, fIn: 87, fBall: 88 };
-const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-band', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch', 45: 'sec-x1', 46: 'sec-x2', 47: 'sec-x3', 48: 'sec-x4', 49: 'sec-x5', 50: 'sec-x6', 52: 'sec-skC', 53: 'sec-col1', 54: 'sec-cov1', 55: 'sec-abu', 56: 'sec-abl', 57: 'sec-spl', 58: 'sec-ltr', 59: 'sec-chb', 60: 'sec-bel', 61: 'sec-mpc', 62: 'sec-mpp', 63: 'sec-skT', 64: 'sec-skW', 65: 'sec-skK', 66: 'sec-shj', 67: 'sec-shb', 68: 'sec-shR', 69: 'sec-shL', 70: 'sec-uar', 71: 'sec-wsj', 72: 'sec-elb', 73: 'sec-fra', 74: 'sec-hnd', 75: 'sec-hpj', 76: 'sec-thg', 77: 'sec-knl', 78: 'sec-kgd', 79: 'sec-shn', 80: 'sec-ftt', 83: 'sec-fToe', 84: 'sec-fToe', 85: 'sec-fHeel', 86: 'sec-fUp', 87: 'sec-fIn', 88: 'sec-fBall' };
+const PART = { skull: 0, helmet: 1, brim: 2, muff: 3, guard: 4, back: 5, visor: 6, face: 7, twin: 8, mono: 9, ear: 10, chin: 11, crest: 12, horn: 13, vent: 14, occ: 15, neck: 16, fig: 17, chest: 18, abd: 19, pelvis: 20, skirt: 21, shoulder: 22, upperarm: 23, forearm: 24, hand: 25, thigh: 26, knee: 27, shin: 28, foot: 29, pack: 30, pipe: 31, cannon: 32, hatch: 33, tread: 34, ball: 35, chestEye: 36, plate: 37, center: 38, collar: 39, band: 40, skF: 41, skS: 42, skB: 43, crotch: 44, x1: 45, x2: 46, x3: 47, x4: 48, x5: 49, x6: 50, skC: 52, col1: 53, cov1: 54, abu: 55, abl: 56, spl: 57, ltr: 58, chb: 59, bel: 60, mpc: 61, mpp: 62, skT: 63, skW: 64, skK: 65, shj: 66, shb: 67, shR: 68, shL: 69, uar: 70, wsj: 71, elb: 72, fra: 73, hnd: 74, hpj: 75, thg: 76, knl: 77, kgd: 78, shn: 79, ftt: 80, fToe: 83, fCov: 84, fHeel: 85, fUp: 86, fIn: 87, fBall: 88, packNz: 89 };
+const PART_TARGET = { 0: 'sec-body', 1: 'sec-helmet', 2: 'sec-brim', 3: 'sec-muff', 4: 'sec-guard', 5: 'sec-back', 6: 'sec-face', 7: 'sec-face', 8: 'sec-twin', 9: 'sec-mono', 10: 'sec-ear', 11: 'sec-chin', 12: 'sec-crest', 13: 'sec-horn', 14: 'btn-vents', 15: 'sec-occ', 16: 'sec-neck', 17: 'sec-fig', 18: 'sec-chest', 19: 'sec-abd', 20: 'sec-chest', 21: 'sec-skirt', 22: 'sec-shoulder', 23: 'sec-upperarm', 24: 'sec-forearm', 25: 'sec-hand', 26: 'sec-thigh', 27: 'sec-knee', 28: 'sec-shin', 29: 'sec-foot', 30: 'sec-pack', 31: 'sec-pipe', 32: 'sec-cannon', 33: 'sec-chest', 34: 'sec-fig', 35: 'sec-fig', 36: 'sec-chest', 37: 'sec-plate', 38: 'sec-center', 39: 'sec-collar', 40: 'sec-band', 41: 'sec-skF', 42: 'sec-skS', 43: 'sec-skB', 44: 'sec-crotch', 45: 'sec-x1', 46: 'sec-x2', 47: 'sec-x3', 48: 'sec-x4', 49: 'sec-x5', 50: 'sec-x6', 52: 'sec-skC', 53: 'sec-col1', 54: 'sec-cov1', 55: 'sec-abu', 56: 'sec-abl', 57: 'sec-spl', 58: 'sec-ltr', 59: 'sec-chb', 60: 'sec-bel', 61: 'sec-mpc', 62: 'sec-mpp', 63: 'sec-skT', 64: 'sec-skW', 65: 'sec-skK', 66: 'sec-shj', 67: 'sec-shb', 68: 'sec-shR', 69: 'sec-shL', 70: 'sec-uar', 71: 'sec-wsj', 72: 'sec-elb', 73: 'sec-fra', 74: 'sec-hnd', 75: 'sec-hpj', 76: 'sec-thg', 77: 'sec-knl', 78: 'sec-kgd', 79: 'sec-shn', 80: 'sec-ftt', 83: 'sec-fToe', 84: 'sec-fToe', 85: 'sec-fHeel', 86: 'sec-fUp', 87: 'sec-fIn', 88: 'sec-fBall', 89: 'sec-packNz' };
 const setPart = id => { M.part = id; G.part = id; };
 
 // ---- 頭 ----
@@ -2683,6 +2683,79 @@ function dropHeadParts() {
   }
   REG = REG.filter(r => !off.has(r.part));
 }
+// ---- バックパックの本体：付け方は Ver2 の背中の部品（parts/back）と同じ。胴体の背中の真ん中に、前の面を背中へ差し込んで付ける。
+// 上の端は胴体の上の端から「上の端の下がり」だけ下。肩アーマーの振れる所（肩のまわり）へは出さない（幅は胴体の幅の内）。
+// 背中の位置は、置いた胴体の部品（スカートは除く）の、バックパックの幅と高さの内でいちばん後ろの所から測る（腰のひねりは戻して測る）。
+// 箱の面はどれも傾ける：後ろの面は上が前へ、横は後ろへすぼまり、上は後ろへ下がり、下は後ろへ上がる。後ろの 4 つの角を面取り ----
+function buildPack() {
+  if (!P.packOn || !P.g_torsoOn || typeof TREE !== 'object') return;
+  const tn = TREE.children.find(n => n.id === 'torso'), sk = tn.children.find(n => n.id === 'skirt'), skirt = sk ? partsUnder(sk) : new Set();
+  const torso = new Set([...partsUnder(tn)].filter(id => !skirt.has(id) && id !== PART.pack));
+  const qi = PARTXF ? PARTXF.q.clone().invert() : null;
+  const pts = [];
+  for (let i = 0; i < M.pid.length; i++) if (torso.has(M.pid[i])) {
+    const q = new V(M.pos[3 * i], M.pos[3 * i + 1], M.pos[3 * i + 2]);
+    if (qi && !PARTXF.hips.has(M.pid[i])) q.sub(PARTXF.pv).applyQuaternion(qi).add(PARTXF.pv);
+    pts.push(q);
+  }
+  const R = D2R, bt = P.packBackT * R, st = P.packSideT * R, tt = P.packTopT * R, ut = P.packBotT * R, c = P.packCham;
+  // 背中に差し込む箱：上の端 yT・下の端 yB・幅の半分 hw・背中からの出 D。背中は、この幅と高さの内の胴体のいちばん後ろ
+  const box = (yT, yB, hw, D) => {
+    const inY = pts.filter(q => Math.abs(q.x) < hw && q.y < yT && q.y > yB);
+    if (!inY.length) return null;
+    const yM = (yT + yB) / 2, zS = Math.min(...inY.map(q => q.z)), zF = zS + P.packIn, zB = zS - D;
+    const back = { n: new V(0, Math.sin(bt), -Math.cos(bt)) }; back.d = back.n.dot(new V(0, yM, zB));
+    const top = { n: new V(0, Math.cos(tt), -Math.sin(tt)) }; top.d = top.n.dot(new V(0, yT, zS));
+    const bot = { n: new V(0, -Math.cos(ut), -Math.sin(ut)) }; bot.d = bot.n.dot(new V(0, yB, zS));
+    const pl = [{ n: new V(0, 0, 1), d: zF }, back, top, bot];
+    const zAt = y => (Math.sin(bt) * y - back.d) / Math.cos(bt);   /* 後ろの面の z（高さ y で） */
+    for (const sx of [1, -1]) {
+      const side = { n: new V(sx * Math.cos(st), 0, -Math.sin(st)) }; side.d = side.n.dot(new V(sx * hw, yM, zS)); pl.push(side);
+      if (c > 0.001) { const zb = zAt(yM), xe = (side.d + Math.sin(st) * zb) / Math.cos(st); const m = side.n.clone().add(back.n).normalize(); pl.push({ n: m, d: m.dot(new V(sx * (xe - c), yM, zb)) }); }
+    }
+    if (c > 0.001) for (const [f, sy] of [[top, 1], [bot, -1]]) {
+      const zb = zAt(sy > 0 ? yT : yB), ye = sy > 0 ? (top.d + Math.sin(tt) * zb) / Math.cos(tt) : -(bot.d + Math.sin(ut) * zb) / Math.cos(ut);
+      const m = f.n.clone().add(back.n).normalize(); pl.push({ n: m, d: m.dot(new V(0, ye - sy * c, zb)) });
+    }
+    return { pl, zS, bot, botY: z => -(bot.d + Math.sin(ut) * z) / Math.cos(ut) };
+  };
+  const inW = pts.filter(q => Math.abs(q.x) < P.packW / 2);
+  if (!inW.length) return;
+  const yT = Math.max(...inW.map(q => q.y)) - P.packY, yB = yT - P.packH;
+  const pk = box(yT, yB, P.packW / 2, P.packD);
+  if (!pk) return;
+  const { zS, bot } = pk;
+  setPart(PART.pack);
+  crystal(M, pk.pl, colOf('pack'));
+  // 噴射口の台：本体の下に続く箱（上の端は本体の下の端より 0.05 上に入れる）。モノアイの機体の見本では、噴射口はこの台の後ろの面から出る
+  if (P.packBsOn) {
+    const bs = box(yB + 0.05, yB - P.packBsH, P.packBsW / 2, P.packBsD);
+    if (bs) { setPart(PART.pack); crystal(M, bs.pl, colOf('pack')); }
+  }
+  // スラスター（噴射口）：Ver2 の噴射口（parts/upper/backpack.js の nozzle）と同じ作り。中が空いた鐘形を短い板の輪で作り、奥に暗いのど、上に付け根の輪。
+  // 付け根はバックパックの下の面の中（台があれば台の中へ下げる。左右に一対）。向きは真下から後ろへ「向き」の角度だけ倒す（Ver2 の厚い塊は 25°）
+  if (P.packNzOn) {
+    const a = P.packNzA * R, u = new V(0, -Math.cos(a), -Math.sin(a)), X1 = new V(1, 0, 0), Y1 = new V().crossVectors(u, X1).normalize();
+    const zc = zS - P.packNzZ, yc = pk.botY(zc) + 0.02 - (P.packNzY || 0);   /* 付け根：本体の下の面から「付け根の下がり」だけ下 */
+    const r0 = P.packNzR0, r1 = P.packNzR, L = P.packNzL, t = 0.025, n = 16, dA = 2 * PI / n;
+    const eAt = an => X1.clone().multiplyScalar(Math.cos(an)).addScaledVector(Y1, Math.sin(an));
+    const fAt = an => X1.clone().multiplyScalar(-Math.sin(an)).addScaledVector(Y1, Math.cos(an));
+    setPart(PART.packNz);
+    for (const sx of [1, -1]) {
+      const C = new V(sx * P.packNzX, yc, zc), at = (rad, ax, an) => C.clone().addScaledVector(eAt(an), rad).addScaledVector(u, ax);
+      for (let k = 0; k < n; k++) {
+        const a0 = k * dA - 0.01, a1 = (k + 1) * dA + 0.01, am = (k + 0.5) * dA, e = eAt(am), ch = Math.cos(dA / 2);
+        const no = e.clone().multiplyScalar(L).addScaledVector(u, -(r1 - r0)).normalize();
+        crystal(M, [{ n: no, d: no.dot(at(r0 * ch, 0, am)) }, { n: no.clone().negate(), d: -no.dot(at((r0 - t) * ch, 0, am)) },
+          { n: fAt(a0).negate(), d: -fAt(a0).dot(C) }, { n: fAt(a1), d: fAt(a1).dot(C) },
+          { n: u.clone().negate(), d: -u.dot(C) }, { n: u.clone(), d: u.dot(C) + L }], COL.dark);
+      }
+      const ring = (rad, ax0, ax1) => { const f = [{ n: u.clone().negate(), d: -u.dot(C) - ax0 }, { n: u.clone(), d: u.dot(C) + ax1 }]; for (let k = 0; k < n; k++) { const e = eAt((k + 0.5) * dA); f.push({ n: e, d: e.dot(C) + rad }); } return f; };
+      crystal(M, ring(r0 - t + 0.003, 0.02, 0.06), new THREE.Color(0x0b0c0e));   /* のど */
+      crystal(M, ring(r0 + 0.02, -0.08, 0.005), COL.dark);   /* 付け根の輪（バックパックの中から） */
+    }
+  }
+}
 // ---- 頭を胴体に載せる：胴体の上の端（頭の幅の内で一番高い所、その高さの前後の真ん中）に、頭の首のつなぎ目を合わせる。頭は下にある一番高い物に載る
 // 頭の「上下のずれ」「前後のずれ」はここからのずれ。胴体が無ければ頭はそのまま ----
 let GXF = {}, NECK_BASE = null;
@@ -3037,6 +3110,7 @@ function build() {
   else { const km = M, kg = G; M = new Tris(); G = new Tris(); nf = head(); M = km; G = kg; }
   dropHeadParts();
   body();
+  buildPack();
   GXF = {}; seatHead();
   applyGroupXf();
   neckTube();
@@ -3080,6 +3154,7 @@ addEventListener('resize', resize); resize();
 const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
 let downAt = null;
 canvas.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+canvas.addEventListener('mousedown', e => e.preventDefault());   /* 3D を押して回しても、アピアランスの欄のフォーカスはそのまま（依頼主：上下キーで欄を動かしながらカメラを回したい） */
 canvas.addEventListener('pointerup', e => {
   if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4 || !group) { downAt = null; return; }
   downAt = null;
@@ -3191,6 +3266,15 @@ const BODY_SECS = [
     ['r', 'splETs', '外の上の縁：横の面に沿った幅', 0, 1, 0.01, 0.06], ['r', 'splETo', '外の上の縁：上の面に沿った幅', 0, 1, 0.01, 0.06],
     ['r', 'splEBs', '外の下の縁：横の面に沿った幅', 0, 1, 0.01, 0.1], ['r', 'splEBo', '外の下の縁：下の面に沿った幅', 0, 1, 0.01, 0.1],
     ['r', 'splEI', '内の横の面の縁', 0, 1, 0.01, 0.05], ['r', 'splEU', '正面の上の辺の縁（前と背中）', 0, 1, 0.01, 0.05], ['r', 'splED', '正面の底の辺の縁（前と背中）', 0, 1, 0.01, 0.05]]],
+  ['sec-pack', 'バックパック', [['c', 'pack'], ['on', 'packOn', false],
+    ['r', 'packW', '幅', 0.2, 3, 0.01, 1.38], ['r', 'packH', '高さ', 0.2, 3, 0.01, 0.85], ['r', 'packD', '背中から後ろへの出（真ん中の高さで）', 0.05, 2, 0.01, 0.45],
+    ['r', 'packIn', '背中への差し込み', 0, 0.6, 0.01, 0.15], ['r', 'packY', '上の端の下がり（胴体の上の端から）', -0.5, 3, 0.01, 0.03],
+    ['r', 'packBackT', '後ろの面の傾き（上が前へ、度）', 1, 40, 0.5, 8], ['r', 'packSideT', '横の面のすぼまり（後ろへ、度）', 1, 40, 0.5, 10],
+    ['r', 'packTopT', '上の面の下がり（後ろへ、度）', 1, 60, 0.5, 15], ['r', 'packBotT', '下の面の上がり（後ろへ、度）', 1, 60, 0.5, 10], ['r', 'packCham', '後ろの角の面取り', 0, 0.4, 0.01, 0.08],
+    ['h', '噴射口の台（本体の下に続く箱）'], ['toggle', 'packBsOn', '台を出す', false], ['r', 'packBsW', '台の幅', 0.2, 3, 0.01, 1.22], ['r', 'packBsH', '台の高さ', 0.1, 2, 0.01, 0.68], ['r', 'packBsD', '台の背中から後ろへの出', 0.05, 2, 0.01, 0.5]]],
+  ['sec-packNz', 'スラスター', [['on', 'packNzOn', true],
+    ['r', 'packNzA', '向き（真下から後ろへ、度）', -30, 90, 1, 60], ['r', 'packNzX', '左右の間（真ん中から）', 0, 1.2, 0.01, 0.36], ['r', 'packNzZ', '付け根の前後（背中から後ろへ）', 0, 1.5, 0.01, 0.22], ['r', 'packNzY', '付け根の下がり（本体の下の面から）', 0, 2, 0.01, 0],
+    ['r', 'packNzR', '口の半径', 0.03, 0.6, 0.005, 0.22], ['r', 'packNzR0', '付け根の半径', 0.03, 0.6, 0.005, 0.16], ['r', 'packNzL', '長さ', 0.05, 1.2, 0.01, 0.35]]],
   ['sec-chb', '胸の本体', [['c', 'chb'], ['on', 'chbOn', false],
     ['r', 'chbW', '幅（上の端）', 0.1, 4, 0.01, 1.19], ['r', 'chbWB', '下の端の幅', 0.1, 4, 0.01, 1.33], ['r', 'chbH', '高さ', 0.1, 4, 0.01, 1.32], ['r', 'chbD', '奥行（正面の真ん中から背まで）', 0.1, 4, 0.01, 1.4],
     ['r', 'chbY', '上端の下がり', -1, 4, 0.01, 0.31], ['r', 'chbZ', '前後の位置（正面の真ん中）', -2, 3, 0.01, 0.78],
@@ -3408,13 +3492,14 @@ const UI_KEY = 'crystal-head-ui';
 let openId = null, mapMode = 'body';
 // ---- レイヤー：右の一覧はグラフィックソフトのレイヤー、欄のつまみはそのレイヤーのアピアランス（依頼主、10/24）。
 // 入れ子にでき、まとめるグループにも属性（色・表示・上下と前後のずれ・大きさ）が付く ----
-const LEAF_ON = { 'sec-helmet': 'helmetOn', 'sec-occ': 'occOn', 'sec-brim': 'brimOn', 'sec-guard': 'guardOn', 'sec-face': 'faceOn', 'sec-deco': 'decoOn', 'sec-muff': 'muffOn', 'sec-twin': 'twin', 'sec-mono': 'mono', 'sec-neck': 'neck', 'sec-chin': 'chin', 'sec-ear': 'ears', 'sec-back': 'back',
+const LEAF_ON = { 'sec-packNz': 'packNzOn', 'sec-pack': 'packOn', 'sec-helmet': 'helmetOn', 'sec-occ': 'occOn', 'sec-brim': 'brimOn', 'sec-guard': 'guardOn', 'sec-face': 'faceOn', 'sec-deco': 'decoOn', 'sec-muff': 'muffOn', 'sec-twin': 'twin', 'sec-mono': 'mono', 'sec-neck': 'neck', 'sec-chin': 'chin', 'sec-ear': 'ears', 'sec-back': 'back',
   'sec-chest': 'coreOn', 'sec-plate': 'plateOn', 'sec-center': 'centerOn', 'sec-collar': 'collarOn', 'sec-abd': 'abdOn', 'sec-band': 'bandOn', 'sec-pipe': 'pipeOn', 'sec-skF': 'skFOn', 'sec-skS': 'skSOn', 'sec-skB': 'skBOn', 'sec-skC': 'skCOn', 'sec-skT': 'skTOn', 'sec-skW': 'skWOn', 'sec-skK': 'skKOn', 'sec-shj': 'shjOn', 'sec-shb': 'shbOn', 'sec-shR': 'shROn', 'sec-shL': 'shLOn', 'sec-uar': 'uarOn', 'sec-wsj': 'wsjOn', 'sec-elb': 'elbOn', 'sec-fra': 'fraOn', 'sec-hnd': 'hndOn', 'sec-hpj': 'hpjOn', 'sec-thg': 'thgOn', 'sec-knl': 'knlOn', 'sec-kgd': 'kgdOn', 'sec-shn': 'shnOn', 'sec-ftt': 'fttOn', 'sec-fToe': 'fToeOn', 'sec-fHeel': 'fHeelOn', 'sec-fUp': 'fUpOn', 'sec-fIn': 'ftInOn', 'sec-fBall': 'fBallOn', 'sec-crotch': 'crotchOn', 'sec-col1': 'col1On', 'sec-cov1': 'cov1On', 'sec-abu': 'abuOn', 'sec-abl': 'ablOn', 'sec-spl': 'splOn', 'sec-ltr': 'ltrOn', 'sec-chb': 'chbOn', 'sec-bel': 'belOn', 'sec-mpc': 'mpcOn', 'sec-mpp': 'mppOn',
   'sec-x1': 'x1On', 'sec-x2': 'x2On', 'sec-x3': 'x3On', 'sec-x4': 'x4On', 'sec-x5': 'x5On', 'sec-x6': 'x6On' };
 const leaf = sec => ({ id: sec, sec, on: LEAF_ON[sec] });
 const TREE = { id: 'all', name: '全身', sec: 'sec-fig', xf: true, children: [
   { id: 'head', name: '頭', sec: 'sec-head', on: 'headOn', xf: true, children: ['sec-body', 'sec-helmet', 'sec-occ', 'sec-brim', 'sec-muff', 'sec-guard', 'sec-back', 'sec-face', 'sec-deco', 'sec-twin', 'sec-mono', 'sec-ear', 'sec-chin', 'sec-neck', 'sec-crest', 'sec-horn'].map(leaf) },
   { id: 'torso', name: '胴体', sec: 'sec-torso', on: 'g_torsoOn', xf: true, children: [...['sec-col1', 'sec-cov1', 'sec-abu', 'sec-abl', 'sec-spl', 'sec-chb', 'sec-ltr', 'sec-bel', 'sec-mpc', 'sec-mpp', 'sec-chest', 'sec-collar', 'sec-plate', 'sec-center', 'sec-abd', 'sec-band', 'sec-pipe'].map(leaf),
+    { id: 'pack', name: 'バックパック', sec: 'sec-pack', on: 'packOn', children: [leaf('sec-packNz')] },
     { id: 'skirt', name: 'スカート', sec: 'sec-skirt', on: 'g_skirtOn', xf: true, children: ['sec-wsj', 'sec-skW', 'sec-skK', 'sec-skC', 'sec-skF', 'sec-skS', 'sec-skB', 'sec-skT'].map(leaf) }, leaf('sec-crotch'),
     ...[1, 2, 3, 4, 5, 6].map(i => ({ ...leaf('sec-x' + i), use: 'x' + i + 'Use' })), { add: true }] },
   { id: 'leg', name: '脚', sec: 'sec-leg', on: 'g_legOn', xf: true, children: [...['sec-hpj', 'sec-thg', 'sec-knl', 'sec-kgd'].map(leaf),
@@ -3458,7 +3543,7 @@ function renderTree() {
     else eye.classList.add('none');
     const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = nameOf(node);
     row.append(tri, eye, nm);
-    row.onclick = () => openSec(openId === node.sec ? null : node.sec);
+    row.onclick = () => openSec(node.sec);   /* 選んでいる部位をもう一度押しても選んだまま（依頼主：解除されて何をしていたか分からなくなる）。閉じるのはアピアランスの題名 */
     row.onmouseenter = () => { if (M) showHL(trisOfParts(node.children ? partsUnder(node) : new Set(SEC_PARTS[node.sec] || []))); };
     row.onmouseleave = () => clearHL();
     box.append(row);
@@ -3567,7 +3652,7 @@ window.__hl = { probeTris, diffTris, hlMutFor, show: showHL, clear: clearHL, mes
 const BASES = {};
 // 白い機体：胴体（柱・コクピットカバー・腹の上と下）と腰。股の塊がいちばん前に出て（前の面は上の段が倒れ出て、折れて下の段が下がる）、背は後ろの板と並び、その両脇から前・後ろの左右の板が蝶番で下がり、横の板に厚い塊、前の板に四角いパネル。
 // 寸法は見本（白い機体の正面・横・後ろ）から：見本の線を胸の幅で倍率を決め、腹の下の端の高さで重ねて、腰の外形が正面・横・後ろで線に乗るように決めた（out/v3/_ov.py）（依頼主：「その読みで白い機体の腰を作って」）
-const SAMPLES = [{ group: '見本', name: '白い機体', v: {"headOn": true, "neck": true, "g_headY": 0.255, "g_headZ": -0.184, "g_headS": 0.75, "col1On":  true, "cov1On":  true, "abuOn":  true, "ablOn":  true, "splOn":  false, "chbOn":  false, "ltrOn":  false, "belOn":  false, "mpcOn":  false, "mppOn":  false, "g_skirtOn":  true, "skWOn":  true, "skWY":  2.19, "skWH":  0.08, "skWOut":  0, "skWOutAt":  0.4, "skWIn":  0.1, "skKOn":  true, "skKW":  0.38, "skKY":  2.27, "skKH":  1.02, "skKZF":  0.62, "skKZB":  0.595, "skKFE":  29, "skKBE":  20, "skKCh":  0.15, "skKBev":  0.03, "skKTopD":  0.03, "skKTopW":  0.398, "skKTopH":  0.45, "skKSlotD":  0.03, "skKSlotW":  0.167, "skKSlotH":  0.45, "skKSlotY":  0.234, "skCOn":  false, "skTOn":  false, "skFOn":  true, "skFSplit":  true, "skFGap":  0.398, "skFW":  1.675, "skFH":  0.732, "skFT":  0.2, "skFY":  2.3, "skFR":  0.5, "skFAz":  0, "skFFlare":  6, "skFTaper":  -2, "skFBotE":  85, "skFSlant":  0.261, "skFBevel":  0.03, "skFHinge":  true, "skFOpen":  0, "skFFoldI":  0, "skFFoldO":  0, "skFFold":  0, "skFPoint":  0, "skFBoxD":  0.08, "skFBoxW":  0.407, "skFBoxH":  0.45, "skFBoxY":  0.1, "skFBoxX":  0.078, "skFBoxBev":  0.03, "skSOn":  true, "skSW":  0.74, "skSH":  0.702, "skST":  0.1, "skSY":  2.27, "skSR":  0.852, "skSZ":  -0.27, "skSAz":  90, "skSFlare":  3, "skSTaper":  0, "skSBotE":  85, "skSSlant":  0, "skSBevel":  0.03, "skSFoldI":  0, "skSFoldO":  0, "skSFold":  0, "skSPoint":  0, "skSBoxD":  0.1, "skSBoxW":  0.4, "skSBoxH":  0.513, "skSBoxY":  0, "skSBoxX":  0, "skSBoxBev":  0.03, "skBOn":  true, "skBSplit":  true, "skBGap":  0.398, "skBW":  1.458, "skBH":  0.813, "skBT":  0.2, "skBY":  2.3, "skBR":  0.575, "skBFlare":  20, "skBTaper":  0, "skBBotE":  85, "skBSlant":  0.261, "skBBevel":  0.03, "skBHinge":  true, "skBOpen":  0, "skBFoldI":  0, "skBFoldO":  0, "skBFold":  0, "skBPoint":  0, "skBBoxD":  0, "skFBendH":  0, "skFBendA":  0, "skBBendH":  0, "skBBendA":  0, "skFYaw":  15, "skBYaw":  5.0, "skKFold":  0.45, "skKFE2":  -3, "skKBFold":  0.45, "skKBE2":  20, "skFHingeR":  0.07, "skBHingeR":  0.07, "skSHingeR":  0.035, "skSHinge":  true, "skSOpen":  0, "skSYaw":  0, "col1W":  1.68, "col1H":  0.937, "col1Y":  0.544, "col1D":  1.362, "abuH":  0.383, "ablH":  0.326, "cov1Y":  0.747, "cov1H":  1.438, "cov1WT":  0.605, "cov1WK":  0.571, "cov1WB":  0.47, "cov1Z":  0.957, "cov1D":  0.92, "cov1LowD":  32, "cov1Pt":  0.54, "g_armOn":  true, "shjOn":  true, "shbOn":  true, "shROn":  true, "shLOn":  true, "uarOn":  true, "shLSame":  true, "shX":  1.13, "shY":  0.82, "shZ":  0, "shjR":  0.12, "shjN":  8, "shjL":  0.25, "shbW":  0.5, "shbH":  0.55, "shbD":  0.55, "shbCh":  0.04, "uarW":  0.48, "uarD":  0.425, "uarL":  0.505, "uarCh":  0.05, "shRKind":  "cu", "shRT":  0.11, "shRUp":  0.11, "shRIn":  0.23, "shRW":  0.8, "shRD":  0.83, "shRCorner":  90, "shRST":  0.14, "shRHF":  0.8, "shRHO":  0.24, "shRFlare":  4, "shRSl":  0.09, "shRSlO":  0, "shRThD":  0.03, "shRThW":  0.5, "shRThH":  0.12, "shRThY":  0.05, "shRBev":  0.07, "shRSTO":  0.06, "shRChIT":  0.08, "shRChOT":  0.08, "shRChIB":  0.08, "shRChOB":  0.07, "shRChOBv":  0.55, "shPv":  0.02, "shjBall":  0.16, "shOpenA":  78, "shOpenU":  0, "shOpenY":  0, "uarLean":  8, "wsjOn":  true, "wsY":  1.834, "wsZ":  -0.15, "wsjR":  0.3, "wsjH":  0.5, "wsjN":  12, "elbOn":  true, "fraOn":  true, "elAx":  0.11, "elR":  0.06, "elW":  0.14, "elFirst":  78, "elCovW":  0.41, "elCovD":  0.34, "elCovCh":  0.04, "elCapT":  0.04, "fraW":  0.57, "fraD":  0.63, "fraL":  1.08, "fraTaper":  1.05, "fraCh":  0.05, "fraBev":  0.05, "fraCupR":  0.2, "fraCupW":  0.2, "fraRingN":  0, "fraNotchD":  0.06, "fraNotchW":  0.2, "fraNotchH":  0.14, "fraBkH":  0.56, "fraBkW":  0.3, "fraBkT":  0.15, "fraBkUp":  0.5, "fraBkOut":  0, "fraBkCh":  0.12, "fraWrW":  0.38, "fraWrH":  0.12, "fraWrD": 0.47, "fraWrLt": true, "elCovUp":  0.13, "elCovDn":  0.13, "uarChF":  0, "elCovIn":  0.23, "hndOn":  true, "hndK":  2.6, "elIn":  -0.13, "fraUp":  -0.16, "fraTopR":  0, "uarBotR":  0, "elCovWIn":  0.3, "g_legOn":  true, "hpjOn":  true, "thgOn":  true, "knlOn":  true, "kgdOn":  true, "shnOn":  true, "fttOn":  true, "skPush":  true, "shL":  1.87, "lgX":  0.42, "lgY":  2.92, "lgZ":  -0.18, "lgK":  2.15, "lgKX":  2.3, "lgThKind":  "ref", "lgKnKind":  "ref", "lgShKind":  "ref", "lgFtKind":  "ref", "lgHbKind":  "none", "lgKT":  2.78, "lgKXT":  1.75, "lgKF":  1.8, "thHip":  0.1, "thL":  1.313, "thWT":  0.312, "thWM":  0.338, "thWB":  0.267, "thMAt":  0.4, "thFT":  0.346, "thFM":  0.346, "thFB":  0.254, "thBT":  0.321, "thBM":  0.321, "thBB":  0.258, "thR":  0.05, "thTopCh":  0.15, "thArW": 0.43, "thArH": 0, "thKnY":  1.483, "thKnZ":  0.09, "thSpZ":  -0.163, "thSpA":  0.66, "thSpB":  0.875, "lgSplay":  5, "hjR":  0.2, "hjDin":  0.3, "hjDout":  0.22, "hjAR":  0.09, "kAxR": 0.214, "kAxW": 0.307, "kAxT": 0.09, "kAxD": 0.2, "kJz": -0.082, "kJy": 0.041, "elTrZ": 0.17, "uarLv": [[0, 0.263, -0.269, 0.266], [-0.263, 0.244, -0.244, 0.256], [-0.525, 0.219, -0.206, 0.25]], "uarR": 0.04, "fraLv": [[0, 0.153, -0.21, 0.2875], [-0.2375, 0.315, -0.316, 0.3125], [-1.031, 0.315, -0.316, 0.3125], [-1.081, 0.246, -0.254, 0.28]], "fraR": 0.04, "elTrS": 0.3, "elTrD": 0.33, "elTrPR": 0.07, "elCapR": 0.19, "kAcR": 0.055, "kAcT": 0.7, "kAcB": 0.7, "kAcX": 0.36, "kAcL": 0.22, "kAct": 4, "kTrSW": 0.22, "kTrCR": 1.48, "kTrTG": 0.03, "kTrSG": 0.03, "kTrX": 0.31, "kTrR": 0.115, "kTrT": 0.1, "kAcIn1": 0.066, "kAcIn2": 0.089, "kThB": -0.041, "kGap": 0.08, "kPinU": 0.27, "kPinL": 0.28, "kU": -0.041, "kUz": -0.196, "kL": 0.11, "kLz": -0.196, "kSplit": 0.5, "kNdW":  0.203, "kNdT":  0.373, "kNdBk":  0.405, "kNdFr":  0.0, "kNdB":  0.08, "kNdCh":  0.1, "kgLv":  [[0.288, 0.67, 0.455, 0.207], [0.139, 0.677, 0.372, 0.246], [-0.046, 0.673, 0.284, 0.259], [-0.269, 0.67, 0.269, 0.271], [-0.454, 0.64, 0.324, 0.267], [-0.64, 0.577, 0.336, 0.237], [-0.825, 0.511, 0.306, 0.192], [-1.048, 0.447, 0.269, 0.13], [-1.271, 0.306, 0.281, 0.074]], "kgR":  0.03, "kgK":  0.735, "kgWK":  1, "kgY":  0, "kgZ":  0, "shCalfLv":  [[-0.132, 0.186, -0.242, 0.297], [-0.224, 0.26, -0.371, 0.408], [-0.33, 0.297, -0.464, 0.483], [-0.66, 0.315, -0.593, 0.52], [-0.924, 0.222, -0.575, 0.464], [-1.154, -0.018, -0.464, 0.39], [-1.303, -0.204, -0.315, 0.334]], "shBodyLv":  [[-0.99, 0.26, -0.408, 0.352], [-1.32, 0.242, -0.445, 0.371], [-1.65, 0.297, -0.464, 0.378], [-1.947, 0.371, -0.5, 0.408]], "shAnkCv":  [[-1.953, 0.464], [-2.063, -0.093], [-2.458, -0.018], [-2.244, 0.631]], "shAnkY":  2.26, "shAnkZ":  -0.222, "shR":  0.08, "shAxW":  0.6, "shCvW":  0.52, "ftToe":  [[-0.504, 1.548], [-0.666, 1.296], [-0.666, 0.134], [-0.282, -0.014], [-0.184, 0.232], [-0.046, 0.728], [-0.258, 1.172]], "ftHeel":  [[-0.666, 0.122], [-0.282, -0.014], [-0.27, -0.226], [-0.306, -0.46], [-0.442, -0.534], [-0.616, -0.572], [-0.666, -0.534]], "ftW":  [0.52, 0.474, 0.52, 0.49], "ftRoot":  0.2, "ftK":  0.8, "ftWK":  1, "ftCh":  0.04, "shAnkDn":  40, "shAnkUp":  25, "shAxR":  0.19, "shAxT":  0.07, "shBotCut":  [], "shArch":  [], "ftPlate":  [], "shBall":  0.3, "shAxKeep":  true, "ftInstep":  [], "ftTip":  1, "ftSplit":  [], "shHolY":  0, "ftHeelUp":  [], "ftTipLo":  1, "ftShoe":  [], "ftSeam":  [], "ftParam":  false, "ftNgon":  false, "kFirst":  82, "thKnA":  0, "thKRW":  0, "kFork":  true, "kFkW":  0.22, "kFkT":  0.5, "kFkD": 0.08, "kTgW": 0.09, "kTgD": 0.109, "kTgL":  0.55, "kgChan":  true, "shRnd":  0.34, "shShell":  false, "shRodW":  0.13, "shnZ":  0.005, "shRim":  false, "thKR":  0, "thKRz":  -0.6, "shWK":  0.88, "g_allS":  1.238, "kAxDz": 0} }];
+const SAMPLES = [{ group: '見本', name: '白い機体', v: {"packOn": true, "packW": 1.16, "packH": 0.96, "packD": 0.48, "packY": 0.04, "packNzOn": true, "packNzX": 0.35, "packNzR": 0.16, "packNzR0": 0.12, "packNzL": 0.4, "packNzA": 30, "packNzZ": 0.24, "packNzY": 0, "packBsOn": false, "headOn": true, "neck": true, "g_headY": 0.255, "g_headZ": -0.184, "g_headS": 0.75, "col1On":  true, "cov1On":  true, "abuOn":  true, "ablOn":  true, "splOn":  false, "chbOn":  false, "ltrOn":  false, "belOn":  false, "mpcOn":  false, "mppOn":  false, "g_skirtOn":  true, "skWOn":  true, "skWY":  2.19, "skWH":  0.08, "skWOut":  0, "skWOutAt":  0.4, "skWIn":  0.1, "skKOn":  true, "skKW":  0.38, "skKY":  2.27, "skKH":  1.02, "skKZF":  0.62, "skKZB":  0.595, "skKFE":  29, "skKBE":  20, "skKCh":  0.15, "skKBev":  0.03, "skKTopD":  0.03, "skKTopW":  0.398, "skKTopH":  0.45, "skKSlotD":  0.03, "skKSlotW":  0.167, "skKSlotH":  0.45, "skKSlotY":  0.234, "skCOn":  false, "skTOn":  false, "skFOn":  true, "skFSplit":  true, "skFGap":  0.398, "skFW":  1.675, "skFH":  0.732, "skFT":  0.2, "skFY":  2.3, "skFR":  0.5, "skFAz":  0, "skFFlare":  6, "skFTaper":  -2, "skFBotE":  85, "skFSlant":  0.261, "skFBevel":  0.03, "skFHinge":  true, "skFOpen":  0, "skFFoldI":  0, "skFFoldO":  0, "skFFold":  0, "skFPoint":  0, "skFBoxD":  0.08, "skFBoxW":  0.407, "skFBoxH":  0.45, "skFBoxY":  0.1, "skFBoxX":  0.078, "skFBoxBev":  0.03, "skSOn":  true, "skSW":  0.74, "skSH":  0.702, "skST":  0.1, "skSY":  2.27, "skSR":  0.852, "skSZ":  -0.27, "skSAz":  90, "skSFlare":  3, "skSTaper":  0, "skSBotE":  85, "skSSlant":  0, "skSBevel":  0.03, "skSFoldI":  0, "skSFoldO":  0, "skSFold":  0, "skSPoint":  0, "skSBoxD":  0.1, "skSBoxW":  0.4, "skSBoxH":  0.513, "skSBoxY":  0, "skSBoxX":  0, "skSBoxBev":  0.03, "skBOn":  true, "skBSplit":  true, "skBGap":  0.398, "skBW":  1.458, "skBH":  0.813, "skBT":  0.2, "skBY":  2.3, "skBR":  0.575, "skBFlare":  20, "skBTaper":  0, "skBBotE":  85, "skBSlant":  0.261, "skBBevel":  0.03, "skBHinge":  true, "skBOpen":  0, "skBFoldI":  0, "skBFoldO":  0, "skBFold":  0, "skBPoint":  0, "skBBoxD":  0, "skFBendH":  0, "skFBendA":  0, "skBBendH":  0, "skBBendA":  0, "skFYaw":  15, "skBYaw":  5.0, "skKFold":  0.45, "skKFE2":  -3, "skKBFold":  0.45, "skKBE2":  20, "skFHingeR":  0.07, "skBHingeR":  0.07, "skSHingeR":  0.035, "skSHinge":  true, "skSOpen":  0, "skSYaw":  0, "col1W":  1.68, "col1H":  0.937, "col1Y":  0.544, "col1D":  1.362, "abuH":  0.383, "ablH":  0.326, "cov1Y":  0.747, "cov1H":  1.438, "cov1WT":  0.605, "cov1WK":  0.571, "cov1WB":  0.47, "cov1Z":  0.957, "cov1D":  0.92, "cov1LowD":  32, "cov1Pt":  0.54, "g_armOn":  true, "shjOn":  true, "shbOn":  true, "shROn":  true, "shLOn":  true, "uarOn":  true, "shLSame":  true, "shX":  1.13, "shY":  0.82, "shZ":  0, "shjR":  0.12, "shjN":  8, "shjL":  0.25, "shbW":  0.5, "shbH":  0.55, "shbD":  0.55, "shbCh":  0.04, "uarW":  0.48, "uarD":  0.425, "uarL":  0.505, "uarCh":  0.05, "shRKind":  "cu", "shRT":  0.11, "shRUp":  0.11, "shRIn":  0.23, "shRW":  0.8, "shRD":  0.83, "shRCorner":  90, "shRST":  0.14, "shRHF":  0.8, "shRHO":  0.24, "shRFlare":  4, "shRSl":  0.09, "shRSlO":  0, "shRThD":  0.03, "shRThW":  0.5, "shRThH":  0.12, "shRThY":  0.05, "shRBev":  0.07, "shRSTO":  0.06, "shRChIT":  0.08, "shRChOT":  0.08, "shRChIB":  0.08, "shRChOB":  0.07, "shRChOBv":  0.55, "shPv":  0.02, "shjBall":  0.16, "shOpenA":  78, "shOpenU":  0, "shOpenY":  0, "uarLean":  8, "wsjOn":  true, "wsY":  1.834, "wsZ":  -0.15, "wsjR":  0.3, "wsjH":  0.5, "wsjN":  12, "elbOn":  true, "fraOn":  true, "elAx":  0.11, "elR":  0.06, "elW":  0.14, "elFirst":  78, "elCovW":  0.41, "elCovD":  0.34, "elCovCh":  0.04, "elCapT":  0.04, "fraW":  0.57, "fraD":  0.63, "fraL":  1.08, "fraTaper":  1.05, "fraCh":  0.05, "fraBev":  0.05, "fraCupR":  0.2, "fraCupW":  0.2, "fraRingN":  0, "fraNotchD":  0.06, "fraNotchW":  0.2, "fraNotchH":  0.14, "fraBkH":  0.56, "fraBkW":  0.3, "fraBkT":  0.15, "fraBkUp":  0.5, "fraBkOut":  0, "fraBkCh":  0.12, "fraWrW":  0.38, "fraWrH":  0.12, "fraWrD": 0.47, "fraWrLt": true, "elCovUp":  0.13, "elCovDn":  0.13, "uarChF":  0, "elCovIn":  0.23, "hndOn":  true, "hndK":  2.6, "elIn":  -0.13, "fraUp":  -0.16, "fraTopR":  0, "uarBotR":  0, "elCovWIn":  0.3, "g_legOn":  true, "hpjOn":  true, "thgOn":  true, "knlOn":  true, "kgdOn":  true, "shnOn":  true, "fttOn":  true, "skPush":  true, "shL":  1.87, "lgX":  0.42, "lgY":  2.92, "lgZ":  -0.18, "lgK":  2.15, "lgKX":  2.3, "lgThKind":  "ref", "lgKnKind":  "ref", "lgShKind":  "ref", "lgFtKind":  "ref", "lgHbKind":  "none", "lgKT":  2.78, "lgKXT":  1.75, "lgKF":  1.8, "thHip":  0.1, "thL":  1.313, "thWT":  0.312, "thWM":  0.338, "thWB":  0.267, "thMAt":  0.4, "thFT":  0.346, "thFM":  0.346, "thFB":  0.254, "thBT":  0.321, "thBM":  0.321, "thBB":  0.258, "thR":  0.05, "thTopCh":  0.15, "thArW": 0.43, "thArH": 0, "thKnY":  1.483, "thKnZ":  0.09, "thSpZ":  -0.163, "thSpA":  0.66, "thSpB":  0.875, "lgSplay":  5, "hjR":  0.2, "hjDin":  0.3, "hjDout":  0.22, "hjAR":  0.09, "kAxR": 0.214, "kAxW": 0.307, "kAxT": 0.09, "kAxD": 0.2, "kJz": -0.082, "kJy": 0.041, "elTrZ": 0.17, "uarLv": [[0, 0.263, -0.269, 0.266], [-0.263, 0.244, -0.244, 0.256], [-0.525, 0.219, -0.206, 0.25]], "uarR": 0.04, "fraLv": [[0, 0.153, -0.21, 0.2875], [-0.2375, 0.315, -0.316, 0.3125], [-1.031, 0.315, -0.316, 0.3125], [-1.081, 0.246, -0.254, 0.28]], "fraR": 0.04, "elTrS": 0.3, "elTrD": 0.33, "elTrPR": 0.07, "elCapR": 0.19, "kAcR": 0.055, "kAcT": 0.7, "kAcB": 0.7, "kAcX": 0.36, "kAcL": 0.22, "kAct": 4, "kTrSW": 0.22, "kTrCR": 1.48, "kTrTG": 0.03, "kTrSG": 0.03, "kTrX": 0.31, "kTrR": 0.115, "kTrT": 0.1, "kAcIn1": 0.066, "kAcIn2": 0.089, "kThB": -0.041, "kGap": 0.08, "kPinU": 0.27, "kPinL": 0.28, "kU": -0.041, "kUz": -0.196, "kL": 0.11, "kLz": -0.196, "kSplit": 0.5, "kNdW":  0.203, "kNdT":  0.373, "kNdBk":  0.405, "kNdFr":  0.0, "kNdB":  0.08, "kNdCh":  0.1, "kgLv":  [[0.288, 0.67, 0.455, 0.207], [0.139, 0.677, 0.372, 0.246], [-0.046, 0.673, 0.284, 0.259], [-0.269, 0.67, 0.269, 0.271], [-0.454, 0.64, 0.324, 0.267], [-0.64, 0.577, 0.336, 0.237], [-0.825, 0.511, 0.306, 0.192], [-1.048, 0.447, 0.269, 0.13], [-1.271, 0.306, 0.281, 0.074]], "kgR":  0.03, "kgK":  0.735, "kgWK":  1, "kgY":  0, "kgZ":  0, "shCalfLv":  [[-0.132, 0.186, -0.242, 0.297], [-0.224, 0.26, -0.371, 0.408], [-0.33, 0.297, -0.464, 0.483], [-0.66, 0.315, -0.593, 0.52], [-0.924, 0.222, -0.575, 0.464], [-1.154, -0.018, -0.464, 0.39], [-1.303, -0.204, -0.315, 0.334]], "shBodyLv":  [[-0.99, 0.26, -0.408, 0.352], [-1.32, 0.242, -0.445, 0.371], [-1.65, 0.297, -0.464, 0.378], [-1.947, 0.371, -0.5, 0.408]], "shAnkCv":  [[-1.953, 0.464], [-2.063, -0.093], [-2.458, -0.018], [-2.244, 0.631]], "shAnkY":  2.26, "shAnkZ":  -0.222, "shR":  0.08, "shAxW":  0.6, "shCvW":  0.52, "ftToe":  [[-0.504, 1.548], [-0.666, 1.296], [-0.666, 0.134], [-0.282, -0.014], [-0.184, 0.232], [-0.046, 0.728], [-0.258, 1.172]], "ftHeel":  [[-0.666, 0.122], [-0.282, -0.014], [-0.27, -0.226], [-0.306, -0.46], [-0.442, -0.534], [-0.616, -0.572], [-0.666, -0.534]], "ftW":  [0.52, 0.474, 0.52, 0.49], "ftRoot":  0.2, "ftK":  0.8, "ftWK":  1, "ftCh":  0.04, "shAnkDn":  40, "shAnkUp":  25, "shAxR":  0.19, "shAxT":  0.07, "shBotCut":  [], "shArch":  [], "ftPlate":  [], "shBall":  0.3, "shAxKeep":  true, "ftInstep":  [], "ftTip":  1, "ftSplit":  [], "shHolY":  0, "ftHeelUp":  [], "ftTipLo":  1, "ftShoe":  [], "ftSeam":  [], "ftParam":  false, "ftNgon":  false, "kFirst":  82, "thKnA":  0, "thKRW":  0, "kFork":  true, "kFkW":  0.22, "kFkT":  0.5, "kFkD": 0.08, "kTgW": 0.09, "kTgD": 0.109, "kTgL":  0.55, "kgChan":  true, "shRnd":  0.34, "shShell":  false, "shRodW":  0.13, "shnZ":  0.005, "shRim":  false, "thKR":  0, "thKRz":  -0.6, "shWK":  0.88, "g_allS":  1.238, "kAxDz": 0} }];
 // [SAMPLES-END]
 function sampleValues(sm) { const b = sm.base ? BASES[sm.base] || {} : {}; return { ...b, ...(sm.v || {}) }; }
 function openSample(i) {
@@ -3675,7 +3760,7 @@ function addTplKinds(cat) {
 function wireNum(num, rng) {   // つまみの横の数字の欄：打ち込み、矢印キーで 1 刻み
   num.min = rng.min; num.max = rng.max; num.step = rng.step;
   num.addEventListener('input', () => { const v = +num.value; if (num.value === '' || !isFinite(v)) return; P[rng.id] = Math.min(+rng.max, Math.max(+rng.min, v)); rng.value = P[rng.id]; HIST.co = true; save(); HIST.co = false; build(); syncUI(); });
-  num.addEventListener('change', () => { num.blur(); syncUI(); });
+  num.addEventListener('change', () => syncUI());   /* フォーカスは外さない（依頼主：1 入力したらフォーカスが無くなる。矢印キーで続けて動かす） */
   num.addEventListener('keydown', e => { if (e.key === 'Enter') num.blur(); e.stopPropagation(); });
 }
 function wireRange(el) { el.addEventListener('input', () => { P[el.id] = +el.value; syncUI(); HIST.co = true; save(); HIST.co = false; build(); }); }
@@ -3816,7 +3901,7 @@ function flashPart(targetId) {
 // 左右の柱（スプリット柱）・胸の本体・胸の T 字の板・腹。腹は胸の本体の底にそろえて内へ縮めた低い塊（依頼主：「見ての通り殆ど無いんですよ。腹」「T字の胸よりは小さい」「胸より小さい塩梅で戻して」）。
 // 比は見本から：上の端の前は柱の前より約 0.48 奥、背は胸と同じ、高さは柱全体の幅の約 0.15、下の端は上の端の約 0.92 倍の幅。幅は見本の腹の真ん中の面（胸の本体とほぼ同じ幅）に合わせて胸より小さく。白い機体の柱・コクピットカバー・腹の上・腹の下は一覧に残して切る。
 // 依頼主が「なにこのゴミ」と言った胸板・胸の中央・腹・腰の帯の箱積みは出さない
-const START = { headOn: true, neck: true, g_headY: 0.2, g_headZ: -0.72, g_headS: 1, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: true, mpcOn: true, mppOn: true, g_skirtOn: true, skWOn: true, skCOn: true, skFOn: true, skSOn: true, skBOn: true, skTOn: true, g_armOn: true, shjOn: true, shbOn: true, shROn: true, shLOn: true, uarOn: true, wsjOn: true, elbOn: true, fraOn: true, hndOn: true, g_legOn: true, hpjOn: true, thgOn: true, knlOn: true, kgdOn: true, shnOn: true, fttOn: true, fToeOn: true, fCovOn: true, fHeelOn: true, fUpOn: true, ftInOn: true, fBallOn: true, layoutV: 103 };
+const START = { packOn: true, packW: 1.38, packH: 0.85, packD: 0.45, packY: 0.03, packNzOn: true, packNzX: 0.36, packNzR: 0.22, packNzR0: 0.16, packNzL: 0.35, packNzA: 60, packNzZ: 0.42, packNzY: 0.3, packBsOn: true, packBsW: 1.22, packBsH: 0.68, packBsD: 0.5, headOn: true, neck: true, g_headY: 0.2, g_headZ: -0.72, g_headS: 1, coreOn: false, plateOn: false, centerOn: false, collarOn: false, abdOn: false, bandOn: false, pipeOn: false, crotchOn: false, col1On: false, cov1On: false, abuOn: false, ablOn: false, splOn: true, chbOn: true, ltrOn: true, belOn: true, mpcOn: true, mppOn: true, g_skirtOn: true, skWOn: true, skCOn: true, skFOn: true, skSOn: true, skBOn: true, skTOn: true, g_armOn: true, shjOn: true, shbOn: true, shROn: true, shLOn: true, uarOn: true, wsjOn: true, elbOn: true, fraOn: true, hndOn: true, g_legOn: true, hpjOn: true, thgOn: true, knlOn: true, kgdOn: true, shnOn: true, fttOn: true, fToeOn: true, fCovOn: true, fHeelOn: true, fUpOn: true, ftInOn: true, fBallOn: true, layoutV: 106 };
 Object.assign(P, START);
 const DEFAULTS = JSON.parse(JSON.stringify(P));
 const KEY = 'crystal-head-knobs';
@@ -3825,7 +3910,7 @@ try {
   const renamed = { crest: 'crestKind', rotX: 'crestRotX', rotY: 'crestRotY', rotZ: 'crestRotZ', vOpen: 'crestVOpen' };   // 前の版の名前
   const oldLayout = saved.layoutV !== START.layoutV;   // 前の版の保存：部品の表示は開いた時の形に戻す
   // 柱・カバー・腹の上・腹の下の値も 1 度だけ初期値に戻す（どれも長さで決める別の部品なので、前の柱の値が残ると腹との間が空いてずれる）
-  const START_PARTS = /^(col1|cov1|abu|abl|spl|chb|ltr|bel|mpc|mpp|sk[CFSBTWK]|g_skirt|sh|uar|g_arm|ws|el|fra|armEl|armF|hnd|lg|kFirst|knee|leg|g_leg|thKnY|thKR|kAx|kNd|kg|kFk|kTg|kFork|kJ|kC|kU|kL|kSplit|kPlate|kPin|kCyl|kThE|kShE|kDisc|kAc|kTr|kThB|kGap|kClose|thL|shLK|elTr|elCap)/;
+  const START_PARTS = /^(pack|col1|cov1|abu|abl|spl|chb|ltr|bel|mpc|mpp|sk[CFSBTWK]|g_skirt|sh|uar|g_arm|ws|el|fra|armEl|armF|hnd|lg|kFirst|knee|leg|g_leg|thKnY|thKR|kAx|kNd|kg|kFk|kTg|kFork|kJ|kC|kU|kL|kSplit|kPlate|kPin|kCyl|kThE|kShE|kDisc|kAc|kTr|kThB|kGap|kClose|thL|shLK|elTr|elCap)/;
   for (const k in saved) { const kk = renamed[k] || k; if (kk in P && !(oldLayout && (kk in START || START_PARTS.test(kk)))) P[kk] = saved[k]; }
   if ('backUnder' in saved && !('backSlope' in saved)) P.backSlope = Math.max(0, Math.min(75, 90 - saved.backUnder));
   if ('brimUnder' in saved && !('brimSlope' in saved)) P.brimSlope = Math.max(0, Math.min(75, 90 - saved.brimUnder));
