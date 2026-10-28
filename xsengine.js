@@ -44,6 +44,8 @@ export const DEFAULTS = {
                            //     (a lasso goes right through its view; subs: lassos cut out; skip: leave what earlier regions took)
   wings: null,             // ... whether it has wing joints
   fromBones: null,         // ... imported with bones of its own: their weights are what is not given by hand (not the spheres)
+  blend: null,             // a part that bends over a joint (機体エディタ Ver2's bellows, partgeo.js blendOf): { to: bone group, a, b, pivot }
+                           //     in the part's frame: at a it is all its own bone's, at b all `to`'s, shared on the way; `to` turns at pivot
   mid: null,               // ... and the x of its centre line (left and right spheres mirror about it; none = 0)
 };
 const FIELDS = Object.keys(DEFAULTS);
@@ -497,6 +499,25 @@ function lodPieces(level) {
   return out;
 }
 
+// A part that bends over a joint (blend): where its root (a) and tip (b) are and where the tip's bone turns (pivot), in
+// editor space, and that bone's name on the part's side. A mirrored copy has them mirrored (they are written for one side).
+function blendOfPiece(pc) {
+  const b = pc.part.blend;
+  if (!b?.to || !Array.isArray(b.a) || !Array.isArray(b.b)) return null;
+  pc.part.proxy.updateMatrixWorld();
+  const M = pc.part.proxy.matrixWorld, A = new THREE.Vector3(...b.a).applyMatrix4(M), B = new THREE.Vector3(...b.b).applyMatrix4(M), P = new THREE.Vector3(...(b.pivot ?? b.b)).applyMatrix4(M);
+  if (!pc.geo.boundingBox) pc.geo.computeBoundingBox();
+  const c = pc.geo.boundingBox.getCenter(new THREE.Vector3());
+  if (Math.abs(c.x) > 1e-3 && Math.sign(c.x) !== Math.sign(A.x + B.x)) for (const v of [A, B, P]) v.x = -v.x;
+  return { to: sided(b.to, c.x, c.z), A, B, P };
+}
+// how much of each vertex of pc.geo goes with the tip's bone: 0 at the root, 1 at the tip, along root → tip
+function blendWeights(pc, bl) {
+  const pos = pc.geo.attributes.position, d = bl.B.clone().sub(bl.A), dd = Math.max(1e-9, d.lengthSq()), v = new THREE.Vector3(), w = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) w[i] = Math.max(0, Math.min(1, v.fromBufferAttribute(pos, i).sub(bl.A).dot(d) / dd));
+  return w;
+}
+
 // joint positions (editor space) from the bounding boxes of what each bone carries
 function jointPositions(pieces) {
   const boxes = {};
@@ -555,6 +576,8 @@ function jointPositions(pieces) {
   }
   for (const [name, list] of Object.entries(found)) at[name] = list.reduce((a, b) => a.add(b), new THREE.Vector3()).multiplyScalar(1 / list.length);
   if (found.leg_l && found.leg_r) at.hips = new THREE.Vector3(0, (at.leg_l.y + at.leg_r.y) / 2, (at.leg_l.z + at.leg_r.z) / 2);
+  // a part bending over a joint (a bellows): the tip's bone turns in its middle, unless a joint part says where
+  for (const pc of pieces) { const bl = blendOfPiece(pc); if (bl && !found[bl.to]) at[bl.to] = bl.P; }
   // imported meshes carry the pivot they were cut at (moved with the part), so the bones bend where the cuts are
   const cut = {};
   for (const pc of pieces) {
@@ -914,6 +937,14 @@ function jointCheck(id = roleId()) {
   const H = whole.max.y - whole.min.y;
   const I = new THREE.Matrix4(), v = new THREE.Vector3(), hit = { point: new THREE.Vector3() };
   for (const pc of pieces) pc.bvh = new MeshBVH(pc.geo);
+  // parts bending over a joint: moved vertex by vertex in every pose, by their two bones' share (as the game's skin does)
+  for (const pc of pieces) { const bl = blendOfPiece(pc); if (bl) pc.blend = { ...bl, w: blendWeights(pc, bl) }; }
+  const posed = (pc, M) => {
+    const g = pc.geo.clone(), pos = g.attributes.position, A = M[pc.bone], B = M[pc.blend.to] ?? A, p = new THREE.Vector3(), q = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) { p.fromBufferAttribute(pos, i); q.copy(p).applyMatrix4(B); p.applyMatrix4(A).lerp(q, pc.blend.w[i]); pos.setXYZ(i, p.x, p.y, p.z); }
+    g.computeBoundingBox();
+    return { ...pc, geo: g, bvh: new MeshBVH(g), world: true };
+  };
   ankleNow = safeAnkle(pieces, at, H);   // the feet turn as far as this model's ankles can (the game reads the same from the model)
   // b moved into a's rest frame; three-mesh-bvh's intersectsGeometry(geometry, matrix) reports false hits,
   // so the other shape is really moved and tested with an identity matrix
@@ -970,15 +1001,16 @@ function jointCheck(id = roleId()) {
   const skirts = skirtOutlines(pieces, at);
   for (const [name, pose, frame] of checks) {
     const M = poseMatrices(at, withSkirts(pose, skirts, H), H);
-    const moved = pc => M[pc.bone];
+    const cur = pieces.map(pc => (pc.blend ? posed(pc, M) : pc));   // (a bent part: its vertices already in place)
+    const moved = pc => (pc.world ? I : M[pc.bone]);
     const hidden = /^saber|^knife|^throw/.test(name) ? pc => isHeld(pc.part) : () => false;   // the game hides the gun then
-    const same = (a, b) => moved(a).equals(moved(b));
+    const same = (a, b) => !a.world && !b.world && moved(a).equals(moved(b));
     // the saber's two-handed grip brings both hands to the one hilt: the left forearm and hand against the right are not counted
     const twoHands = /^saber/.test(name) ? (a, b) => /^forearm_/.test(a.bone) && /^forearm_/.test(b.bone) && a.bone !== b.bone : () => false;
     // 1) off the body: keep the rest contacts that still hold in this pose, then look for islands
     const adj = pieces.map(() => []);
     for (const [a, b] of touch) {
-      const pa = pieces[a], pb = pieces[b];
+      const pa = cur[a], pb = cur[b];
       if (same(pa, pb) || gapUnder(pa, moved(pa), pb, moved(pb), TOUCH * 2) || gapUnder(pb, moved(pb), pa, moved(pa), TOUCH * 2)) { adj[a].push(b); adj[b].push(a); }
     }
     const comp = new Array(n).fill(-1); let c = 0;
@@ -993,9 +1025,9 @@ function jointCheck(id = roleId()) {
     const off = [...new Set(pieces.filter((pc, k) => comp[k] !== body && !hidden(pc) && !isLight(pc.part)).map(pieceLabel))];
     // 2) cutting in: pairs moving differently that intersect now but were apart at rest (parts marked 当たり判定なし, like power pipes, are skipped)
     const cut = new Set();
-    const boxes = pieces.map(pc => pc.geo.boundingBox.clone().applyMatrix4(moved(pc)));
+    const boxes = cur.map(pc => pc.geo.boundingBox.clone().applyMatrix4(moved(pc)));
     for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
-      const pa = pieces[a], pb = pieces[b];
+      const pa = cur[a], pb = cur[b];
       if (same(pa, pb) || hidden(pa) || hidden(pb) || twoHands(pa, pb) || atWaist(pa.bone, pb.bone) || pa.part.noHit || pb.part.noHit || restPair.has(a + ',' + b) || !boxes[a].intersectsBox(boxes[b])) continue;
       const gb = into(pa, moved(pa), pb, moved(pb));
       if (!pa.bvh.intersectsGeometry(gb, I)) continue;
@@ -1152,7 +1184,7 @@ function buildGameModel() {
   const root = new THREE.Group(); root.name = 'xs';
   if (whole.userData.top > whole.max.y + 1e-6) root.userData.height = Math.round(H * 1e4) / 1e4;   // wings above the head: the body's height
   // skeleton: a tracked XS has no leg bones; the cannon mount only when barrels ride on it
-  const gameBones = GAME_BONES.filter(([n]) => !(tracked && /^(leg|shin|foot)_/.test(n)) && (!OPTIONAL_BONES.has(n) || lods[0].some(pc => pc.bone === n || pc.part.rig?.[n])));
+  const gameBones = GAME_BONES.filter(([n]) => !(tracked && /^(leg|shin|foot)_/.test(n)) && (!OPTIONAL_BONES.has(n) || lods[0].some(pc => pc.bone === n || pc.part.rig?.[n] || (pc.part.blend && blendOfPiece(pc)?.to === n))));
   const bones = {};
   for (const [name, parent] of gameBones) {
     const b = new THREE.Bone(); b.name = name;
@@ -1272,7 +1304,8 @@ function buildGameModel() {
         const col = cls === 'skin' ? new THREE.Color(0xffffff) : new THREE.Color(pc.part.color), bi = boneIndex[pc.orb] ?? boneIndex[pc.bone];
         const uv = cls === 'skin' ? pc.geo.attributes.uv : null;
         const si = pc.part.rig ? pc.geo.attributes.skinIndex : null, sw = si ? pc.geo.attributes.skinWeight : null;
-        const map = si ? IMPORT_BONES.map(n => boneIndex[n] ?? boneIndex.torso) : null;
+        const bl = !si && pc.orb == null ? blendOfPiece(pc) : null, bt = bl ? boneIndex[bl.to] : undefined, bw = bt !== undefined ? blendWeights(pc, bl) : null;   // a part bending over a joint
+        const map = si ? IMPORT_BONES.map(n => boneIndex[n] ?? (n.startsWith('foot_') ? boneIndex['shin_' + n.slice(-1)] : undefined) ?? boneIndex.torso) : null;   // (an ankle not exported: the shin)
         const tq = (cls === 'body' || cls === 'team' || cls === 'metal') && !si ? texFrame(pc.geo) ?? [0, 0, 0, 1] : [0, 0, 0, 1];
         for (let i = 0; i < pos.count; i++) {
           Q.push(tq[0], tq[1], tq[2], tq[3]);
@@ -1281,6 +1314,7 @@ function buildGameModel() {
           if (nor) N.push(-nor.getX(i), nor.getY(i), -nor.getZ(i));
           C.push(col.r, col.g, col.b);
           if (si) for (let k = 0; k < 4; k++) { SI.push(map[si.getComponent(i, k)]); SW.push(sw.getComponent(i, k)); }
+          else if (bw) { SI.push(bi, bt, 0, 0); SW.push(1 - bw[i], bw[i], 0, 0); }
           else { SI.push(bi, 0, 0, 0); SW.push(1, 0, 0, 0); }
         }
         metal += pc.part.metal * pos.count; rough += pc.part.rough * pos.count; n += pos.count;

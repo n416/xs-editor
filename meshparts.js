@@ -122,16 +122,18 @@ const FIGURE = [
   ['arm', '上腕', [0.42, 2.55, 0], [0.5, 2.02, 0], 0.1],
   ['fore', '前腕・手', [0.5, 1.98, 0], [0.53, 1.25, 0], 0.1],
   ['leg', '太もも', [0.2, 1.8, 0], [0.28, 1.05, 0], 0.13],
-  ['shin', 'すね・足', [0.29, 1.0, 0], [0.32, 0.03, 0.05], 0.14],
+  ['shin', 'すね', [0.29, 1.0, 0], [0.31, 0.2, 0.02], 0.14],
+  ['foot', '足', [0.31, 0.17, 0.02], [0.33, 0.03, 0.2], 0.12],   // from the ankle down (bones foot_l / foot_r: the game keeps the soles level)
 ];
 const FIGURE_NAME = { head: '頭', torso: '胴', hips: '腰', wing: '翼' };
 // where each bone turns (x for the left side; the right is mirrored): neck, waist, hip root, shoulder, elbow, hip, knee
-const FIGURE_PIVOT = { head: [0, 2.66, 0], torso: [0, 1.98, 0], hips: [0, 1.84, 0], arm: [0.42, 2.55, 0], fore: [0.5, 2.0, 0], leg: [0.2, 1.84, 0], shin: [0.29, 1.02, 0], wing: [0.22, 2.4, -0.3] };
+const FIGURE_PIVOT = { head: [0, 2.66, 0], torso: [0, 1.98, 0], hips: [0, 1.84, 0], arm: [0.42, 2.55, 0], fore: [0.5, 2.0, 0], leg: [0.2, 1.84, 0], shin: [0.29, 1.02, 0], foot: [0.31, 0.17, 0.02], wing: [0.22, 2.4, -0.3] };
 // The bones an import is skinned to, and each vertex's weights: the wings (behind the back off the centre line, or
 // above the shoulders behind them) go wholly on their wing; everything else on the nearest bones of the figure,
 // measured from each bone's capsule, blended smoothly where two meet (a joint bends the surface instead of tearing it).
-export const IMPORT_BONES = ['hips', 'torso', 'head', 'arm_l', 'arm_r', 'forearm_l', 'forearm_r', 'leg_l', 'leg_r', 'shin_l', 'shin_r', 'wing_l', 'wing_r'];
-const IMPORT_PARENT = { torso: 'hips', head: 'torso', arm_l: 'torso', arm_r: 'torso', forearm_l: 'arm_l', forearm_r: 'arm_r', leg_l: 'hips', leg_r: 'hips', shin_l: 'leg_l', shin_r: 'leg_r', wing_l: 'torso', wing_r: 'torso' };
+// (new bones go at the end: a kept import's weights name bones by their place in this list. The ankles came 2026-10-29)
+export const IMPORT_BONES = ['hips', 'torso', 'head', 'arm_l', 'arm_r', 'forearm_l', 'forearm_r', 'leg_l', 'leg_r', 'shin_l', 'shin_r', 'wing_l', 'wing_r', 'foot_l', 'foot_r'];
+const IMPORT_PARENT = { torso: 'hips', head: 'torso', arm_l: 'torso', arm_r: 'torso', forearm_l: 'arm_l', forearm_r: 'arm_r', leg_l: 'hips', leg_r: 'hips', shin_l: 'leg_l', shin_r: 'leg_r', wing_l: 'torso', wing_r: 'torso', foot_l: 'shin_l', foot_r: 'shin_r' };
 const BLEND = 0.035;   // how wide the blend across a joint is (units; the figure is 3 tall)
 function weightsAt(x, y, z, a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Vector3(), seg = new THREE.Line3(), c = new THREE.Vector3()) {
   const wing = x > 0 ? 'wing_l' : 'wing_r';

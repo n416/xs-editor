@@ -488,11 +488,14 @@ export function initPartEdit(ctx) {
       html.push('<h2>辺の面取り</h2>', slider('面取り幅', 'bevel', 0, +(S * 0.25).toFixed(4), +(S / 400).toPrecision(1)), slider('段数', 'bevelSegs', 1, 6, 1), '<div class="hint">段数 1 は斜めに落とす、2 以上は丸める</div>');
     } else if (kind === 'bellows') {
       const F = [['rings', '輪の数', 1, 60, 1], ['rOut', '外の半径（山）', 0, S, step], ['rIn', '内の半径（谷）', 0, S, step], ['len', '長さ', 0, S * 2, step], ['bend', '曲がり（度）', -180, 180, 1],
-        ['bendDir', '曲がる向き（度）', -180, 180, 5], ['ringN', '輪の断面の形', 0.6, 8, 0.1], ['segments', 'まわりの分割数', 6, 48, 1], ['capA', '根元の受けの長さ', 0, S, step], ['capB', '先の受けの長さ', 0, S, step], ['capR', '受けの太さ（山に掛ける）', 1, 1.6, 0.01]];
-      const fix = { rings: v => Math.max(1, Math.min(60, Math.round(v))), segments: v => Math.max(6, Math.min(48, Math.round(v))), ringN: v => Math.max(0.6, Math.min(8, v)), capR: v => Math.max(1, v) };
+        ['bendDir', '曲がる向き（度）', -180, 180, 5], ['ringN', '輪の断面の形', 0.6, 8, 0.1], ['ringSteps', '1 つの輪の分割', 2, 12, 1], ['segments', 'まわりの分割数', 6, 48, 1], ['capA', '根元の受けの長さ', 0, S, step], ['capB', '先の受けの長さ', 0, S, step], ['capR', '受けの太さ（山に掛ける）', 1, 1.6, 0.01]];
+      const fix = { rings: v => Math.max(1, Math.min(60, Math.round(v))), segments: v => Math.max(6, Math.min(48, Math.round(v))), ringSteps: v => Math.max(2, Math.min(12, Math.round(v))), ringN: v => Math.max(0.6, Math.min(8, v)), capR: v => Math.max(1, v) };
       for (const [k] of F) bind(k, () => val(pc, k), v => { if (!Number.isFinite(v)) return; if (['rOut', 'rIn', 'len', 'capA', 'capB'].includes(k) && v < 0) return; pc[k] = fix[k] ? fix[k](v) : v; });
       const L = val(pc, 'len') - val(pc, 'capA') - val(pc, 'capB'), n = Math.max(1, Math.round(val(pc, 'rings')));
+      const BL = { '': 'なし（ブロックの骨 1 本に付く）', fore: '前腕（ひじをまたぐ）', shin: 'すね（ひざをまたぐ）', foot: '足（足首をまたぐ）' };
       html.push('<h2>蛇腹</h2>', ...F.map(([k, t, a, b, s2]) => slider(t, k, +(+a).toFixed(4), +(+b).toFixed(4), s2)),
+        `<div class="row"><label>曲がる（先の骨）</label><select id="peBlend">${Object.entries(BL).map(([k, v]) => `<option value="${k}" ${(pc.blendTo ?? '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>`,
+        '<div class="hint">曲がる蛇腹は、根元がブロックの骨、先がこの骨に付き、根元から先へ頂点ごとに割合を移す（書き出し）。その骨は蛇腹の真ん中で回る。三角形はおよそ 輪の数 × 1 つの輪の分割 × まわりの分割数 × 2（機体ぜんぶで近距離 30,000 まで）</div>',
         `<div class="hint">輪はどれも同じ形・同じ間隔（${fmt(L / n)}）。山と谷の差 ${fmt(val(pc, 'rOut') - val(pc, 'rIn'))}。根元は原点で、+y（上）へ伸びる。曲がる向き 0 は先が前（+z）、90 は +x。輪の断面の形：1 で山形、2 で丸、大きいほど角ばる。受けは端の谷を包む筒（0 で無し）。向きを変えるには上の「回転」で</div>`);
     } else if (kind === 'loft') {
       bind('segments', () => val(pc, 'segments'), v => { pc.segments = Math.max(3, Math.min(64, Math.round(v))); });
@@ -567,6 +570,7 @@ export function initPartEdit(ctx) {
     if ($('#peColor')) { $('#peColor').oninput = e => { pc.color = e.target.value; ctx.repaint(); dimOthers(); }; $('#peColor').onchange = () => { commit(); renderLeft(); }; $('#peTeam').onchange = e => { pc.team = e.target.checked; commit(); }; }
     if ($('#peBone')) { $('#peBone').onchange = e => { pc.bone = e.target.value; changed(true); }; $('#pePivot').onchange = e => { pc.pivot = e.target.value; changed(true); }; }
     if ($('#peBake')) $('#peBake').onclick = bakeTf;
+    if ($('#peBlend')) $('#peBlend').onchange = e => { if (e.target.value) pc.blendTo = e.target.value; else delete pc.blendTo; commit(); };
     if ($('#peRole')) $('#peRole').onchange = e => { const r = e.target.value; pc.color = ROLE_COLOR[r]; if (r === 'glow') pc.glow = true; else delete pc.glow; ctx.repaint(); dimOthers(); commit(); renderLeft(); };
     for (const el of E.right.querySelectorAll('[data-f]')) {
       el.oninput = () => { const v = parseFloat(el.value); if (!Number.isFinite(v)) return; binds[el.dataset.f].set(v); for (const o of E.right.querySelectorAll(`[data-f="${el.dataset.f}"]`)) if (o !== el) o.value = el.type === 'range' ? fmt(v) : v; live(); prof?.draw(); };
@@ -697,7 +701,7 @@ export function initPartEdit(ctx) {
     const src = structuredClone(BELLOWS[name]), ref = block() ?? st.def.pieces[0], b = refBox(), lo = b.min.toArray(), hi = b.max.toArray();
     const k = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 0.02) * 0.5;
     for (const f of ['rOut', 'rIn', 'len', 'capA', 'capB']) if (src[f] != null) src[f] = r5(src[f] * k);
-    pushBlock({ ...carry(ref), kind: 'bellows', segments: 24, ...src, color: ROLE_COLOR.sub, name: uniqueName(name), pos: [0, 0, 0],
+    pushBlock({ ...carry(ref), kind: 'bellows', segments: 12, ringSteps: 3, ...src, color: ROLE_COLOR.sub, name: uniqueName(name), pos: [0, 0, 0],
       tf: { p: [(lo[0] + hi[0]) / 2, hi[1], (lo[2] + hi[2]) / 2].map(r5), r: [0, 0, 0], s: [1, 1, 1] } });
   }
   function copyBlock(mirror) {

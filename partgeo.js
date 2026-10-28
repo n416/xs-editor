@@ -12,9 +12,11 @@
 //           左半分は鏡像。どの断面も点の数を同じにする：同じ番めの点が上から下まで 1 本の稜線になる。断面の間は平らな面でつなぐ（steps・segments は使わない）
 //   bellows 蛇腹：輪を、根元（原点）から +y へ伸びる円弧に沿って積む。輪はどれも同じ形（そろえる）。
 //           rings（輪の数）・rOut（山＝外の半径）・rIn（谷＝内の半径）・len（受けも入れた全長）・bend（曲がりの角度、度。0 でまっすぐ）・
-//           bendDir（曲がる向き、度：0 = 先が前 +z へ、90 = +x へ）・ringN（輪の断面の形：1 = 山形、2 = 丸、大きいほど角ばる）・segments（まわりの分割数）・
+//           bendDir（曲がる向き、度：0 = 先が前 +z へ、90 = +x へ）・ringN（輪の断面の形：1 = 山形、2 = 丸、大きいほど角ばる）・ringSteps（1 つの輪の断面の分割）・segments（まわりの分割数）・
 //           capA・capB（根元・先の受けの長さ。0 で無し）・capR（受けの太さ。山の半径に掛ける）。
-//           1 つの輪は谷から山を通って次の谷までの凸の玉で、隣の輪の谷の中へ少し入る（輪どうしがつながる）。受けは筒で、端の谷を包む
+//           受け・輪・受けを 1 本のつながった管として回す（三角形の数：輪の数 × ringSteps × segments × 2 ほど。ゲームの近距離の上限は機体ぜんぶで 30,000）
+//           blendTo：曲がる蛇腹（ひじ・ひざ・足首をまたぐ）。根元はブロックの骨、先は blendTo の骨（'fore' 前腕・'shin' すね・'foot' 足）。
+//           書き出しで頂点ごとに、根元から先へ割合を移す（blendOf）。その骨はこの蛇腹の真ん中で回る
 // どの種類にも：
 //   op      'add'（足す）か 'sub'（引く：同じパーツの中で、自分より上に並ぶブロックを削る）
 //   mirror  パーツの x = 0 で反転した写しも作る
@@ -31,7 +33,7 @@ const D = Math.PI / 180;
 export const KIND_LABEL = { hull: '面で囲った形', extrude: '押し出し', lathe: '回転体', loft: '断面をつなぐ形', bellows: '蛇腹' };
 /** ブロックの設定の既定値（持っていない項目はこれ） */
 export const BLOCK0 = { op: 'add', mirror: false, arrayCount: 1, arrayStep: [0, 0.05, 0], bevel: 0, bevelSegs: 1, corner: 0, cornerSegs: 1, taper: 1, tiltY: 0, ridge: 0, depth: 0.1, segments: 24, steps: 4, side: null, top: null,
-  rings: 10, rOut: 0.05, rIn: 0.04, len: 0.15, bend: 0, bendDir: 0, ringN: 2, capA: 0, capB: 0, capR: 1.12 };
+  rings: 10, rOut: 0.05, rIn: 0.04, len: 0.15, bend: 0, bendDir: 0, ringN: 2, ringSteps: 3, capA: 0, capB: 0, capR: 1.12, blendTo: null };
 const val = (pc, k) => pc[k] ?? BLOCK0[k];
 export const kindOf = pc => pc.kind ?? 'hull';
 export const isSub = pc => pc.op === 'sub';
@@ -149,41 +151,43 @@ function bellowsFrame(pc) {
     return { o: [R * (1 - c) * dir[0], R * s, R * (1 - c) * dir[2]], t: [dir[0] * s, c, dir[2] * s], n: [dir[0] * c, -s, dir[2] * c], b };
   };
 }
-/** 蛇腹の形：輪ごとの凸の玉と、両端の受け（断面 [r, h] の並びを軸に沿って回した閉じた形をいくつも） */
+/** 蛇腹の形：根元の受け → 輪 → 先の受けを、1 本のつながった管として軸に沿って回す（断面 [r, h] の並び）。両端だけをふさぐ */
 function bellowsGeo(pc, lod) {
   const L = Math.max(1e-4, val(pc, 'len')), rOut = Math.max(1e-4, val(pc, 'rOut')), rIn = Math.min(rOut, Math.max(1e-4, val(pc, 'rIn')));
   const capA = Math.max(0, Math.min(val(pc, 'capA'), L * 0.45)), capB = Math.max(0, Math.min(val(pc, 'capB'), L * 0.45)), capR = rOut * Math.max(1, val(pc, 'capR'));
-  const n = Math.max(1, Math.round(val(pc, 'rings'))), q = Math.max(0.6, val(pc, 'ringN')), seg = Math.max(6, Math.round(lod ? Math.min(val(pc, 'segments'), 10) : val(pc, 'segments')));
-  const at = bellowsFrame(pc), body = L - capA - capB, p = body / n, lap = Math.min(p * 0.2, (rOut - rIn) + p * 0.05);
-  const solids = [];
-  // 輪：谷 → 山 → 谷。両端は隣の輪の中へ lap だけ入る（谷の太さのまま）
-  const steps = lod ? 4 : 10;
-  for (let k = 0; k < n; k++) {
-    const h0 = capA + k * p, prof = [[rIn * 0.98, h0 - lap]];
-    for (let i = 0; i <= steps; i++) { const t = i / steps, u = Math.abs(2 * t - 1), f = Math.max(0, 1 - u ** q) ** (1 / q); prof.push([rIn + (rOut - rIn) * f, h0 + p * t]); }
-    prof.push([rIn * 0.98, h0 + p + lap]);
-    solids.push(prof);
+  const n = Math.max(1, Math.round(val(pc, 'rings'))), q = Math.max(0.6, val(pc, 'ringN'));
+  const seg = Math.max(6, Math.round(lod ? Math.min(val(pc, 'segments'), 6) : val(pc, 'segments'))), steps = Math.max(2, Math.round(lod ? 2 : val(pc, 'ringSteps')));
+  const at = bellowsFrame(pc), p = (L - capA - capB) / n;
+  // 受け：外の端は角を落とし、輪の側は谷の太さまで段で下りる
+  const cap = (h0, dir, len) => { const c = Math.min(len * 0.25, capR * 0.15); return [[capR * 0.86, h0], [capR, h0 + dir * c], [capR, h0 + dir * (len - c * 0.5)], [Math.max(rIn, capR * 0.9), h0 + dir * len]]; };
+  const prof = capA > 0 ? cap(0, 1, capA) : [];
+  // 輪：谷 → 山 → 次の谷。1 つの輪を steps に分ける（輪の断面の形 ringN：1 = 山形、2 = 丸、大きいほど角ばる）
+  for (let k = 0; k < n; k++) for (let i = 0; i < steps; i++) {
+    const t = i / steps, u = Math.abs(2 * t - 1), f = Math.max(0, 1 - u ** q) ** (1 / q);
+    prof.push([rIn + (rOut - rIn) * f, capA + (k + t) * p]);
   }
-  // 受け：端の谷を包む筒。外の端は角を落とし、輪の側は谷の中まで入る
-  const cap = (hA, hB) => {   // hA = 外の端（相手の部品の中へ入る側）、hB = 輪の側
-    const c = Math.min((hB - hA) * 0.25, capR * 0.15), dirS = Math.sign(hB - hA);
-    return [[capR * 0.86, hA], [capR, hA + dirS * c], [capR, hB - dirS * c * 0.5], [Math.max(rIn, capR * 0.9), hB], [rIn * 0.98, hB + dirS * lap]];
-  };
-  if (capA > 0) solids.push(cap(0, capA));
-  if (capB > 0) solids.push(cap(L, L - capB).reverse());
-  const tri = [];
-  const put = (a, b, c) => tri.push(...a, ...b, ...c);
-  for (const prof0 of solids) {
-    const prof = prof0[0][1] <= prof0[prof0.length - 1][1] ? prof0 : prof0.slice().reverse();
-    const P = prof.map(([r, h]) => { const F = at(h); return Array.from({ length: seg }, (_, j) => { const w = (j + 0.5) / seg * Math.PI * 2, cu = Math.cos(w) * r, sv = Math.sin(w) * r; return [0, 1, 2].map(i => F.o[i] + cu * F.n[i] + sv * F.b[i]); }); });
-    for (let j = 0; j < P.length - 1; j++) for (let k = 0; k < seg; k++) { const a = P[j][k], b = P[j][(k + 1) % seg], c = P[j + 1][(k + 1) % seg], d = P[j + 1][k]; put(a, c, d); put(a, b, c); }
-    const lo = at(prof[0][1]).o, hi = at(prof[prof.length - 1][1]).o;
-    for (let k = 0; k < seg; k++) { put(lo, P[0][(k + 1) % seg], P[0][k]); put(hi, P[P.length - 1][k], P[P.length - 1][(k + 1) % seg]); }
-  }
+  prof.push([rIn, L - capB]);
+  if (capB > 0) prof.push(...cap(L, -1, capB).reverse());
+  const tri = [], put = (a, b, c) => tri.push(...a, ...b, ...c);
+  const P = prof.map(([r, h]) => { const F = at(h); return Array.from({ length: seg }, (_, j) => { const w = (j + 0.5) / seg * Math.PI * 2, cu = Math.cos(w) * r, sv = Math.sin(w) * r; return [0, 1, 2].map(i => F.o[i] + cu * F.n[i] + sv * F.b[i]); }); });
+  for (let j = 0; j < P.length - 1; j++) for (let k = 0; k < seg; k++) { const a = P[j][k], b = P[j][(k + 1) % seg], c = P[j + 1][(k + 1) % seg], d = P[j + 1][k]; put(a, c, d); put(a, b, c); }
+  const lo = at(prof[0][1]).o, hi = at(prof[prof.length - 1][1]).o;
+  for (let k = 0; k < seg; k++) { put(lo, P[0][(k + 1) % seg], P[0][k]); put(hi, P[P.length - 1][k], P[P.length - 1][(k + 1) % seg]); }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tri), 3));
   g.computeVertexNormals();
   return tri.length ? toCreasedNormals(g, 40 * D) : g;
+}
+
+/**
+ * 曲がる蛇腹の骨の割合：{ to: 先の骨の組, a: 根元（割合 0）, b: 先（割合 1）, pivot: 先の骨が回る点 }（パーツの座標。pos を足したもの）。
+ * 頂点の割合は、a → b の上へ落とした位置（0〜1）。曲がっていない蛇腹でなければ null
+ */
+export function blendOf(pc) {
+  if (kindOf(pc) !== 'bellows' || !pc.blendTo) return null;
+  const L = Math.max(1e-4, val(pc, 'len')), at = bellowsFrame(pc), m = tfMatrix(pc.tf), p = pc.pos ?? [0, 0, 0];
+  const put = h => new THREE.Vector3(...at(h).o).applyMatrix4(m).add(new THREE.Vector3(...p)).toArray().map(v => Math.round(v * 1e6) / 1e6);
+  return { to: pc.blendTo, a: put(Math.min(val(pc, 'capA'), L * 0.45)), b: put(L - Math.min(val(pc, 'capB'), L * 0.45)), pivot: put(L / 2) };
 }
 
 // ---- ブロック 1 個の形（ブロックの座標） ----
@@ -292,7 +296,7 @@ function merge(geos, keep = false) {
 }
 
 // ---- できあがりの形（削った後）。ブロックごとに覚えておき、設定が変わったら作り直す ----
-const shapeKey = pc => JSON.stringify([kindOf(pc), pc.planes, pc.pts, pc.depth, pc.bevel, pc.bevelSegs, pc.corner, pc.cornerSegs, pc.taper, pc.tiltY, pc.ridge, pc.segments, pc.secs, pc.steps, pc.rings, pc.rOut, pc.rIn, pc.len, pc.bend, pc.bendDir, pc.ringN, pc.capA, pc.capB, pc.capR, pc.side, pc.top, pc.tf, pc.mirror, pc.arrayCount, pc.arrayStep, pc.pos]);
+const shapeKey = pc => JSON.stringify([kindOf(pc), pc.planes, pc.pts, pc.depth, pc.bevel, pc.bevelSegs, pc.corner, pc.cornerSegs, pc.taper, pc.tiltY, pc.ridge, pc.segments, pc.secs, pc.steps, pc.rings, pc.rOut, pc.rIn, pc.len, pc.bend, pc.bendDir, pc.ringN, pc.ringSteps, pc.capA, pc.capB, pc.capR, pc.side, pc.top, pc.tf, pc.mirror, pc.arrayCount, pc.arrayStep, pc.pos]);
 const FINAL = new WeakMap();   // ブロック → { key, geo }
 const STALE = new Set();       // 作り直して要らなくなった形（画面が付け替えた後で捨てる）
 /** 作り直す前の形を捨てる（置いてあるメッシュを新しい形に付け替えた後で呼ぶ） */
@@ -376,7 +380,7 @@ export function shapesOf(def) {
     if (isPlain(pc) && !cuttersOf(def, pc).length) return { pc, shape: { planes: pc.planes.map(p => p.slice()) } };
     const g = geoOf(def, pc), low = merge(instances(pc, 1));
     const shape = { kind: 'tri', planes: null, tris: Array.from(g.attributes.position.array, r5), nors: Array.from(g.attributes.normal.array, r5), trisLow: Array.from(low.attributes.position.array, r5),
-      op: 'add', mirror: false, arrayCount: 1, bevel: 0, corner: 0, side: null, top: null };
+      op: 'add', mirror: false, arrayCount: 1, bevel: 0, corner: 0, side: null, top: null, blend: blendOf(pc) };
     low.dispose();
     return { pc, shape };
   });
@@ -386,7 +390,7 @@ export function freeShapes(def) {
   return def.pieces.filter(drawn).flatMap(pc => {
     const low = instances(pc, 1);
     const out = instGeosOf(def, pc).map((g, k) => ({ pc, shape: { kind: 'tri', tris: Array.from(g.attributes.position.array, r5), nors: Array.from(g.attributes.normal.array, r5), trisLow: Array.from((low[k] ?? g).attributes.position.array, r5),
-      op: 'add', mirror: false, arrayCount: 1, bevel: 0, corner: 0 } }));
+      op: 'add', mirror: false, arrayCount: 1, bevel: 0, corner: 0, blend: blendOf(pc) } }));
     for (const g of low) g.dispose();
     return out;
   });
