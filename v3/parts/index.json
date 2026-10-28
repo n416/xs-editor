@@ -1,0 +1,216 @@
+{
+ "foot": [
+  {
+   "id": "foothover",
+   "name": "足（ホバー）"
+  }
+ ],
+ "shin": [
+  {
+   "id": "shinhover",
+   "name": "すね（ホバー・裾が広がる）"
+  }
+ ],
+ "chest": [
+  {
+   "id": "chestf1",
+   "name": "胸（左右 2 枚と稜）（F1 型）"
+  }
+ ],
+ "abd": [
+  {
+   "id": "abdomenf1",
+   "name": "腹（左右に分けた板）（F1 型）"
+  }
+ ],
+ "shoulder": [
+  {
+   "id": "shoulderarmorf1",
+   "name": "肩アーマー（丸い）（F1 型）"
+  }
+ ],
+ "h_helmet": [
+  {
+   "id": "heavyhelmplain",
+   "name": "重装の頭（低いドームと錣・目なし）"
+  },
+  {
+   "id": "peakhelmplain",
+   "name": "ひさしの頭（目なし）"
+  },
+  {
+   "id": "sniperhelmplain",
+   "name": "細身の頭（くちばしのひさしと後ろのひれ・目なし）"
+  },
+  {
+   "id": "roundhelmplain",
+   "name": "丸い重装の頭（一つ目の溝と口の箱・目なし）"
+  },
+  {
+   "id": "visorhelmplain",
+   "name": "バイザーの頭（目なし）"
+  },
+  {
+   "id": "scopehelmplain",
+   "name": "望遠の頭（縦横の溝と横の望遠レンズ・目なし）"
+  },
+  {
+   "id": "headshellplain",
+   "name": "頭の殻（目なし）"
+  },
+  {
+   "id": "heavyhelm",
+   "name": "重装の頭（低いドームと錣）"
+  },
+  {
+   "id": "peakhelm",
+   "name": "ひさしの頭"
+  },
+  {
+   "id": "sniperhelm",
+   "name": "細身の頭（くちばしのひさしと後ろのひれ）"
+  },
+  {
+   "id": "roundhelm",
+   "name": "丸い重装の頭（一つ目の溝と口の箱）"
+  },
+  {
+   "id": "scopehelm",
+   "name": "望遠の頭（縦横の溝と横の望遠レンズ）"
+  },
+  {
+   "id": "headshell",
+   "name": "頭の殻"
+  }
+ ],
+ "h_face": [
+  {
+   "id": "maska",
+   "name": "マスク（見本 A）"
+  },
+  {
+   "id": "maskslit",
+   "name": "マスク（への字の通気口）"
+  },
+  {
+   "id": "masksnout",
+   "name": "マスク（口先）"
+  },
+  {
+   "id": "maskprow",
+   "name": "マスク（船首）"
+  }
+ ],
+ "h_eye": [
+  {
+   "id": "facemask",
+   "name": "顔当て"
+  },
+  {
+   "id": "twineyes18",
+   "name": "ツインアイ（八の字 18°）"
+  },
+  {
+   "id": "twineyes24",
+   "name": "ツインアイ（八の字 24°）"
+  },
+  {
+   "id": "twineyes40",
+   "name": "ツインアイ（八の字 40°）"
+  },
+  {
+   "id": "monoeye",
+   "name": "モノアイの帯"
+  },
+  {
+   "id": "monoeyelens",
+   "name": "モノアイ（目だけ）"
+  },
+  {
+   "id": "peakvisor",
+   "name": "バイザーのガラス"
+  }
+ ],
+ "h_chin": [
+  {
+   "id": "jawmass",
+   "name": "あご（顔の下の塊）"
+  },
+  {
+   "id": "jawblock",
+   "name": "あご台"
+  },
+  {
+   "id": "scopejaw",
+   "name": "狙撃の口（稜のあるあご・頬の吸気口）"
+  },
+  {
+   "id": "snoutbox",
+   "name": "口の箱（横桟の通気口）"
+  }
+ ],
+ "h_side": [
+  {
+   "id": "peakcheek",
+   "name": "ほほガード（とがり）"
+  },
+  {
+   "id": "earsensor",
+   "name": "耳カバーと丸いセンサー"
+  },
+  {
+   "id": "earblock",
+   "name": "耳ブロック"
+  },
+  {
+   "id": "cheekmass",
+   "name": "側頭の塊（左右）"
+  },
+  {
+   "id": "cheekguard",
+   "name": "頬当て"
+  },
+  {
+   "id": "sensorpod",
+   "name": "大型センサーポッド（片側）"
+  },
+  {
+   "id": "headpiperim",
+   "name": "動力パイプ（頭を回る）"
+  },
+  {
+   "id": "pipebox",
+   "name": "動力パイプの受け（頭の後ろ）"
+  },
+  {
+   "id": "headbandthin",
+   "name": "後ろへ回る帯（細い）"
+  }
+ ],
+ "h_crest": [
+  {
+   "id": "crestblade",
+   "name": "トサカ（後ろへ伸びる刃）"
+  },
+  {
+   "id": "browplate",
+   "name": "額の板（差し色）"
+  },
+  {
+   "id": "horn",
+   "name": "ブレードアンテナ（一本）"
+  },
+  {
+   "id": "antenna",
+   "name": "ロッドアンテナ"
+  },
+  {
+   "id": "vbladethick",
+   "name": "刃（太い）"
+  },
+  {
+   "id": "topsensor",
+   "name": "センサーの箱（光る丸 3 つ）"
+  }
+ ]
+}
