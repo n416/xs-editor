@@ -85,11 +85,18 @@ const LOFTS = {
   丸から四角へ: { secs: [{ y: -0.5, w: 0.3, n: 2, hard: true }, { y: 0, w: 0.32, n: 3 }, { y: 0.5, w: 0.3, n: 8, hard: true }], segments: 28, steps: 4 },
   すぼまる筒: { secs: [{ y: -0.5, w: 0.35, hard: true }, { y: 0, w: 0.27 }, { y: 0.5, w: 0.2, hard: true }], segments: 24, steps: 4 },
 };
+/** 蛇腹（輪を曲線に沿って積む）。大きさ 1 で書き、足すときにパーツに合わせて縮める */
+const BELLOWS = {
+  まっすぐな蛇腹: { rings: 10, rOut: 0.25, rIn: 0.2, len: 1, bend: 0, bendDir: 0, ringN: 2, capA: 0, capB: 0 },
+  曲がった蛇腹: { rings: 14, rOut: 0.2, rIn: 0.16, len: 1.2, bend: 40, bendDir: 0, ringN: 2, capA: 0, capB: 0 },
+  受け付きの蛇腹: { rings: 10, rOut: 0.22, rIn: 0.17, len: 1, bend: 0, bendDir: 0, ringN: 2, capA: 0.12, capB: 0.12, capR: 1.15 },
+};
 const GROUPS = [
   ['角と面を動かせる形（凸）', Object.keys(PRIMS), 'prim'],
   ['断面を描いて押し出す形', ['面取り箱', '丸箱', '装甲板', '先細り'], 'shape'],
   ['断面を回して作る形（回転体）', ['関節', 'スラスター', '六角ナット', 'ピストン', '自由な回転体'], 'shape'],
   ['断面をつないで作る形（流線形・つなぎの面）', Object.keys(LOFTS), 'loft'],
+  ['輪を積む形（蛇腹）', Object.keys(BELLOWS), 'bellows'],
   ['削る形（引く）', ['スリット', '丸穴', 'パネルライン', '箱で削る'], 'shape'],
 ];
 
@@ -360,11 +367,12 @@ export function initPartEdit(ctx) {
       <div class="pebar"><button id="peUp" title="一覧の上へ">↑</button><button id="peDown" title="一覧の下へ">↓</button><button id="peDup" title="同じブロックをもう 1 つ（Ctrl+D）">複製</button><button id="peMir" title="左右（x）を反転した写しを足す">反転の複製</button><button id="peDel" title="選んだブロックを消す（Delete）">消す</button></div>
       <div class="hint">「−」は引くブロック：自分より上に並ぶブロックを削る</div>
       <h2>ブロックを足す</h2>
-      ${GROUPS.map(([title, names, how]) => `<div class="hint">${title}</div><div class="pegrid">${(how === 'shape' && names[0] === '面取り箱' && st.def.free ? ['あたり箱', ...names] : names).map(k => `<button data-${how === 'prim' ? 'prim' : how === 'loft' ? 'loft' : 'shape'}="${k}" class="${SHAPES[k]?.op === 'sub' || k === '箱で削る' ? 'subp' : ''}">${k}</button>`).join('')}</div>`).join('')}
+      ${GROUPS.map(([title, names, how]) => `<div class="hint">${title}</div><div class="pegrid">${(how === 'shape' && names[0] === '面取り箱' && st.def.free ? ['あたり箱', ...names] : names).map(k => `<button data-${how === 'prim' ? 'prim' : how === 'loft' ? 'loft' : how === 'bellows' ? 'bellows' : 'shape'}="${k}" class="${SHAPES[k]?.op === 'sub' || k === '箱で削る' ? 'subp' : ''}">${k}</button>`).join('')}</div>`).join('')}
       <div class="hint">足した形は、選んでいるブロックに合わせた大きさで出る。削る形は、選んでいるブロックの前の面に埋めて出る</div>`;
     for (const el of E.left.querySelectorAll('[data-i]')) el.onclick = () => selectBlock(+el.dataset.i);
     for (const el of E.left.querySelectorAll('[data-prim]')) el.onclick = () => addPrim(el.dataset.prim);
     for (const el of E.left.querySelectorAll('[data-loft]')) el.onclick = () => addLoft(el.dataset.loft);
+    for (const el of E.left.querySelectorAll('[data-bellows]')) el.onclick = () => addBellows(el.dataset.bellows);
     for (const el of E.left.querySelectorAll('[data-shape]')) el.onclick = () => (el.dataset.shape === '箱で削る' ? addPrim('箱', true) : addShape(el.dataset.shape));
     $('#peUp').onclick = () => moveBlock(-1); $('#peDown').onclick = () => moveBlock(1);
     $('#peDup').onclick = () => copyBlock(false); $('#peMir').onclick = () => copyBlock(true); $('#peDel').onclick = removeBlock;
@@ -478,6 +486,14 @@ export function initPartEdit(ctx) {
       }
       if (st.mode === 'face' && st.face >= 0) html.push('<div class="pebar"><button id="peFaceCorner" title="この面の真ん中に角を 1 つ足す（引き出すと、とがった形・屋根の形になる）">面の真ん中に角を足す</button><button id="peFaceDel" title="この面をなくす（となりの面が伸びてふさぐ）">この面をなくす</button></div>');
       html.push('<h2>辺の面取り</h2>', slider('面取り幅', 'bevel', 0, +(S * 0.25).toFixed(4), +(S / 400).toPrecision(1)), slider('段数', 'bevelSegs', 1, 6, 1), '<div class="hint">段数 1 は斜めに落とす、2 以上は丸める</div>');
+    } else if (kind === 'bellows') {
+      const F = [['rings', '輪の数', 1, 60, 1], ['rOut', '外の半径（山）', 0, S, step], ['rIn', '内の半径（谷）', 0, S, step], ['len', '長さ', 0, S * 2, step], ['bend', '曲がり（度）', -180, 180, 1],
+        ['bendDir', '曲がる向き（度）', -180, 180, 5], ['ringN', '輪の断面の形', 0.6, 8, 0.1], ['segments', 'まわりの分割数', 6, 48, 1], ['capA', '根元の受けの長さ', 0, S, step], ['capB', '先の受けの長さ', 0, S, step], ['capR', '受けの太さ（山に掛ける）', 1, 1.6, 0.01]];
+      const fix = { rings: v => Math.max(1, Math.min(60, Math.round(v))), segments: v => Math.max(6, Math.min(48, Math.round(v))), ringN: v => Math.max(0.6, Math.min(8, v)), capR: v => Math.max(1, v) };
+      for (const [k] of F) bind(k, () => val(pc, k), v => { if (!Number.isFinite(v)) return; if (['rOut', 'rIn', 'len', 'capA', 'capB'].includes(k) && v < 0) return; pc[k] = fix[k] ? fix[k](v) : v; });
+      const L = val(pc, 'len') - val(pc, 'capA') - val(pc, 'capB'), n = Math.max(1, Math.round(val(pc, 'rings')));
+      html.push('<h2>蛇腹</h2>', ...F.map(([k, t, a, b, s2]) => slider(t, k, +(+a).toFixed(4), +(+b).toFixed(4), s2)),
+        `<div class="hint">輪はどれも同じ形・同じ間隔（${fmt(L / n)}）。山と谷の差 ${fmt(val(pc, 'rOut') - val(pc, 'rIn'))}。根元は原点で、+y（上）へ伸びる。曲がる向き 0 は先が前（+z）、90 は +x。輪の断面の形：1 で山形、2 で丸、大きいほど角ばる。受けは端の谷を包む筒（0 で無し）。向きを変えるには上の「回転」で</div>`);
     } else if (kind === 'loft') {
       bind('segments', () => val(pc, 'segments'), v => { pc.segments = Math.max(3, Math.min(64, Math.round(v))); });
       bind('steps', () => val(pc, 'steps'), v => { pc.steps = Math.max(1, Math.min(12, Math.round(v))); });
@@ -675,6 +691,14 @@ export function initPartEdit(ctx) {
     for (const sec of src.secs) for (const f of ['y', 'w', 'f', 'b', 'x', 'z']) if (sec[f] != null) sec[f] = r5(sec[f] * k);
     pushBlock({ ...carry(ref), kind: 'loft', ...src, color: ROLE_COLOR.main, name: uniqueName(name), pos: [0, 0, 0],
       tf: { p: [(lo[0] + hi[0]) / 2, hi[1] + k / 2, (lo[2] + hi[2]) / 2].map(r5), r: [0, 0, 0], s: [1, 1, 1] } });
+  }
+  /** 蛇腹を足す：大きさをパーツに合わせて縮めて、選んだブロックの上に置く */
+  function addBellows(name) {
+    const src = structuredClone(BELLOWS[name]), ref = block() ?? st.def.pieces[0], b = refBox(), lo = b.min.toArray(), hi = b.max.toArray();
+    const k = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 0.02) * 0.5;
+    for (const f of ['rOut', 'rIn', 'len', 'capA', 'capB']) if (src[f] != null) src[f] = r5(src[f] * k);
+    pushBlock({ ...carry(ref), kind: 'bellows', segments: 24, ...src, color: ROLE_COLOR.sub, name: uniqueName(name), pos: [0, 0, 0],
+      tf: { p: [(lo[0] + hi[0]) / 2, hi[1], (lo[2] + hi[2]) / 2].map(r5), r: [0, 0, 0], s: [1, 1, 1] } });
   }
   function copyBlock(mirror) {
     const pc = block(); if (!pc) return;
