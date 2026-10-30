@@ -4,6 +4,7 @@
 //   ビビッド：数色の鮮やかな色。on に入っている部位のパーツは主装甲をその色で塗り、差し色のブロックはビビッドの色を使う。
 // 役は、いまのカタログのブロックの色から決める（部品を作る道具の 5 色：明るい装甲・暗い装甲・黒・差し色・発光。ほかの色は明るさと鮮やかさで振り分ける）。
 // 光（エフェクト：光っていて当たり判定のないブロック）と透けるブロックは、塗りの対象にしない（自分の色のまま）。
+// 自由な部品（機体エディタの形式）は色を自分で持ち塗らないが、ブロックに role（役の名前、または keep）を書いたものは塗る（Tripo の形から作った機体の色を塗り替えられるように）。
 // [独自] 型・色の範囲・検査の数字は、ここで決めた値。
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -29,6 +30,7 @@ const roleCache = new Map();
 /** ブロックの役。塗らないブロック（光・透けるもの）は null */
 export function roleOf(pc) {
   if ((pc.glow && pc.noHit) || pc.opacity != null) return null;
+  if (pc.role) return pc.role === 'keep' ? null : pc.role;   // 役を書いてあるブロック（形を取り込んだ自由な部品）：その役。keep は塗らず自分の色のまま
   if (pc.glow) return 'glow';
   const c = String(pc.color ?? '#c3c9d2').toLowerCase();
   if (KNOWN[c]) return KNOWN[c];

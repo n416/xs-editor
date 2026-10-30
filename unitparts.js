@@ -94,7 +94,7 @@ export function unitParts(doc, { shaped = false } = {}) {
   const body = bodyParts(items.filter(it => !isHead(it.part)), adj, null);
   // 体の色：bodyParts の部品は、置いたパーツの順・ブロックの順に並ぶ
   let n = 0;
-  for (const it of items.filter(x => !isHead(x.part))) { const def = byId[it.part]; if (def.free) { n += freeParts(def, it, freeShapes).length; continue; } for (const pc of def.pieces) if (!isSub(pc)) Object.assign(body.parts[n++], paintOf(pc, def)); }
+  for (const it of items.filter(x => !isHead(x.part))) { const def = byId[it.part]; if (def.free) { for (const p of freeParts(def, it, freeShapes)) { if (p.role) Object.assign(body.parts[n], paintOf(p, def)); n++; } continue; }   /* 自由な部品は役を書いたブロックだけ塗る */ for (const pc of def.pieces) if (!isSub(pc)) Object.assign(body.parts[n++], paintOf(pc, def)); }
   const nW = items.filter(held).reduce((a, it) => a + freeParts(byId[it.part], it, freeShapes).length, 0);
   return { parts: [...body.parts.slice(0, nW), ...head, ...body.parts.slice(nW)], anchors: body.anchors, head: head.length > 0 || items.some(it => byId[it.part]?.free) };
 }
