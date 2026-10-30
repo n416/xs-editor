@@ -98,5 +98,14 @@ export function unitParts(doc, { shaped = false } = {}) {
   const nW = items.filter(held).reduce((a, it) => a + freeParts(byId[it.part], it, freeShapes).length, 0);
   return { parts: [...body.parts.slice(0, nW), ...head, ...body.parts.slice(nW)], anchors: body.anchors, head: head.length > 0 || items.some(it => byId[it.part]?.free) };
 }
-/** 機体の JSON を読む前に：入っている自分のパーツを目次に入れる（もう入っている id はそのまま） */
-export function registerUnit(doc) { for (const def of Object.values(doc.userParts ?? {})) if (def?.id && Array.isArray(def.pieces) && !byId[def.id]) registerUser(def); }
+/** 機体の JSON を読む前に：入っている自分のパーツを目次に入れる。同じ id の自分のパーツがもう入っていれば、ファイルの方に入れ替える
+ *  （ブラウザに前の版が残っていると、開いたファイルの形ではなく前の版が出ていた。最初から入っているパーツ（user でない）はそのまま） */
+export function registerUnit(doc) {
+  for (const def of Object.values(doc.userParts ?? {})) {
+    if (!def?.id || !Array.isArray(def.pieces)) continue;
+    const had = byId[def.id];
+    if (had && (!had.user || had === def)) continue;
+    if (had) unregisterUser(def.id);
+    registerUser(def);
+  }
+}
