@@ -47,6 +47,7 @@ export const DEFAULTS = {
   blend: null,             // a part that bends over a joint (機体エディタ Ver2's bellows, partgeo.js blendOf): { to: bone group, a, b, pivot }
                            //     in the part's frame: at a it is all its own bone's, at b all `to`'s, shared on the way; `to` turns at pivot
   mid: null,               // ... and the x of its centre line (left and right spheres mirror about it; none = 0)
+  precut: false,           // kind 'tri' from Ver2, already cut by the cutters of its own part (partgeo.js): not cut again here
 };
 const FIELDS = Object.keys(DEFAULTS);
 
@@ -247,7 +248,7 @@ function rebuild() {
   }
   for (const p of parts.filter(p => p.op === 'add' && !p.blockout)) for (const g of worldGeometries(p)) {
     let geo = g;
-    if (p.kind !== 'mesh') {   // (an imported mesh is never cut)
+    if (p.kind !== 'mesh' && !p.precut) {   // (an imported mesh is never cut; nor a piece Ver2 already cut by the cutters of its own part (precut): cut again, its cut faces lie on the cutters' faces and the result came out differently from one export to the next)
       let brush = new Brush(g); brush.updateMatrixWorld();
       for (const sb of cutters) {
         if (sb.userData.order < parts.indexOf(p)) continue;

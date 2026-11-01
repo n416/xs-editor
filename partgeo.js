@@ -242,6 +242,8 @@ function baseGeo(pc, lod = 0) {
     g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(h.positions, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(h.normals, 3));
+    // smooth（度）：隣り合う面の折れがこの角度より小さい所だけ陰をなめらかにつなぐ（細かい面で作った膨らみの格子を消す）。縁のように大きく折れる所は角のまま。省くと今までどおり面ごとに平ら
+    if (!lod && pc.smooth > 0) g = toCreasedNormals(g, pc.smooth * D);
   } else if (kind === 'extrude') {
     const depth = Math.max(0.002, val(pc, 'depth'));
     const pts = roundCorners(pc.pts, lod ? 0 : val(pc, 'corner'), val(pc, 'cornerSegs'), true);
@@ -377,7 +379,7 @@ const r5 = v => Math.round(v * 1e5) / 1e5;
  */
 export function shapesOf(def) {
   return def.pieces.filter(drawn).map(pc => {
-    if (isPlain(pc) && !cuttersOf(def, pc).length) return { pc, shape: { planes: pc.planes.map(p => p.slice()) } };
+    if (isPlain(pc) && !(pc.smooth > 0) && !cuttersOf(def, pc).length) return { pc, shape: { planes: pc.planes.map(p => p.slice()) } };   // smooth のある凸の形は、陰をつないだ面の向きごと三角形で渡す（面の式だと書き出しが面ごとに平らに作り直す）
     const g = geoOf(def, pc), low = merge(instances(pc, 1));
     const shape = { kind: 'tri', planes: null, tris: Array.from(g.attributes.position.array, r5), nors: Array.from(g.attributes.normal.array, r5), trisLow: Array.from(low.attributes.position.array, r5),
       op: 'add', mirror: false, arrayCount: 1, bevel: 0, corner: 0, side: null, top: null, blend: blendOf(pc) };

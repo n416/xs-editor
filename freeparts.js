@@ -87,7 +87,9 @@ export const atRest = it => it.mov.every(v => Math.abs(v) < 1e-9) && it.rot.ever
 export function freeParts(def, it, shapes) {
   const tracked = isTrackedSet(def.pieces);
   // 機体エディタに無い形（断面をつなぐ形・蛇腹）は、置いたままでも三角形で渡す（写しごとに 1 個）
-  const native = pc => ['hull', 'extrude', 'lathe', 'mesh', 'tri'].includes(pc.kind ?? 'hull');
+  // 陰をつなぐ凸の形（smooth のある hull）も三角形で渡す：面の式のまま渡すと、書き出しが面ごとに平らに作り直す
+  const smoothHull = pc => (pc.kind ?? 'hull') === 'hull' && pc.smooth > 0;
+  const native = pc => ['hull', 'extrude', 'lathe', 'mesh', 'tri'].includes(pc.kind ?? 'hull') && !smoothHull(pc);
   if (atRest(it) && def.pieces.every(native)) return def.pieces.map(partOf);
   if (atRest(it)) {
     const tri = new Map(); for (const s of shapes(def)) if (!native(s.pc)) (tri.get(s.pc) ?? tri.set(s.pc, []).get(s.pc)).push(s.shape);
@@ -95,7 +97,7 @@ export function freeParts(def, it, shapes) {
   }
   // 動かしただけ（回していない・拡大していない）：元の部品の並びのまま、位置だけ足す（手に持たせた武器。形の作り方・遠くの形の簡略化が元のまま残る）。
   // ミラーの部品は x = 0 で折り返すので、左右に動かしたときは三角形で渡す
-  if (it.rot.every(v => Math.abs(v) < 1e-9) && it.scal.every(v => Math.abs(v - 1) < 1e-9) && !(Math.abs(it.mov[0]) > 1e-9 && def.pieces.some(pc => pc.mirror)))
+  if (it.rot.every(v => Math.abs(v) < 1e-9) && it.scal.every(v => Math.abs(v - 1) < 1e-9) && !(Math.abs(it.mov[0]) > 1e-9 && def.pieces.some(pc => pc.mirror)) && !def.pieces.some(smoothHull))
     return def.pieces.map(pc => { const p = partOf(pc); p.pos = p.pos.map((v, k) => v + it.mov[k]); return p; });
   const R = rotMatrix(it.rot), e = new THREE.Euler().setFromRotationMatrix(R, 'XYZ');
   return shapes(def).map(({ pc, shape }) => {
