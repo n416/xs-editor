@@ -1,5 +1,5 @@
 // 「みんなの機体」：ゲームの中央サーバーに投稿された機体を見る・開く・イイネ・通報、自分の機体を投稿・上書き・削除する画面。
-// ゲームのアカウントでログインする（合言葉のトークンはこのブラウザに残る）。サーバーが返した文字は、ぜんぶ textContent で出す。
+// ゲームのアカウントに Google か Discord でログインする（合言葉のトークンはこのブラウザに残る）。サーバーが返した文字は、ぜんぶ textContent で出す。
 // 投稿するのは機体の JSON（Ver2 の形：置いたパーツ・寸法・色・作ったパーツ）と小さな絵。取り込んだ形（.glb）の入った機体と艦は投稿できない。
 // 機体エディタ 1 から投稿された機体（部品の並び）は、「機体エディタの部品でできた機体」として開く。
 // ctx（v2.js が渡す）：{ busy(), okToLeave(what), doc() 今の機体の JSON, name() 今の機体の名前, problem() 投稿できない理由（無ければ ''）,
@@ -7,6 +7,7 @@
 //   openUnit(doc, title) Ver2 の機体を開く, openScene(parts, title, role, ai) 機体エディタ 1 の機体を開く, kinds 用途の名前 }
 const CENTRAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? (new URLSearchParams(location.search).get('central') || 'http://localhost:8787') : 'https://ex-online-central.tobira-sys.workers.dev';
 const TOKEN_KEY = 'xs_token';
+const PROVIDER_NAMES = { google: 'Google', discord: 'Discord' };
 // （Ver2 の機体を受け取れない前のサーバーは、unit を読まずにこう答える）
 const OLD_SERVER = /部品は1〜|変更する内容がありません/;
 
@@ -44,7 +45,7 @@ const HTML = `<div class="box">
   <div class="bar2 tabs2"><button data-tab="rank" class="on">月間ランキング</button><select id="shMonth"></select><button data-tab="new">新着</button><button data-tab="likes">イイネ順</button><button data-tab="mine">自分の機体</button></div>
   <div class="grid" id="shGrid"></div>
   <div class="foot"><span class="hint" id="shNote"></span><button id="shMore" hidden>もっと見る</button></div>
-  <p class="hint">投稿・イイネには XS オンラインのアカウントでログインする。月間ランキングは、その月に集まったイイネの数で並べる（日本時間）。原作の固有名詞を使った機体名や、ふさわしくない機体は通報してください。</p>
+  <p class="hint">投稿・イイネには XS オンラインのアカウントに Google か Discord でログインする。月間ランキングは、その月に集まったイイネの数で並べる（日本時間）。原作の固有名詞を使った機体名や、ふさわしくない機体は通報してください。</p>
 </div>`;
 
 export function initShare(ctx) {
@@ -77,16 +78,54 @@ export function initShare(ctx) {
       a.append(el('span', 'who', `ログイン中：${share.me.name}`), out);
       return;
     }
-    const mail = el('input'); mail.type = 'email'; mail.placeholder = 'メールアドレス'; mail.autocomplete = 'username';
-    const pass = el('input'); pass.type = 'password'; pass.placeholder = 'パスワード'; pass.autocomplete = 'current-password';
-    const go = el('button', 'acc', 'ログイン');
-    go.onclick = async () => {
-      try { const r = await central('/api/login', 'POST', { email: mail.value, password: pass.value }); setTok(r.token); await loadMe(); await loadShare(); sNote('ログインしました。'); }
-      catch (e) { sNote(e.message, true); }
-    };
-    pass.onkeydown = e => { if (e.key === 'Enter') go.click(); };
-    const reg = el('a', 'hint', 'アカウントを作る'); reg.href = CENTRAL + '/'; reg.target = '_blank'; reg.rel = 'noopener';
-    a.append(mail, pass, go, reg);
+    const btns = el('span'), reg = el('a', 'hint', 'アカウントはゲームのページで作る'); reg.href = CENTRAL + '/'; reg.target = '_blank'; reg.rel = 'noopener';
+    btns.style.display = 'contents';
+    a.append(btns, reg);
+    providers().then(ok => {
+      const list = ['google', 'discord'].filter(p => ok[p]);
+      if (!list.length) { btns.textContent = 'いまログインに使える入口がありません。'; return; }
+      for (const p of list) {
+        const b = el('button', 'acc', `${PROVIDER_NAMES[p]} でログイン`);
+        b.onclick = async () => {
+          btns.querySelectorAll('button').forEach(x => { x.disabled = true; });
+          try { const ans = await trip(p); if (ans) await answered(ans); }
+          catch (e) { sNote(e.message, true); }
+          btns.querySelectorAll('button').forEach(x => { x.disabled = false; });
+        };
+        btns.appendChild(b);
+      }
+    });
+  }
+  // Google・Discord のログイン（中央の server/central/oauth.ts）。小さな別窓で入口へ行き、答えは auth.html が同じ住所の
+  // BroadcastChannel で渡す（手元の中央なら、中央のページが postMessage で）。別窓が開けない時は、このページごと行って戻る（#auth=）。
+  let shown = null;
+  const providers = () => (shown ??= fetch(CENTRAL + '/api/auth/providers').then(r => r.json()).catch(() => { shown = null; return {}; }));
+  async function trip(p) {
+    // （クリックの中ですぐ開く：待ってから開く窓はブラウザに止められる）
+    const w = open('about:blank', 'xs-auth', 'popup,width=520,height=700');
+    const begin = (popup, back) => central(`/api/auth/${p}/begin`, 'POST', { mode: 'login', back, popup });
+    if (!w) {
+      if (!ctx.okToLeave('ログインのページへ移ります')) return null;
+      location.href = (await begin(false, location.pathname + location.search)).url;
+      return new Promise(() => { /* このページは移る */ });
+    }
+    let url;
+    try { url = (await begin(true, new URL('auth.html', location.href).pathname)).url; } catch (e) { w.close(); throw e; }
+    w.location.href = url;
+    return new Promise(done => {
+      let ch = null;
+      const finish = a => { removeEventListener('message', onMsg); ch?.close(); clearInterval(watch); done(a); };
+      const onMsg = e => { if (e.origin === new URL(CENTRAL).origin && e.data?.exoAuth) finish(e.data.exoAuth); };
+      addEventListener('message', onMsg);
+      try { ch = new BroadcastChannel('xs-auth'); ch.onmessage = e => { if (e.data?.exoAuth) finish(e.data.exoAuth); }; } catch { /* none */ }
+      // （答えなしに閉じられた：少し待って、来なければ何もしない）
+      const watch = setInterval(() => { if (w.closed) setTimeout(() => finish(null), 800); }, 500);
+    });
+  }
+  async function answered(a) {
+    if (a.kind === 'login') { setTok(a.token); await loadMe(); await loadShare(); sNote('ログインしました。'); return; }
+    if (a.kind === 'signup') { sNote(`この ${PROVIDER_NAMES[a.provider] ?? ''} は、まだゲームのアカウントにつながっていません。ゲームのページ（下の「アカウントはゲームのページで作る」）でアカウントを作ってから、もう一度ログインしてください。`, true); return; }
+    sNote(a.error ?? 'ログインできませんでした。', true);
   }
   async function loadMe() {
     if (!getTok()) { share.me = null; renderAuth(); return; }
@@ -235,6 +274,17 @@ export function initShare(ctx) {
   $('#shClose').onclick = close;
   box.addEventListener('pointerdown', e => { if (e.target === box) close(); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && !box.hidden) { e.stopPropagation(); close(); } }, true);
+
+  // 別窓が開けずにこのページごと行って戻った時：答えは #auth= の後ろ（サーバーには送られない）
+  if (location.hash.startsWith('#auth=')) {
+    const raw = location.hash.slice(6);
+    history.replaceState(null, '', location.pathname + location.search);
+    let ans;
+    try { ans = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(raw.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)))); }
+    catch { ans = { kind: 'error', error: 'ログインの答えを読めませんでした。もう一度お試しください。' }; }
+    box.hidden = false; fillMonths();
+    answered(ans).then(() => { if (ans.kind !== 'login') loadShare(); });
+  }
 
   return {
     async open() {

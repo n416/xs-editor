@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="referrer" content="no-referrer">
+<title>ログイン</title>
+<body style="font-family:system-ui,sans-serif;background:#10141c;color:#e6e9ef;max-width:520px;margin:48px auto;padding:0 16px;line-height:1.8">
+<p id="said">ログインの画面に戻ります。このウィンドウは閉じてかまいません。</p>
+<p><a style="color:#f0b43c" href="v2.html">機体エディタへ</a></p>
+<script>
+// 中央（server/central/oauth.ts）が、Google・Discord のログインの答えを #auth= の後ろに付けてここへ戻す。
+// 別窓のこのページから、同じ住所のエディタ（v2-share.js）へ BroadcastChannel で渡して閉じる。答えはサーバーに送らない。
+const raw = location.hash.startsWith('#auth=') ? location.hash.slice(6) : '';
+history.replaceState(null, '', location.pathname);
+if (raw) {
+  try {
+    const a = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(raw.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))));
+    if (a.kind === 'error') document.getElementById('said').textContent = String(a.error);
+    const c = new BroadcastChannel('xs-auth'); c.postMessage({ exoAuth: a }); c.close();
+    if (a.kind !== 'error') setTimeout(() => window.close(), 300);
+  } catch (e) { document.getElementById('said').textContent = 'ログインの答えを読めませんでした。もう一度お試しください。'; }
+}
+</script>
+</body>
+</html>
