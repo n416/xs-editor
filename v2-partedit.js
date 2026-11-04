@@ -17,7 +17,7 @@ import { BONE_CHOICES, PIVOT_CHOICES, groupOfPart, pivotOfPart, isGlowPart, isTr
 import { profileEditor } from './v2-profile.js';
 
 const ROLE_COLOR = { main: '#c3c9d2', sub: '#6b727d', frame: '#23262c', accent: '#b8483e', glow: '#ffd257' };
-const r5 = v => Math.round(v * 1e5) / 1e5, r7 = v => Math.round(v * 1e7) / 1e7, r4 = v => Math.round(v * 1e4) / 1e4, r1 = v => Math.round(v * 10) / 10;
+const r5 = v => Math.round(v * 1e5) / 1e5, r12 = v => Math.round(v * 1e12) / 1e12, r4 = v => Math.round(v * 1e4) / 1e4, r1 = v => Math.round(v * 10) / 10;
 const fmt = v => String(+(+v).toFixed(4));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const $ = s => document.querySelector(s);
@@ -34,16 +34,22 @@ export function cornersOf(planes) {
   return out;
 }
 /** 角の並び → 平面の集まり。体積が無ければ（点が 1 つの面の上に並ぶ）null。
- *  直すたびに 面 → 角 → 面 と行き来するので、数値のわずかなずれで 1 枚の面が 2 枚に割れないよう、ほぼ同じ面（向きの差 0.1° 未満・位置の差 0.0002 未満）は
- *  外側の 1 枚にまとめる（割れると、辺の途中に要らない角が増えていく） */
+ *  直すたびに 面 → 角 → 面 と行き来する。角は 3D の形（float32）から読むので、同じ面の角も 1e-7 ほどずれる：0.000001 以内は同じ面の上とみなし、
+ *  角がどれも 0.000001 以内に乗る 2 枚の面は外側の 1 枚にまとめる（割れると、辺の途中に要らない角が増えていく）。
+ *  それより大きなずれは本当の折れ目として、面を分けたままにする。0.1° 未満の向きの差・0.0002 未満のずれまでまとめ、面の数値を 7 桁に丸めていた頃は、
+ *  ほとんど平らな折れ目で面と面の交わりが遠くへずれ、元の角の無い所へ角が出て、角を動かすたびに角が増えていった（テスター 2026-11-04 「頂点が 4 桁」。
+ *  tools/cornergrowtest.mjs） */
 export function planesOf(pts) {
   if (pts.length < 4) return null;
+  const T = 1e-6, dist = (q, p) => q[0] * p[0] + q[1] * p[1] + q[2] * p[2] - q[3];
+  const on = q => pts.filter(p => Math.abs(dist(q, p)) < 2e-4);
   const pl = [];
-  for (const p of planesFromPoints(pts, 5e-5)) {
-    const k = pl.findIndex(q => q[0] * p[0] + q[1] * p[1] + q[2] * p[2] > 1 - 2e-6 && Math.abs(q[3] - p[3]) < 2e-4);
+  for (const p of planesFromPoints(pts, T)) {
+    const k = pl.findIndex(q => q[0] * p[0] + q[1] * p[1] + q[2] * p[2] > 1 - 2e-6 && Math.abs(q[3] - p[3]) < 2e-4
+      && [...on(q), ...on(p)].every(x => Math.abs(dist(q, x)) < T && Math.abs(dist(p, x)) < T));
     if (k < 0) pl.push(p); else if (p[3] > pl[k][3]) pl[k] = p;
   }
-  for (let i = 0; i < pl.length; i++) pl[i] = pl[i].map(r7);
+  for (let i = 0; i < pl.length; i++) pl[i] = pl[i].map(r12);
   if (pl.length < 4) return null;
   const h = buildHull(pl, { reach: hullReach(pl) });
   return h.positions.length >= 36 ? pl : null;
