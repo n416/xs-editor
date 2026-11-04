@@ -217,10 +217,17 @@ function placeFreeJoints() {
   for (const pc of byId[items[i].part].pieces) if (pc.kind === 'mesh' && pc.rig && MESHES.has(pc.mesh)) rigs.push({ rig: pc.rig, M: tfMatrix(pc.tf) });
   if (!pieces.length) return;
   const at = freeJoints(pieces, rigs), P = n => at[n].toArray();
-  moveJoint(torsoJ, P('torso')); moveJoint(headJ, P('head'));
-  for (const s of ['l', 'r']) {
-    moveJoint(armJ[s], P('arm_' + s)); moveJoint(foreJ[s], P('forearm_' + s)); moveJoint(elbowJ[s], P('forearm_' + s));
-    moveJoint(legJ[s], P('leg_' + s)); moveJoint(shinJ[s], P('shin_' + s)); moveJoint(kneeJ[s], P('shin_' + s)); moveJoint(footJ[s], P('foot_' + s));
+  // 自由な部品が形を持つ骨だけ、その決め方の位置へ動かす。持たない骨（上半身と太ももだけの部品に、カタログのすね・足を付けた時のすね・足首など）は、
+  // freeJoints の推測（すねの部品が無ければ太ももの 1/4 下、足が無ければ部品全体の下の端）ではなく、標準の骨格の位置のまま。
+  // 推測の足首はひざより上に来ていて、ひざを曲げると足がすねから離れた（issue #90）
+  const has = new Set(pieces.map(p => p.bone)), carried = n => has.has(n) || rigs.some(r => Array.isArray(r.rig?.[n]));
+  moveJoint(torsoJ, carried('torso') ? P('torso') : [0, S.belly.y, 0]); moveJoint(headJ, carried('head') ? P('head') : [0, S.neck.y, 0]);
+  for (const [s, sg] of [['l', 1], ['r', -1]]) {
+    if (carried('arm_' + s)) moveJoint(armJ[s], P('arm_' + s));
+    if (carried('forearm_' + s)) { moveJoint(foreJ[s], P('forearm_' + s)); moveJoint(elbowJ[s], P('forearm_' + s)); }
+    moveJoint(legJ[s], carried('leg_' + s) ? P('leg_' + s) : [sg * S.hip.x, S.hip.y, 0]);
+    if (carried('shin_' + s)) { moveJoint(shinJ[s], P('shin_' + s)); moveJoint(kneeJ[s], P('shin_' + s)); }
+    if (carried('foot_' + s)) moveJoint(footJ[s], P('foot_' + s));
   }
 }
 /** 自由な部品（機体エディタの形式）の Group：形 1 個ずつ（ミラー・繰り返しの写しごと）を、付く骨の入れ物（userData.extra）へ分ける。腰に付くものは g そのもの */
@@ -1752,7 +1759,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'cf75649';
+const BUILD = '1bbfd5d';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
