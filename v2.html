@@ -103,6 +103,7 @@
   .svcell img { width: 100%; aspect-ratio: 1; border-radius: 4px; background: #14161a; cursor: pointer; }
   .svcell .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .svcell .bar { margin: 0; }
+  header #gameId { width: auto; }
   #unitName { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   body.drop main::after { content: "ここに落とすと、その機体のファイルを開く"; position: absolute; inset: 10px; border: 2px dashed var(--acc); border-radius: 10px; display: flex; align-items: center; justify-content: center; background: rgba(20, 22, 26, .8); font-size: 16px; z-index: 6; }
   .pghead { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
@@ -155,6 +156,10 @@
   </div>
   <div class="grp asm"><b>機体</b>
     <span id="unitName" title="今の機体の名前。● は、保存してから変えたところがある印"></span>
+    <b>種別</b><select id="gameId" title="機体の種別（陣営と用途）。つながりと関節のチェック、ゲーム用の書き出し、「みんなの機体」の用途は、この種別で決まる">
+      <optgroup label="連合"><option value="a_raid">連合・強襲</option><option value="a_heavy">連合・重撃</option><option value="a_support">連合・支援</option><option value="a_sniper">連合・狙撃</option><option value="a_artillery_leg">連合・砲撃（脚）</option></optgroup>
+      <optgroup label="GIO"><option value="b_raid">GIO・強襲</option><option value="b_heavy">GIO・重撃</option><option value="b_support">GIO・支援</option><option value="b_sniper">GIO・狙撃</option><option value="b_artillery_leg">GIO・砲撃（脚）</option></optgroup>
+    </select>
     <button id="bSave" class="acc" title="今の機体を保存する（Ctrl+S）。保存してある機体なら上書き、まだなら名前を付けて保存">保存</button>
     <button id="bOpen" title="保存した機体の一覧（開く・消す）、ファイルに保存、ファイルから開く">開く</button>
     <button id="bHow" title="機体を作る手順（置く → 整える → 確かめる → 出す）">作り方</button>
@@ -286,10 +291,7 @@
   </details>
   <details class="asm">
     <summary>ゲーム用に書き出す<span>.glb を作る</span></summary>
-    <div class="row"><select id="gameId" title="ゲームの機体（陣営と用途）">
-      <optgroup label="連合"><option value="a_raid">連合・強襲</option><option value="a_heavy">連合・重撃</option><option value="a_support">連合・支援</option><option value="a_sniper">連合・狙撃</option><option value="a_artillery_leg">連合・砲撃（脚）</option></optgroup>
-      <optgroup label="GIO"><option value="b_raid">GIO・強襲</option><option value="b_heavy">GIO・重撃</option><option value="b_support">GIO・支援</option><option value="b_sniper">GIO・狙撃</option><option value="b_artillery_leg">GIO・砲撃（脚）</option></optgroup>
-    </select><button id="bGame" class="acc small">書き出す</button></div>
+    <div class="row"><span class="hint" style="flex:1">上の「種別」の機体として書き出す</span><button id="bGame" class="acc small">書き出す</button></div>
     <div class="bar"><button id="bCheck" class="small" title="選んだ機体として、つながり（離れている部品）と関節（ゲームの動きで外れる・めり込む）を調べる。ファイルは作らない">チェックだけする</button><button id="bGlb" class="small" title="今の形を、骨の無いふつうの .glb にする（ほかのソフトで開く・見せる用。ゲームには使わない）">ふつうの .glb にする</button></div>
     <div class="bar xsonly"><input type="text" id="weaponShape" placeholder="武器の形の名前（例 heat_axe）" style="width:150px" title="ゲームでの形の名前（半角の英数字と _）。空なら、その武器に決まっている名前"><button id="bWeaponGlb" class="small" title="今持っている武器だけを、武器のモデル（w_陣営_名前.glb）として書き出す。ゲームがその武器を選んだときに手に持たせる形になる">持っている武器だけを書き出す</button></div>
     <label class="chk"><input type="checkbox" id="paintTeam">差し色をゲームの陣営色にする（ビビッドを使っていないとき）</label>
@@ -319,6 +321,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=4cc9706"></script>
+<script type="module" src="./v2.js?v=b083400"></script>
 </body>
 </html>
