@@ -8,7 +8,8 @@
 //         前の面は y −0.43 より上で 0.118 まで。足首の装甲は y −0.8 より上。節・後ろの立ち上がり・足首は今までと同じ物
 // 役目：すねは太ももより太く、ふくらはぎがいちばん太い（推進器と脚を動かす機械が入る）。横の装甲は貼った板ではなく、すねの壁がそのまま上がった形
 //（外の面の出と前後の縁を、すねの殻の上の端に合わせる）。寸法は [独自]
-import { LEG, SHIN, FOOT, thighTabs, shinPlates, link, wide, shells, curve, kneecap, KX, DX } from './kit.js';
+import { LEG, SHIN, FOOT, ANKLE_Y, thighTabs, shinPlates, link, wide, shells, curve, kneecap, KX, DX } from './kit.js';
+import { cylX } from '../limb/kit.js';
 import { ellipsoid, piece, planesFromPoints, DARK, MAIN } from '../../xsasm-lib.js';
 import { ANKLE_RANGE } from '../../doublejoint.js';
 
@@ -26,8 +27,10 @@ const THIGH = [
 // すねの殻：角は 前の中央・前の端・前の角・横の後ろ・後ろの角・後ろの中央
 const sh = (y, cx, pts) => ({ y, x: cx, pts });
 // ひざの下で外へ張り出す（内の面は股関節の軸から 0.085 のまま、外はふくらはぎで 0.245）：上半身の太さに脚の太さを合わせる
+/** すねの殻の下の端（y −0.8）の断面。足首の受けの二股（DX から ±0.112〜）がこの横の面から下りるので、横はその幅まで張る（前は 0.105、後ろは −0.13） */
+const ANKLE_TOP = [[0, 0.105], [0.06, 0.1], [0.118, 0.058], [0.13, -0.055], [0.085, -0.12], [0, -0.13]];
 export const SHINB = [
-  sh(-0.8, 0.0625, [[0, 0.105], [0.06, 0.1], [0.105, 0.058], [0.11, -0.055], [0.07, -0.12], [0, -0.13]]),         // 足首の上
+  sh(-0.8, DX, ANKLE_TOP),                                                                                          // 足首の上（足首の受けがここから下りる）
   sh(-0.62, 0.075, [[0, 0.12], [0.075, 0.115], [0.133, 0.068], [0.14, -0.075], [0.092, -0.16], [0, -0.17]]),
   sh(-0.36, 0.08, [[0, 0.125], [0.088, 0.12], [0.156, 0.075], [0.165, -0.09], [0.11, -0.215], [0, -0.225]]),      // ふくらはぎ（いちばん太い）
   sh(-0.24, DX, [[0, 0.118], [0.07, 0.115], [0.127, 0.07], [0.135, -0.08], [0.09, -0.19], [0, -0.2]]),            // 中身の上の端（横の装甲と同じ幅）
@@ -41,6 +44,31 @@ const ankle = () => ({ ...piece('足首', ellipsoid([0.05, 0.07, 0.07], [0, -0.8
 const riser = () => shinPlates().filter(pc => pc.name.includes('立ち上がり'));
 /** すねの殻のほかの物（横の装甲・後ろの立ち上がり・足首・ひざの節）：同じ作りの別のすね（parts/leg/hover.js）でも使う */
 export const shinFixtures = () => [...ears(), ...riser(), ankle(), ...link()].map(pc => ({ ...SHIN, ...wide(pc) }));
+
+// ---- 足首の受け（issue #218「関節がおもちゃっぽい」）：すねの殻の下に暗い卵が 1 つあるだけで、すねと足が細い柄でつながって見えた。
+// 重機の腕の先（ショベルのアームとバケットのつなぎ）と同じ作りにする：すねの両の壁がそのまま下へ下りて、足首の軸を左右から挟む二股の受け
+//（骨 shin）。足の側は、軸のまわりに回る太い軸受けの筒（骨 foot、左右の端は二股の内に入って見えない）と、そこから足の中へ下りる台。
+// 軸の端の蓋・ピンは付けない。受けの外の面は平らにせず、下へ向かって外へ開き、真ん中を盛り上げる。足の甲・かかとの装甲（足首の軸から
+// 0.1 以内、x は DX から ±0.115 まで）は二股の内（±0.112 より内）を通るので、足が回っても受けに入らない。寸法は [独自] ----
+// 上の断面は、すねの殻の下の端の断面（ANKLE_TOP、少し内へ）のうち軸から 0.112 より外の所。そこから下は、足首の軸のまわりの楕円（下へ 0.068・前後へ 0.088）へ
+// 絞れて、外の面は下へ向かって外へ開く（軸の高さで 0.142）
+const clipX = (poly, x0) => poly.flatMap((p, i) => {
+  const q = poly[(i + 1) % poly.length], out = [];
+  if (p[0] >= x0) out.push(p);
+  if ((p[0] >= x0) !== (q[0] >= x0)) { const t = (x0 - p[0]) / (q[0] - p[0]); out.push([x0, p[1] + t * (q[1] - p[1])]); }
+  return out;
+});
+const YOKE_TOP = clipX([...ANKLE_TOP, [0, -0.13]].map(([x, z]) => [x * 0.97, 0.97 * z - 0.0005]), 0.112);
+const YOKE_LOW = Array.from({ length: 11 }, (_, k) => (k - 5) * 18 * Math.PI / 180).map(a => [ANKLE_Y - 0.068 * Math.cos(a), 0.088 * Math.sin(a)]);
+/** 二股の片側（s 1 で外、−1 で内）：内の面は軸から 0.112 */
+const yokeCheek = s => {
+  const xo = y => 0.142 - Math.max(0, y - ANKLE_Y) * 0.2, at = (dx, y, z) => [DX + s * dx, y, z], cy = -0.86, cz = 0;
+  return piece(`足首の受け（${s > 0 ? '外' : '内'}）`, planesFromPoints([
+    ...YOKE_TOP.map(([x, z]) => at(x, -0.795, z)),
+    ...YOKE_LOW.flatMap(([y, z]) => [at(0.112, y, z), at(xo(y) - 0.006, y, z), at(xo(y), y + (cy - y) * 0.2, z * 0.8)]),
+    at(0.112, -0.795, 0.05), at(0.112, -0.795, -0.1), at(xo(cy) + 0.007, cy, cz)]), { ...SHIN, ankleRange: ANKLE_RANGE });
+};
+const ankleYoke = () => [yokeCheek(1), yokeCheek(-1)];
 
 // ---- 足（骨 foot）：足首の横の軸（y −0.87）のまわりに回る。足の裏は y −1.14 で平ら。y −0.93 より上にあるのは、足首の台と、足首の軸から 0.1 以内の
 // 甲の装甲・かかとの上の装甲だけ（足が回っても、すねの裾に当たらない）。すねを太くした分、足も広い（半分の幅 0.131 → 0.165）----
@@ -57,11 +85,14 @@ const SOLEB = [
 ];
 const lr = pts => pts.flatMap(([x, y, z]) => [[DX - x, y, z], [DX + x, y, z]]);
 const hullAt = (name, pts, o = {}) => piece(name, planesFromPoints(lr(pts)), o);
-const footCore = () => ({ ...hullAt('足首の台', [[0.056, -0.84, -0.05], [0.056, -0.84, 0.05], [0.105, -1.08, -0.15], [0.105, -1.08, 0.14]], { color: DARK }), pivot: 'foot', center: [0, -0.87, 0] });
+/** 足首の軸受け（骨 foot）：足首の軸のまわりの太い筒。左右の端は足首の受けの二股の内に入る（DX から ±0.11）。足が回っても形は同じ */
+const footHub = () => cylX('足首の軸受け', ANKLE_Y, 0, 0.058, DX - 0.11, DX + 0.11, 20, { color: DARK });
+/** 足首の台：軸受けの筒から足の中へ下りる台（上は軸受けの幅いっぱい、軸の高さから） */
+const footCore = () => ({ ...hullAt('足首の台', [[0.1, ANKLE_Y, -0.055], [0.1, ANKLE_Y, 0.055], [0.105, -1.08, -0.15], [0.105, -1.08, 0.14]], { color: DARK }), pivot: 'foot', center: [0, ANKLE_Y, 0] });
 
 export default [
   { id: 'footmass', name: '足（厚い塊）', cat: '足', size: [0.34, 0.27, 0.73],
-    pieces: [footCore(), shell('足の殻', FOOTB), shell('足の裏の縁', SOLEB, { color: DARK }),
+    pieces: [footCore(), footHub(), shell('足の殻', FOOTB), shell('足の裏の縁', SOLEB, { color: DARK }),
       hullAt('足の甲の装甲', [[0.11, -0.945, 0.33], [0.115, -0.945, 0.02], [0.075, -0.875, 0.088], [0.075, -0.89, 0.03]]),   // つま先の上から足首の前へ上がる塊（足首を隠す）
       hullAt('かかとの上の装甲', [[0.11, -0.945, -0.02], [0.105, -0.945, -0.2], [0.07, -0.885, -0.035], [0.07, -0.89, -0.09]]),
     ].map(pc => ({ ...FOOT, ...pc })) },
@@ -71,5 +102,5 @@ export default [
   { id: 'thighmass', name: '太もも（厚い塊）', cat: '太もも', size: [0.275, 0.37, 0.24],
     pieces: [{ ...LEG, ...shell('太ももの殻', THIGH) }, ...thighTabs().map(pc => ({ ...LEG, ...wide(pc) }))] },
   { id: 'shinmass', name: 'すね（厚い塊）', cat: 'すね', size: [0.28, 0.87, 0.36], ankle: ANKLE_RANGE,
-    pieces: [{ ...SHIN, ...shell('すねの殻', SHINB) }, ...shinFixtures()] },
+    pieces: [{ ...SHIN, ...shell('すねの殻', SHINB) }, ...[...ears(), ...riser(), ...link()].map(pc => ({ ...SHIN, ...wide(pc) })), ...ankleYoke()] },
 ];
