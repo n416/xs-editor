@@ -15,7 +15,12 @@ import { ROLE_LABEL, roleOf } from './paint.js';
 import { KIND_LABEL, BLOCK0, kindOf, isSub, soloGeo, boxOf, pointsOf, roundCorners, latheLoop, tfMatrix, loftSecs } from './partgeo.js';
 import { BONE_CHOICES, PIVOT_CHOICES, groupOfPart, pivotOfPart, isGlowPart, isTrackedSet } from './freeparts.js';
 import { profileEditor } from './v2-profile.js';
+import { FORM_MAX, formOf, setForm } from './v2-forms.js';
 
+/** 「武器の口」（issue #144）：その武器の弾・ビームが、このブロックの真ん中から出る（ゲーム用に書き出した形で。xsengine.js MOUTH_NODE）。武器の種類と強さは機体の種別で決まる */
+export const MOUTH_CHOICES = { '': 'なし（名前に「銃口」「ビームの口」があればそこ）', muzzle: '手に持つ武器の銃口', arm: '腕の武器の口（ビーム・腕の銃）', head: '頭の機関砲の口', chest: '胸の武器の口', belly: '腹の武器の口', shoulder: '肩の砲・ロケットの口', back: 'ミサイルの発射口（背中・肩当て）', shield: '盾の武器の口' };
+const mouthRow = pc => `<div class="row"><label>武器の口</label><select id="peMouth">${Object.entries(MOUTH_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.mouth ?? '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select><button id="peFire" class="small" title="選んだ口から、試しにビームを撃って見せる（このブロックの真ん中から機体の前へ）">試し撃ち</button></div>
+  <div class="hint">その種類の武器を撃つと、弾やビームがこのブロックの真ん中から出る（ゲーム用に書き出した形で）。決まるのは出る場所だけで、武器の種類と強さは機体の種別で決まる。左右のある口（腕・頭・肩・ミサイル）は、ブロックが機体のどちら側にあるかで左右が決まる</div>`;
 const ROLE_COLOR = { main: '#c3c9d2', sub: '#6b727d', frame: '#23262c', accent: '#b8483e', glow: '#ffd257' };
 const r5 = v => Math.round(v * 1e5) / 1e5, r12 = v => Math.round(v * 1e12) / 1e12, r4 = v => Math.round(v * 1e4) / 1e4, r1 = v => Math.round(v * 10) / 10;
 const fmt = v => String(+(+v).toFixed(4));
@@ -561,11 +566,26 @@ export function initPartEdit(ctx) {
       html.push('<h2>ゲーム用</h2>',
         `<div class="row"><label>付く骨</label><select id="peBone">${Object.entries(BONE_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.bone ?? 'auto') === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + autoB : ''}</option>`).join('')}</select></div>`,
         `<div class="row"><label>回転の中心</label><select id="pePivot">${Object.entries(PIVOT_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.pivot ?? 'auto') === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + autoP : ''}</option>`).join('')}</select></div>`,
-        check('発光する（目・センサーなど）', 'glow'), check('当たり判定なし（関節チェックでめり込みを見ない）', 'noHit'), check('全高に数えない（頭より高い翼・背中の装備）', 'noHeight'), check('あたり（下書き。書き出さない）', 'blockout'),
+        check('発光する（目・センサーなど）', 'glow'), check('当たり判定なし（関節チェックでめり込みを見ない）', 'noHit'), check('全高に数えない（頭より高い翼・背中の装備）', 'noHeight'), check('あたり（下書き。書き出さない）', 'blockout'), mouthRow(pc),
         '<div class="hint">左右のある骨（腕・脚など）は、形の真ん中が機体のどちら側にあるかで左右が決まる</div>');
     } else if (!sub) {
       bind('noHit', () => !!pc.noHit, v => { if (v) pc.noHit = true; else delete pc.noHit; });
-      html.push('<h2>ゲーム用</h2>', check('当たり判定なし（関節チェックでめり込みを見ない。動力パイプ・光）', 'noHit'), `<div class="hint">付く骨：${pc.bone ?? '（部位の既定）'}${pc.hinge ? '・蝶番あり' : ''}。光らせるには、色の役を「発光」に</div>`);
+      html.push('<h2>ゲーム用</h2>', check('当たり判定なし（関節チェックでめり込みを見ない。動力パイプ・光）', 'noHit'), mouthRow(pc), `<div class="hint">付く骨：${pc.bone ?? '（部位の既定）'}${pc.hinge ? '・蝶番あり' : ''}。光らせるには、色の役を「発光」に</div>`);
+    }
+    // 形態（変形の見た目、v2-forms.js）：形態 2 からの、このブロックの見た目
+    const fN = ctx.form(), fAll = ctx.forms(), fv = formOf(pc, fN) ?? {};
+    if (!sub) {
+      html.push('<h2>形態（変形の見た目）</h2>', `<div class="seg">${Array.from({ length: fAll }, (_, i) => `<button data-form="${i + 1}" class="${i + 1 === fN ? 'on' : ''}">形態 ${i + 1}</button>`).join('')}${fAll < FORM_MAX ? '<button id="peFormAdd" title="形態を 1 つ足す">＋</button>' : ''}</div>`);
+      if (fN === 1) html.push('<div class="hint">形態 1 はいつもの形（ゲーム用に書き出す形）。形態 2 からを選ぶと、その形態でのこのブロックの見た目（出す・消す、色、位置と向き）を決められる。エディタとみんなの機体の中だけで、戦場では変形しない</div>');
+      else {
+        const p = fv.p ?? [0, 0, 0], r = fv.r ?? [0, 0, 0];
+        html.push(`<label class="chk"><input type="checkbox" id="peFHide" ${fv.hide ? 'checked' : ''}>形態 ${fN} では出さない</label>`,
+          `<div class="row"><label class="chk" style="flex:1"><input type="checkbox" id="peFColorOn" ${fv.color ? 'checked' : ''}>色を変える</label><input type="color" id="peFColor" value="${esc(fv.color ?? ctx.colorOf(pc, d))}" style="width:48px"></div>`,
+          `<div class="row"><label>ずらす</label>${[0, 1, 2].map(a => `<input type="number" step="0.01" data-fp="${a}" value="${p[a]}">`).join('')}</div>`,
+          `<div class="row"><label>回す（度）</label>${[0, 1, 2].map(a => `<input type="number" step="5" data-fr="${a}" value="${r[a]}">`).join('')}</div>`,
+          '<div class="hint">ずらす：左右・上下・前後（パーツの向きで。左右ミラーの写しは逆へ）。回す：ブロックの真ん中で、x・y・z の軸の回り。枠線と角のつまみは形態 1 の所に出る</div>',
+          '<div class="pebar"><button id="peFReset">形態 1 と同じに戻す</button></div>');
+      }
     }
     E.right.innerHTML = html.join('');
 
@@ -575,7 +595,21 @@ export function initPartEdit(ctx) {
     for (const el of E.right.querySelectorAll('[data-op]')) el.onclick = () => { if ((el.dataset.op === 'sub') === sub) return; if (el.dataset.op === 'sub') { if (d.pieces.filter(p => !isSub(p)).length <= 1) { ctx.note('足すブロックが 1 個も残らなくなります', true); return; } pc.op = 'sub'; } else delete pc.op; changed(true); };
     if ($('#peColor')) { $('#peColor').oninput = e => { pc.color = e.target.value; ctx.repaint(); dimOthers(); }; $('#peColor').onchange = () => { commit(); renderLeft(); }; $('#peTeam').onchange = e => { pc.team = e.target.checked; commit(); }; }
     if ($('#peBone')) { $('#peBone').onchange = e => { pc.bone = e.target.value; changed(true); }; $('#pePivot').onchange = e => { pc.pivot = e.target.value; changed(true); }; }
+    if ($('#peMouth')) { $('#peMouth').onchange = e => { if (e.target.value) pc.mouth = e.target.value; else delete pc.mouth; commit(); }; $('#peFire').onclick = () => ctx.testFire(pc); }
     if ($('#peBake')) $('#peBake').onclick = bakeTf;
+    // 形態：カタログ型のパーツは、形態を持ったブロックだけ写しを 1 つずつのメッシュにするので、持つ・持たないが変わったら作り直す
+    const formSet = change => { const had = !!pc.forms; if (change) setForm(pc, ctx.form(), change); else { const all = { ...(pc.forms ?? {}) }; delete all[ctx.form()]; if (Object.keys(all).length) pc.forms = all; else delete pc.forms; } if (had !== !!pc.forms && !d.free) ctx.rebuild(); else ctx.showForms(); };
+    for (const el of E.right.querySelectorAll('[data-form]')) el.onclick = () => { ctx.setForm(+el.dataset.form); renderRight(); };
+    if ($('#peFormAdd')) $('#peFormAdd').onclick = () => { ctx.addForm(); renderRight(); };
+    if ($('#peFHide')) {
+      $('#peFHide').onchange = e => { formSet({ hide: e.target.checked || null }); commit(); };
+      $('#peFColorOn').onchange = e => { formSet({ color: e.target.checked ? $('#peFColor').value : null }); commit(); };
+      $('#peFColor').oninput = e => { if ($('#peFColorOn').checked) formSet({ color: e.target.value }); };
+      $('#peFColor').onchange = () => commit();
+      const vec = k => [0, 1, 2].map(a => +E.right.querySelector(`[data-${k}="${a}"]`).value || 0);
+      for (const el of E.right.querySelectorAll('[data-fp],[data-fr]')) { el.oninput = () => formSet({ p: vec('fp'), r: vec('fr') }); el.onchange = () => commit(); }
+      $('#peFReset').onclick = () => { formSet(null); commit(); renderRight(); };
+    }
     if ($('#peBlend')) $('#peBlend').onchange = e => { if (e.target.value) pc.blendTo = e.target.value; else delete pc.blendTo; commit(); };
     if ($('#peRole')) $('#peRole').onchange = e => { const r = e.target.value; pc.color = ROLE_COLOR[r]; if (r === 'glow') pc.glow = true; else delete pc.glow; ctx.repaint(); dimOthers(); commit(); renderLeft(); };
     for (const el of E.right.querySelectorAll('[data-f]')) {

@@ -29,6 +29,7 @@ export const DEFAULTS = {
   orb: null,               // a part of an orb (ORB) from the body generator: { i: its number, size: 's' | 'm' | 'l', len, dock: [x, y, z] its dock in the part's frame }
   noHeight: false,         // not counted in the XS's height (wings and back gear that rise above the head)
   gun: null,               // a hand weapon the game hides for melee: true / false, null = by its name
+  mouth: null,             // where a weapon's shot leaves, chosen on the block (機体エディタ Ver2 「武器の口」, issue #144): one of MOUTH_NODE's keys; null = by its name
   opacity: null,           // a see-through part (lights from the body generator): 0..1, null = solid
   pos: [0, 0, 0], rot: [0, 0, 0], scl: [1, 1, 1],
   side: null, top: null,   // extrude only: outlines seen from the side [[z, y], ...] and from above [[x, z], ...]; null = none
@@ -656,6 +657,9 @@ function nozzlesOf(pieces) {
   return out.sort((a, b) => b.r - a.r);
 }
 
+// 「武器の口」 (a block's mouth) → the node the game reads; the sided ones get _l / _r by the side the block is on
+export const MOUTH_NODE = { muzzle: 'muzzle', arm: 'arm_muzzle', head: 'mouth_head', chest: 'mouth_chest', belly: 'mouth_belly', shoulder: 'mouth_shoulder', back: 'mouth_back', shield: 'mouth_shield' };
+const MOUTH_SIDED = new Set(['arm', 'head', 'shoulder', 'back']);
 // attachment points (editor space) found from part names; each rides on the bone of the part it comes from
 function attachPoints(pieces) {
   const find = (re, bone, pick) => {
@@ -680,6 +684,29 @@ function attachPoints(pieces) {
   // a beam built into an arm (a weapon with mount "arm", the claw hand's): where it comes out, a part named …ビームの口 on
   // that side's forearm (nodes arm_muzzle_l / arm_muzzle_r; client/src/models.ts muzzleOf)
   for (const s of ['l', 'r']) { const p = find(/ビームの口/, 'forearm_' + s); if (p) out['arm_muzzle_' + s] = p; }
+  // mouths chosen on a block (「武器の口」): a node at the middle of the blocks of each kind (and side), over the ones found by name.
+  // Only where a shot is drawn from: the weapon itself is the XS kind's (client/src/models.ts muzzleOf)
+  const marks = new Map();
+  for (const pc of pieces) {
+    const k = pc.part.mouth;
+    if (!MOUTH_NODE[k]) continue;
+    // a mirrored block comes as one shape with its copy (Ver2's 「左右ミラー」, its two copies baked into one): a sided mouth
+    // whose shape is two lumps apart on either side of the part's middle is a mouth on each side
+    let halves = [[pc.geo.boundingBox, null]];
+    if (MOUTH_SIDED.has(k)) {
+      pc.part.proxy.updateMatrixWorld();
+      const mid = new THREE.Vector3().setFromMatrixPosition(pc.part.proxy.matrixWorld).x, pos = pc.geo.attributes.position, L = new THREE.Box3(), R = new THREE.Box3(), v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i); (v.x >= mid ? L : R).expandByPoint(v); }
+      if (!L.isEmpty() && !R.isEmpty() && L.min.x - mid > 1e-3 && mid - R.max.x > 1e-3) halves = [[L, 'l'], [R, 'r']];
+    }
+    for (const [box, half] of halves) {
+      const cx = box.min.x + box.max.x, side = half ?? (/_l$/.test(pc.bone) ? 'l' : /_r$/.test(pc.bone) ? 'r' : cx >= 0 ? 'l' : 'r');
+      const name = MOUTH_NODE[k] + (MOUTH_SIDED.has(k) ? '_' + side : '');
+      if (!marks.has(name)) marks.set(name, { box: new THREE.Box3(), bone: pc.bone });
+      marks.get(name).box.union(box);
+    }
+  }
+  for (const [name, m] of marks) out[name] = { pos: m.box.getCenter(new THREE.Vector3()), bone: m.bone };
   // the back's two largest nozzles, one a side (docs/models.md; the game's own flames come from jet_<n>, below)
   const back = nozzlesOf(pieces).filter(n => n.bone === 'torso');
   for (const s of ['l', 'r']) { const t = back.find(n => (s === 'l' ? n.pos.x > 0.02 : n.pos.x < -0.02)); if (t) out['thruster_' + s] = { pos: t.pos, bone: 'torso' }; }

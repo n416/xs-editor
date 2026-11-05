@@ -26,6 +26,7 @@ import { initAi } from './v2-ai.js';
 import { initShare } from './v2-share.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
+import { FORM_MAX, FORM_MS, formsUsed, keepBase, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
@@ -277,8 +278,11 @@ function groupOf(item, index) {
   const subs = new Map(), b0 = boneOf(def);
   for (const pc of def.pieces) {
     if (isSub(pc)) continue;   // 引くブロックは形を持たない（上に並ぶブロックを削るだけ）
-    const m = new THREE.Mesh(geoOf(def, pc), material(pc, def));
+    // 形態（v2-forms.js）のあるブロックは、ミラー・繰り返しの写しを 1 つずつのメッシュに（ミラーの写しは逆へ動く）
+    (pc.forms ? instGeosOf(def, pc) : [geoOf(def, pc)]).forEach((geo, k) => {
+    const m = new THREE.Mesh(geo, material(pc, def));
     m.userData.index = index; m.userData.noHit = !!pc.noHit; m.userData.pc = pc; m.userData.def = def;
+    if (pc.forms) m.userData.inst = k;
     const pos = new THREE.Vector3(...(pc.pos ?? [0, 0, 0]));
     if (pc.hinge) {
       const k = JSON.stringify(pc.hinge);
@@ -293,6 +297,7 @@ function groupOf(item, index) {
       if (!g.userData.extra.has(pc.bone)) { const e = new THREE.Group(); e.userData.index = index; g.userData.extra.set(pc.bone, e); }
       m.position.copy(pos); g.userData.extra.get(pc.bone).add(m);
     } else { m.position.copy(pos); g.add(m); }
+    });
   }
   applyToGroup(item, g);
   return g;
@@ -598,6 +603,8 @@ function rebuildMain() {
   markCatalog();
   updateGhostChest();
   applyPose();
+  renderForms();
+  showFormNow();
   if (PE.active()) PE.afterRebuild();
   disposeStale();
 }
@@ -633,6 +640,8 @@ function tick(now) {
   if (meshDirty) { meshDirty = false; rebuild(); }
   if (playing) moveFrame(now);
   flashTick(now);
+  if (formAnim) { showFormNow(); if (now - formAnim.t0 >= FORM_MS) { formAnim = null; showFormNow(); } }
+  shotTick(now);
   resize(); orbit.update(); if (PE.active()) PE.tick(); renderer.render(scene, camera); requestAnimationFrame(tick);
 }
 
@@ -1028,7 +1037,7 @@ function note(s, warn) { const el = $('#note'); el.textContent = s; el.style.col
 const SAMPLE_SETS = { h: ['head', '頭', HEAD_SAMPLES], u: ['upper', '上半身', UPPER_SAMPLES], b: ['back', '背中', BACK_SAMPLES], a: ['arm', '腕', ARM_SAMPLES], l: ['lower', '下半身', SAMPLES], g: ['leg', '脚', LEG_SAMPLES] };
 $('#sampleSel').innerHTML = Object.entries(SAMPLE_SETS).map(([h, [, title, set]]) => `<optgroup label="${title}">${Object.keys(set).map(k => `<option value="${h}:${k}">${k}</option>`).join('')}</optgroup>`).join('');
 $('#bPipe').onclick = placeRandomPipe;
-$('#bNew').onclick = () => { if (busy() || !okToLeave('新しく始めます')) return; unitName = ''; saveId = ''; savedHash = ''; items = []; paint = DEFAULT_PAINT(); showPaint(); adj = { ...NEW_ADJ }; showAdj(); selected = -1; rebuild(); save(); };
+$('#bNew').onclick = () => { if (busy() || !okToLeave('新しく始めます')) return; resetForms(); unitName = ''; saveId = ''; savedHash = ''; items = []; paint = DEFAULT_PAINT(); showPaint(); adj = { ...NEW_ADJ }; showAdj(); selected = -1; rebuild(); save(); };
 $('#bRandom').onclick = () => { if (busy()) return; adj = { ...NEW_ADJ }; showAdj(); items = tidy([...randomHeadV2(), ...randomLower(), ...adjusted(randomUpper()), ...adjusted(randomBack()), ...adjusted(randomArm()), ...randomLeg()]); selected = -1; rebuild(); save(); fitKneeGuards(); };
 $('#bKneeFit').onclick = fitKneeGuards;
 /** その部分だけ入れ替える */
@@ -1067,19 +1076,77 @@ function makeUserCopy(src, fresh = false) {
   registerUser(def);
   return def;
 }
+// ---- 形態（変形の見た目、issue #145。v2-forms.js）：右の「形態」と、パーツエディタの「形態」で切り替える。書き出す形・チェック・小さな絵は形態 1 ----
+let formNow = 1, formAdded = 1, formAnim = null;   // formAdded：「＋」で足した数（ブロックに書くまでは数に入らないので）
+const formCount = () => Math.min(FORM_MAX, Math.max(formAdded, formsUsed(kept().map(it => byId[it.part]))));
+const formRoots = () => groups.flatMap(g => [g, ...g.userData.extra.values()]);
+/** メッシュ o の、塗りのとおりの材質（形態で色を変える時は、この写しに色を入れる） */
+function formMat(o) { return o.userData.meshPart ? o.userData.fb?.m ?? o.material : o.userData.pc.blockout && o.userData.def?.free ? draftMat : material(o.userData.pc, o.userData.def); }
+function showFormNow() { if (formAnim) showForms(formRoots(), formAnim.from, formAnim.to, (performance.now() - formAnim.t0) / FORM_MS, formMat); else showForms(formRoots(), formNow, formNow, 1, formMat); }
+function switchForm(n) {
+  n = Math.max(1, Math.min(formCount(), n));
+  if (n === formNow && !formAnim) return;
+  formAnim = { from: formNow, to: n, t0: performance.now() }; formNow = n;
+  renderForms();
+}
+function addForm() { if (formCount() >= FORM_MAX) return; formAdded = formCount() + 1; switchForm(formAdded); }
+function resetForms() { formNow = 1; formAdded = 1; formAnim = null; renderForms(); }
+function renderForms() {
+  const bar = $('#formBar'); if (!bar) return;
+  const n = formCount();
+  if (formNow > n) { formNow = n; formAnim = null; }   // （その形態を使うブロックが無くなった）
+  bar.innerHTML = Array.from({ length: n }, (_, i) => `<button class="small ${i + 1 === formNow ? 'acc' : ''}" data-form="${i + 1}">形態 ${i + 1}</button>`).join('')
+    + (n < FORM_MAX ? '<button class="small" id="bFormAdd" title="形態を 1 つ足す（パーツエディタでブロックを選び、右の「形態」で、この形態での見た目を決める）">＋ 形態を足す</button>' : '');
+  for (const b of bar.querySelectorAll('[data-form]')) b.onclick = () => switchForm(+b.dataset.form);
+  if ($('#bFormAdd')) $('#bFormAdd').onclick = addForm;
+}
+// ---- 武器の口の試し撃ち（issue #144）：「武器の口」を選んだブロックの真ん中から、機体の前（+Z）へ短いビームを見せる。見た目だけ ----
+const shotGeo = new THREE.CylinderGeometry(0.022, 0.022, 1, 10).rotateX(Math.PI / 2).translate(0, 0, 0.5);
+let shots = [];
+function testFire(only) {
+  const at = [];
+  for (const t of formRoots()) t.traverse(o => {
+    if (!o.isMesh || !o.userData.pc?.mouth || (only && o.userData.pc !== only) || o.scale.x < 0.01) return;
+    o.updateWorldMatrix(true, false);
+    // （カタログ型のパーツは、ミラー・繰り返しの写しが 1 つのメッシュ：写しごとに）
+    for (const g of o.userData.inst == null && !o.userData.meshPart ? instGeosOf(o.userData.def, o.userData.pc) : [o.geometry]) {
+      if (!g.boundingBox) g.computeBoundingBox();
+      at.push(g.boundingBox.getCenter(new THREE.Vector3()).applyMatrix4(o.matrixWorld));
+    }
+  });
+  if (!at.length) { note(only ? '先にこのブロックの「武器の口」を選んでください' : '「武器の口」を選んだブロックがありません（パーツエディタでブロックを選び、右の「ゲーム用」の「武器の口」で選ぶ）', true); return; }
+  const t0 = performance.now();
+  for (const p of at) for (let k = 0; k < 3; k++) {
+    const m = new THREE.Mesh(shotGeo, new THREE.MeshBasicMaterial({ color: 0x8cecff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    m.position.copy(p); m.scale.set(1, 1, 1e-3); m.renderOrder = 12; m.visible = false; scene.add(m);
+    shots.push({ m, t0: t0 + k * 260 });
+  }
+  note(`${at.length} か所の武器の口から撃ちました（見た目だけ。ゲームでは、その種類の武器を撃つとここから出る）`);
+}
+function shotTick(now) {
+  shots = shots.filter(({ m, t0 }) => {
+    const t = (now - t0) / 420;
+    if (t >= 1) { scene.remove(m); m.material.dispose(); return false; }
+    m.visible = t >= 0;
+    if (t >= 0) { m.scale.z = 1.8 * Math.min(1, t * 3); m.material.opacity = 0.95 * (1 - t); }
+    return true;
+  });
+}
 /** パーツを直している間は、組み替えの操作を止める */
 const busy = () => { if (!PE.active()) return false; note('パーツエディタを開いている間は、組み替えできません（「完了して機体へ戻る」か「やめる」で終わってから）', true); return true; };
 const PE = initPartEdit({
   scene, camera, orbit, gizmo, canvas, byId, items: () => items, groups: () => groups, note, save: () => save(),
-  rebuild: () => rebuild(), restPose: () => setPose([]), repaint: () => applyPaint(), refreshCatalog: () => renderCatalog(),
+  rebuild: () => rebuild(), restPose: () => setPose([]),
+  /** 形態（v2-forms.js）：今の形態・数・切り替える・足す・ブロックの見た目を変えた後にかけ直す。武器の口の試し撃ち */
+  form: () => formNow, forms: () => formCount(), setForm: n => switchForm(n), addForm: () => addForm(), showForms: () => { renderForms(); showFormNow(); }, testFire: pc => testFire(pc), repaint: () => applyPaint(), refreshCatalog: () => renderCatalog(),
   colorOf: (pc, def) => (def?.free ? pc.color ?? '#c3c9d2' : colorOf(pc, def?.cat ?? '', paint)),
   /** パーツ def のブロックの形が変わった：置いてあるメッシュを新しい形に付け替える */
   regeo: def => {
     let redo = false, n = 0;
-    for (const g of groups) for (const t of [g, ...g.userData.extra.values()]) t.traverse(o => { if (o.isMesh && o.userData.meshPart) { if (o.userData.def === def) applyTf(o, o.userData.pc); return; } if (o.isMesh && o.userData.def === def) { n++; const ng = def.free ? instGeosOf(def, o.userData.pc)[o.userData.inst] : geoOf(def, o.userData.pc); if (!ng) redo = true; else if (o.geometry !== ng) o.geometry = ng; } });
+    for (const g of groups) for (const t of [g, ...g.userData.extra.values()]) t.traverse(o => { if (o.isMesh && o.userData.meshPart) { if (o.userData.def === def) { applyTf(o, o.userData.pc); keepBase(o); } return; } if (o.isMesh && o.userData.def === def) { n++; const ng = def.free || o.userData.inst != null ? instGeosOf(def, o.userData.pc)[o.userData.inst] : geoOf(def, o.userData.pc); if (!ng) redo = true; else if (o.geometry !== ng) o.geometry = ng; } });
     // 自由な部品：写しの数が変わった（ミラー・繰り返し）ら、置いたパーツを作り直す
     if (def.free && !redo) { const want = def.pieces.filter(drawn).reduce((a, pc) => a + instGeosOf(def, pc).length, 0) * items.filter(it => it.part === def.id).length; if (want !== n) redo = true; }
-    if (redo) rebuild();
+    if (redo) rebuild(); else showFormNow();
     disposeStale();
   },
   /** 画面をパーツ用に切り替える・戻す（左右の欄と上の並びが入れ替わり、仮の形は隠す） */
@@ -1124,7 +1191,8 @@ $('#bNewPart').onclick = () => { if (busy()) return; const t = byId[$('#newPartS
 
 // ---- 塗り：役ごとの色（パレット）とビビッド。色を変えたら、置いてあるパーツの材質だけ付け替える（形は作り直さない） ----
 function applyPaint() {
-  for (const g of groups) for (const t of [g, ...g.userData.extra.values()]) t.traverse(o => { if (o.isMesh && o.userData.pc) o.material = o.userData.pc.blockout && o.userData.def?.free ? draftMat : material(o.userData.pc, o.userData.def); });
+  for (const g of groups) for (const t of [g, ...g.userData.extra.values()]) t.traverse(o => { if (o.isMesh && o.userData.pc && !o.userData.meshPart) o.material = formMat(o); });
+  showFormNow();
 }
 const ROLE_KEYS = ['main', 'sub', 'frame', 'accent', 'glow'];
 function showPaint() {
@@ -1329,7 +1397,9 @@ function unitThumb() {
   const cam = camera.position.clone(), tgt = orbit.target.clone(), gv = gizmo.visible, ghosts = ghostAll.map(m => m.visible);
   endFlash(); gizmo.visible = false; for (const m of ghostAll) m.visible = false;
   resize(); setView('threeq'); camera.position.lerp(orbit.target, 0.1); camera.updateMatrixWorld();
+  showForms(formRoots(), 1, 1, 1, formMat);   // （小さな絵は形態 1）
   renderer.render(scene, camera);
+  showFormNow();
   const cv = document.createElement('canvas'), src = renderer.domElement, side = Math.min(src.width, src.height);
   cv.width = cv.height = 220;
   cv.getContext('2d').drawImage(src, (src.width - side) / 2, (src.height - side) / 2, side, side, 0, 0, 220, 220);
@@ -1355,7 +1425,7 @@ function openDoc(d, name = '', id = '') {
   persistUser(); renderCatalog(); showTab(tab);
   adj = { ...ADJ0, ...(d.adj ?? {}) };
   paint = d.paint?.pal ? { ...DEFAULT_PAINT(), ...d.paint } : DEFAULT_PAINT(); showPaint();
-  items = tidy(list); selected = -1;
+  items = tidy(list); selected = -1; resetForms();
   const fixed = toNewBody(items, adj); showAdj();   // 前の頭身の機体は新しい頭身へ（保存してある方は、保存し直すまで前のまま）
   unitName = name || d.name || ''; saveId = id; savedHash = '';
   rebuild(); save();
@@ -1750,6 +1820,8 @@ const SHARE = initShare({
   openScene: (parts, title, role, ai) => { const def = openE1(parts, title, role); if (ai) { def.ai = ai; persistUser(); } },
 });
 $('#bShare').onclick = () => { if (!busy()) SHARE.open(); };
+$('#bFire').onclick = () => testFire(null);
+renderForms();
 // ---- スマホ：下のタブで、下に出す欄を選ぶ（パーツ＝左の欄、調整＝右の欄、3D だけ）。広い画面では使わない（CSS が無視する）----
 function setSheet(k) { document.body.dataset.sheet = k; for (const b of document.querySelectorAll('#mnav button')) b.classList.toggle('on', b.dataset.sheet === k); }
 for (const b of document.querySelectorAll('#mnav button')) b.onclick = () => setSheet(b.dataset.sheet);
@@ -1761,7 +1833,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'b083400';
+const BUILD = '4f36ca0';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

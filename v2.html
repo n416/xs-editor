@@ -248,6 +248,11 @@
     <div class="bar"><button class="small" id="bVividOff">ビビッドを消す</button><button class="small" id="bPaintReset">塗る前の色に戻す</button></div>
   </details>
   <details open class="asm">
+    <summary>形態<span>変形の見た目（エディタとみんなの機体の中だけ）</span></summary>
+    <div class="bar" id="formBar"></div>
+    <div class="hint">押すと、その形態へ動いて切り替わる。形態ごとに、ブロックを出す・消す、色、位置と向きを変えられる（パーツエディタでブロックを選び、右の「形態」で）。ゲーム用に書き出す形・チェック・小さな絵は形態 1 で、戦場では変形しない</div>
+  </details>
+  <details open class="asm">
     <summary>見本<span>部位ごとに用意した組み合わせ</span></summary>
     <div class="row"><select id="sampleSel"></select><button id="bSample" class="small">読む</button></div>
     <div class="hint">選んだ見本の部位だけが入れ替わる</div>
@@ -292,7 +297,7 @@
   <details class="asm">
     <summary>ゲーム用に書き出す<span>.glb を作る</span></summary>
     <div class="row"><span class="hint" style="flex:1">上の「種別」の機体として書き出す</span><button id="bGame" class="acc small">書き出す</button></div>
-    <div class="bar"><button id="bCheck" class="small" title="選んだ機体として、つながり（離れている部品）と関節（ゲームの動きで外れる・めり込む）を調べる。ファイルは作らない">チェックだけする</button><button id="bGlb" class="small" title="今の形を、骨の無いふつうの .glb にする（ほかのソフトで開く・見せる用。ゲームには使わない）">ふつうの .glb にする</button></div>
+    <div class="bar"><button id="bFire" class="small" title="「武器の口」を選んだブロックから、試しにビームを撃って見せる（パーツエディタでブロックを選び、右の「ゲーム用」の「武器の口」で選ぶ）">武器の口から試し撃ち</button><button id="bCheck" class="small" title="選んだ機体として、つながり（離れている部品）と関節（ゲームの動きで外れる・めり込む）を調べる。ファイルは作らない">チェックだけする</button><button id="bGlb" class="small" title="今の形を、骨の無いふつうの .glb にする（ほかのソフトで開く・見せる用。ゲームには使わない）">ふつうの .glb にする</button></div>
     <div class="bar xsonly"><input type="text" id="weaponShape" placeholder="武器の形の名前（例 heat_axe）" style="width:150px" title="ゲームでの形の名前（半角の英数字と _）。空なら、その武器に決まっている名前"><button id="bWeaponGlb" class="small" title="今持っている武器だけを、武器のモデル（w_陣営_名前.glb）として書き出す。ゲームがその武器を選んだときに手に持たせる形になる">持っている武器だけを書き出す</button></div>
     <label class="chk"><input type="checkbox" id="paintTeam">差し色をゲームの陣営色にする（ビビッドを使っていないとき）</label>
     <div id="gameOut" class="hint" style="margin-top:4px">選んだ機体として、つながりと関節（その機体に起こる動き）を調べてから .glb を作る</div>
@@ -321,6 +326,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=b083400"></script>
+<script type="module" src="./v2.js?v=4f36ca0"></script>
 </body>
 </html>
