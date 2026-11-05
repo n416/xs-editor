@@ -654,7 +654,7 @@ canvas.addEventListener('pointerup', e => {
   downAt = null;
   const r = canvas.getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-  if (PE.active()) { PE.pick(ndc); return; }   // パーツを直している間は、ブロック・角・面を選ぶ
+  if (PE.active()) { PE.pick(ndc, e.ctrlKey || e.shiftKey || e.metaKey); return; }   // パーツを直している間は、ブロック・角・辺・面を選ぶ（Ctrl・Shift で選び足す）
   ray.setFromCamera(ndc, camera);
   const hits = ray.intersectObjects(groups, true);
   select(hits.length ? hits[0].object.userData.index : -1);
@@ -1836,7 +1836,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '332f97b';
+const BUILD = 'bdc0bc4';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

@@ -1,7 +1,7 @@
 // 機体エディタ Ver2 のパーツエディタ：パーツ 1 つを、ブロックを足す・削る・直すで作る画面。
 // 開くと画面ぜんたいがパーツ用に切り替わる：左＝ブロックの一覧と足す形、右＝選んだブロックの設定、3D はそのパーツに寄り、ほかのパーツは薄く（か隠す）。
 // パーツ = いくつかのブロックの集まり。ブロックの種類と設定は partgeo.js（機体エディタ index.html の部品と同じ 3 種類）：
-//   面で囲った形（凸）：角を動かす・辺と面を選んで動かす回す大きさを変える（issue #239）・角を足す消す・辺を角にまとめる・辺の面取り
+//   面で囲った形（凸）：角を動かす・辺と面を選んで動かす回す大きさを変える（issue #239）・Ctrl・Shift で角・辺・面をいくつも選んでまとめて（issue #242）・角を足す消す・辺を角にまとめる・辺の面取り
 //   押し出し          ：正面・側面・上面の断面を描く、厚み・テーパー・面取り・角の面取り・傾き・盛り上がり
 //   回転体            ：断面（右半分）を描く、分割数・角の面取り
 // どのブロックにも：足す／引く（上に並ぶブロックを削る）、左右ミラー、繰り返し、位置・大きさの数値、色の役、当たり判定なし。
@@ -292,32 +292,37 @@ export function initPartEdit(ctx) {
     if (!pc) return;
     gizmo.showX = gizmo.showY = gizmo.showZ = true; gizmo.setSpace('world');
     const hull = hullEdit(pc);
-    if (st.mode === 'corner') {
+    if (st.mode === 'corner' && selOf().length < 2) {
       const twin = symOn() && st.corner >= 0 ? mirrorIndex(st.pts, st.corner) : -1;
       st.handles = st.pts.map((p, i) => { const m = new THREE.Mesh(handleGeo, i === st.corner ? handleSel : i === twin ? handleSym : handleMat); m.position.set(...p); m.renderOrder = 10; m.userData.corner = i; holder.add(m); return m; });
       st.twin = twin;
       if (st.corner >= 0 && st.handles[st.corner]) { gizmo.setMode('translate'); gizmo.attach(st.handles[st.corner]); }
       sizeHandles();
-    } else if (st.mode === 'face' || st.mode === 'edge') {
+    } else if (st.mode === 'corner' || st.mode === 'face' || st.mode === 'edge') {
       // 辺・面（issue #239）：選んだ辺・面の角をまとめて、つまみで動かす（W）・回す（E）・大きさを変える（R）。つまみの向きは、面なら y が面の向き、
-      // 辺なら x が辺の向き・y がとなり合う 2 枚の面の向きの真ん中。角を動かした後で凸の立体を作り直す（内側に入った角は消える）
+      // 辺なら x が辺の向き・y がとなり合う 2 枚の面の向きの真ん中。角を動かした後で凸の立体を作り直す（内側に入った角は消える）。
+      // Ctrl・Shift を押しながら選んだ角・辺・面（issue #242）はまとめて：つまみは選んだ角の真ん中に、向きは左右・上下・前後
       st.edges = edgesOf(pc.planes, st.pts);
-      let part = null;
-      if (st.mode === 'face' && st.face >= 0 && pc.planes[st.face]) {
-        const f = faceInfo(pc, st.face);
-        if (!f) { st.face = -1; if (panel) renderRight(); }   // 形に出ていない面は選べない
-        else part = { on: f.on, c: f.c, q: frameQ(f.n, null) };
-      } else if (st.mode === 'edge' && st.edges[st.edge]) {
-        const e = st.edges[st.edge], A = V(st.pts[e.a]), B = V(st.pts[e.b]);
-        part = { on: new Set([e.a, e.b]), c: A.clone().add(B).multiplyScalar(0.5), q: frameQ(V(e.n), B.clone().sub(A)) };
-      } else st.edge = -1;
-      // 左右対称：選んだ角の反対側の角（選んだ中に無いもの）も、左右を返して一緒に動かす
-      const twin = new Set();
-      if (part && symOn()) for (const i of part.on) { const t = mirrorIndex(st.pts, i); if (t >= 0 && !part.on.has(t)) twin.add(t); }
-      drawParts(part?.on ?? null, twin);
-      if (part) {
-        const h = new THREE.Object3D(); h.position.copy(part.c); h.quaternion.copy(part.q); holder.add(h); h.updateMatrix();
-        st.helper = h; st.H0i = h.matrix.clone().invert(); st.pts0 = st.pts; st.selIx = part.on; st.twinIx = twin;
+      const n0 = selOf().length, els = selElements(pc);
+      if (panel && els.length !== n0) renderRight();   // 形に出ていない面・無い辺は選べない
+      // 左右対称：反対側の角（選んだ中に無いもの）も、左右を返して一緒に動かす。左右の両方を選んでいれば、左（x < 0）の側は右の動きを左右に返して動く
+      const sym = symOn(), on = new Set(), twin = new Set(), own = [];
+      for (const g of els) {
+        const m = sym ? mirrorSet(g.on) : null, key = s => [...s].sort((a, b) => a - b).join(',');
+        const pair = m && key(m) !== key(g.on) && els.some(o => key(o.on) === key(m));
+        if (pair && g.c.x < 0) { for (const i of g.on) twin.add(i); continue; }
+        own.push(g); for (const i of g.on) on.add(i);
+      }
+      if (sym) for (const i of on) { const t = mirrorIndex(st.pts, i); if (t >= 0 && !on.has(t)) twin.add(t); }
+      for (const i of on) twin.delete(i);
+      drawParts(els.map(g => g.on), twin);
+      if (own.length) {
+        // つまみ：1 つだけ選べばその角・辺・面の向き（#239）。2 つ以上なら、選んだ角ぜんぶの真ん中に、左右・上下・前後の向きで（左右の両方を選べば x = 0 の上）
+        const all = new Set(els.flatMap(g => [...g.on]));
+        const c = els.length === 1 ? els[0].c : [...all].reduce((a, i) => a.add(V(st.pts[i])), new THREE.Vector3()).multiplyScalar(1 / all.size);
+        const h = new THREE.Object3D(); h.position.copy(c); h.quaternion.copy(els.length === 1 ? els[0].q : new THREE.Quaternion()); holder.add(h); h.updateMatrix();
+        st.helper = h; st.H0i = h.matrix.clone().invert(); st.pts0 = st.pts; st.selIx = on; st.twinIx = twin; st.keep0 = twin.size > 0;
+        st.selAt = els.map(g => [...g.on]);
         gizmo.setSpace('local'); gizmo.attach(h);
       }
     } else if (hull) {
@@ -350,11 +355,12 @@ export function initPartEdit(ctx) {
     else X = (Math.abs(Y.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1)).cross(Y).normalize();
     return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, X.clone().cross(Y)));
   }
-  /** 辺・面を直すときの印：辺のときは辺ぜんぶ（黄）、選んだ辺・面は赤、左右対称で一緒に動く側はだいだい。選んだ角に丸 */
-  function drawParts(on, twin) {
-    const lines = { all: [], sel: [], sym: [] };
+  /** 辺・面を直すときの印：辺のときは辺ぜんぶ（黄）、選んだ辺・面は赤、左右対称で一緒に動く側はだいだい。選んだ角に丸。
+   *  groups：選んだ角・辺・面ごとの角の番号の集まり。角を直すときは、ほかの角も黄色の丸で出して押して選び足せる */
+  function drawParts(groups, twin) {
+    const lines = { all: [], sel: [], sym: [] }, on = new Set(groups.flatMap(g => [...g]));
     for (const e of st.edges) {
-      const k = on?.has(e.a) && on.has(e.b) ? 'sel' : twin.has(e.a) && twin.has(e.b) ? 'sym' : st.mode === 'edge' ? 'all' : null;
+      const k = groups.some(g => g.has(e.a) && g.has(e.b)) ? 'sel' : twin.has(e.a) && twin.has(e.b) ? 'sym' : st.mode === 'edge' ? 'all' : null;
       if (k) lines[k].push(...st.pts[e.a], ...st.pts[e.b]);
     }
     for (const [k, mat] of [['all', edgeMat], ['sym', edgeSym], ['sel', edgeSel]]) {
@@ -362,10 +368,48 @@ export function initPartEdit(ctx) {
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines[k], 3));
       const l = new THREE.LineSegments(g, mat); l.renderOrder = 10; l.userData.own = true; holder.add(l);
     }
-    for (const [ix, mat] of [[on, handleSel], [twin, handleSym]]) for (const i of ix ?? []) {
-      const m = new THREE.Mesh(handleGeo, mat); m.position.set(...st.pts[i]); m.renderOrder = 10; m.raycast = () => {}; holder.add(m); st.handles.push(m);
-    }
+    st.pts.forEach((p, i) => {
+      const mat = on.has(i) ? handleSel : twin.has(i) ? handleSym : st.mode === 'corner' ? handleMat : null;
+      if (!mat) return;
+      const m = new THREE.Mesh(handleGeo, mat); m.position.set(...p); m.renderOrder = 10; m.userData.corner = i; holder.add(m); st.handles.push(m);
+      if (st.mode !== 'corner') m.raycast = () => {};
+    });
     sizeHandles();
+  }
+  /** 選んだ角・辺・面の番号の並び（Ctrl・Shift で選び足したもの、いちばん後に選んだもの の順。issue #242） */
+  function selOf() {
+    const cur = st.mode === 'corner' ? st.corner : st.mode === 'edge' ? st.edge : st.mode === 'face' ? st.face : -1;
+    return [...new Set([...(st.more ?? []), cur])].filter(k => k >= 0);
+  }
+  function clearSel() { st.corner = st.face = st.edge = -1; st.more = []; }
+  /** 押した角・辺・面 k を選ぶ。add（Ctrl・Shift）なら選び足す。もう選んでいれば、選ぶのをやめる */
+  function choose(k, add) {
+    const f = st.mode, list = selOf();
+    if (!add) { st[f] = k; st.more = []; }
+    else if (list.includes(k)) { const rest = list.filter(x => x !== k); st[f] = rest.length ? rest[rest.length - 1] : -1; st.more = rest.slice(0, -1); }
+    else { st.more = list; st[f] = k; }
+    refresh();
+  }
+  /** 選んだ角・辺・面それぞれの { on: 角の番号, c: つまみの真ん中, q: つまみの向き }。形に出ていない面・無い辺は選ぶのをやめる */
+  function selElements(pc) {
+    const out = [], keep = [];
+    for (const k of selOf()) {
+      let g = null;
+      if (st.mode === 'corner' && st.pts[k]) g = { on: new Set([k]), c: V(st.pts[k]), q: new THREE.Quaternion() };
+      else if (st.mode === 'edge' && st.edges[k]) {
+        const e = st.edges[k], A = V(st.pts[e.a]), B = V(st.pts[e.b]);
+        g = { on: new Set([e.a, e.b]), c: A.clone().add(B).multiplyScalar(0.5), q: frameQ(V(e.n), B.clone().sub(A)) };
+      } else if (st.mode === 'face' && pc.planes[k]) { const f = faceInfo(pc, k); if (f) g = { on: f.on, c: f.c, q: frameQ(f.n, null) }; }
+      if (g) { out.push(g); keep.push(k); }
+    }
+    st[st.mode] = keep.length ? keep[keep.length - 1] : -1; st.more = keep.slice(0, -1);
+    return out;
+  }
+  /** 角の集まりの、x = 0 をはさんだ反対側（どれかに反対側が無ければ null） */
+  function mirrorSet(on) {
+    const m = new Set();
+    for (const i of on) { const t = mirrorIndex(st.pts, i); if (t < 0) return null; m.add(t); }
+    return m;
   }
   /** 画面の点 ndc にいちばん近い辺（画面で 10 px 以内。重なっていれば手前の辺）。無ければ −1 */
   function pickEdge(ndc) {
@@ -381,16 +425,18 @@ export function initPartEdit(ctx) {
     cand.sort((a, b) => a.d - b.d);
     return cand.filter(c => c.d < cand[0].d + 3).sort((a, b) => a.z - b.z)[0].k;
   }
-  /** 辺・面を動かした後、動いた角の位置 at から、その辺・面を選び直す（内側に入って消えたら、選ばない） */
-  function reselectPart(at) {
-    const pc = block(), pts = cornersOf(pc.planes), near = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < 1e-3;
-    if (st.mode === 'face') {
+  /** 角・辺・面を動かした後、動いた角の位置から、選んでいた角・辺・面を選び直す（ats：選んだものごとの角の位置。内側に入って消えたら、選ばない） */
+  function reselectParts(ats) {
+    const pc = block(), pts = cornersOf(pc.planes), edges = edgesOf(pc.planes, pts), near = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < 1e-3;
+    const one = at => {
+      if (st.mode === 'corner') return pts.findIndex(p => near(p, at[0]));
+      if (st.mode === 'edge') return edges.findIndex(e => (near(pts[e.a], at[0]) && near(pts[e.b], at[1])) || (near(pts[e.a], at[1]) && near(pts[e.b], at[0])));
       let bi = -1, bn = 2;
       pc.planes.forEach((q, k) => { const l = Math.hypot(q[0], q[1], q[2]) || 1, n = at.filter(p => Math.abs((p[0] * q[0] + p[1] * q[1] + p[2] * q[2] - q[3]) / l) < 1e-3).length; if (n > bn) { bn = n; bi = k; } });
-      st.face = bi;
-    } else {
-      st.edge = edgesOf(pc.planes, pts).findIndex(e => (near(pts[e.a], at[0]) && near(pts[e.b], at[1])) || (near(pts[e.a], at[1]) && near(pts[e.b], at[0])));
-    }
+      return bi;
+    };
+    const ks = [...new Set(ats.map(one))].filter(k => k >= 0);
+    st[st.mode] = ks.length ? ks[ks.length - 1] : -1; st.more = ks.slice(0, -1);
   }
   /** 角 i の、x = 0 をはさんだ反対側の角の番号（自分が x = 0 の上なら自分。無ければ −1） */
   function mirrorIndex(pts, i) {
@@ -425,7 +471,7 @@ export function initPartEdit(ctx) {
     st.hpos = pos;
     const d = JSON.parse(st.hist[pos].s);
     st.def.name = d.name; st.def.pieces.length = 0; st.def.pieces.push(...d.pieces);
-    st.sel = Math.min(st.hist[pos].sel, st.def.pieces.length - 1); st.corner = st.face = st.edge = -1;
+    st.sel = Math.min(st.hist[pos].sel, st.def.pieces.length - 1); clearSel();
     ctx.saveUserPart(st.def);
     ctx.rebuild();
     ctx.note(`${pos + 1} / ${st.hist.length}`);
@@ -494,14 +540,14 @@ export function initPartEdit(ctx) {
         if (!confirm(`あたり（下書き）のブロック ${nBlk} 個を消します。よろしいですか？（↶ 戻すで戻せます）`)) return;
         const cur = block();
         st.def.pieces.splice(0, st.def.pieces.length, ...keep);
-        st.sel = Math.max(0, keep.indexOf(cur)); st.corner = st.face = st.edge = -1;
+        st.sel = Math.max(0, keep.indexOf(cur)); clearSel();
         changed(true);
       };
     }
     for (const el of E.tools.querySelectorAll('[data-mode]')) el.onclick = () => setEditMode(el.dataset.mode);
     if ($('#peSym')) $('#peSym').onclick = () => { st.sym = !st.sym; refresh(); };
   }
-  function setEditMode(m) { if (!hullEdit(block())) return; st.mode = m; st.corner = st.face = st.edge = -1; if (m === 'block') gizmo.setMode('translate'); refresh(); }
+  function setEditMode(m) { if (!hullEdit(block())) return; st.mode = m; clearSel(); if (m === 'block') gizmo.setMode('translate'); refresh(); }
 
   // 右の欄の入力：id → { get, set }。打っている間は形だけ作り直し（live）、打ち終えたら元に戻すの 1 区切り（commit）
   let binds = {};
@@ -568,19 +614,22 @@ export function initPartEdit(ctx) {
     if (kind === 'hull') {
       bind('bevel', () => val(pc, 'bevel'), v => { pc.bevel = Math.max(0, v); });
       bind('bevelSegs', () => val(pc, 'bevelSegs'), v => { pc.bevelSegs = Math.max(1, Math.round(v)); });
+      const nSel = hullEdit(pc) ? selOf().length : 0;
       if (!hullEdit(pc)) html.push('<h2>形を直す</h2><div class="hint">この面の形は、置き方（位置・回転・拡大）を別に持っています。つまみと上の数値で動かせます。角・面を直すには、置き方を形に焼き込みます（面取りの幅は、拡大した後の大きさで掛かり直す）</div><div class="pebar"><button id="peBake">置き方を形に焼き込む（角・面を直せるようにする）</button></div>');
       else html.push(`<h2>形を直す</h2><div class="seg">
           <button data-mode="block" class="${st.mode === 'block' ? 'on' : ''}">ブロックごと</button><button data-mode="corner" class="${st.mode === 'corner' ? 'on' : ''}">角</button><button data-mode="edge" class="${st.mode === 'edge' ? 'on' : ''}">辺</button><button data-mode="face" class="${st.mode === 'face' ? 'on' : ''}">面</button></div>
-        <div class="hint">${st.mode === 'corner' ? (st.corner >= 0 ? '選んだ角（赤）をつまみで動かす。別の角は押して選ぶ' : '黄色の角を押して選ぶ')
+        <div class="hint">${nSel > 1 ? `${nSel} ${{ corner: '個の角', edge: '本の辺', face: '枚の面' }[st.mode]}を選んだ（赤）。まとめて、つまみで動かす（W）・回す（E）・大きさを変える（R）。つまみは選んだ角の真ん中、向きは左右・上下・前後。Ctrl か Shift を押しながら押すと、選び足す・外す`
+          : st.mode === 'corner' ? (st.corner >= 0 ? '選んだ角（赤）をつまみで動かす。別の角は押して選ぶ' : '黄色の角を押して選ぶ')
           : st.mode === 'edge' ? (st.edge >= 0 ? '選んだ辺（赤）を、つまみで動かす（W）・回す（E）・大きさを変える（R）。赤の矢印は辺の向き、緑の矢印は辺を外へ出す向き。別の辺は押して選ぶ' : '黄色の辺を押して選ぶ')
           : st.mode === 'face' ? (st.face >= 0 ? '選んだ面（赤）を、つまみで動かす（W）・回す（E）・大きさを変える（R）。緑の矢印で出し入れする。別の面は押して選ぶ' : 'ブロックの面を押して選ぶ')
-          : 'つまみで動かす（W 移動・E 回転・R 拡大）'}。角は ${st.pts.length} 個・面は ${pc.planes.length} 枚${st.mode !== 'block' && st.sym ? (symOn() ? '。左右対称に直す（反対側も一緒に動く）' : '。このブロックは左右対称でないので、動かした側だけが変わる') : ''}${st.mode === 'edge' || st.mode === 'face' ? '。形はいつも凸なので、へこませた角は内側に入って消える' : ''}</div>`);
-      if (st.mode === 'corner' && st.corner >= 0 && st.pts?.[st.corner]) {
+          : 'つまみで動かす（W 移動・E 回転・R 拡大）'}${nSel === 1 ? '。Ctrl か Shift を押しながら押すと、まとめて選べる' : ''}。角は ${st.pts.length} 個・面は ${pc.planes.length} 枚${st.mode !== 'block' && st.sym ? (symOn() ? '。左右対称に直す（反対側も一緒に動く）' : '。このブロックは左右対称でないので、動かした側だけが変わる') : ''}${st.mode === 'edge' || st.mode === 'face' ? '。形はいつも凸なので、へこませた角は内側に入って消える' : ''}</div>`);
+      if (st.mode === 'corner' && nSel > 1) html.push('<div class="pebar"><button id="peCornerDel" title="選んだ角をなくす（残りの角で形を作り直す）">選んだ角を消す</button></div>');
+      else if (st.mode === 'corner' && st.corner >= 0 && st.pts?.[st.corner]) {
         [0, 1, 2].forEach(a => bind('k' + a, () => st.pts[st.corner][a], v => moveCorner(a, v)));
         html.push(row3('角の位置', ['k0', 'k1', 'k2'], step), '<div class="pebar"><button id="peCornerDel" title="この角をなくす（残りの角で形を作り直す）">この角を消す</button></div>');
       }
-      if (st.mode === 'edge' && st.edge >= 0) html.push('<div class="pebar"><button id="peEdgeJoin" title="この辺の両端の角を、辺の真ん中の 1 つの角にまとめる（とがった形・屋根の形になる）">辺を 1 つの角にまとめる</button></div>');
-      if (st.mode === 'face' && st.face >= 0) html.push('<div class="pebar"><button id="peFaceCorner" title="この面の真ん中に角を 1 つ足す（引き出すと、とがった形・屋根の形になる）">面の真ん中に角を足す</button><button id="peFaceDel" title="この面をなくす（となりの面が伸びてふさぐ）">この面をなくす</button></div>');
+      if (st.mode === 'edge' && st.edge >= 0 && nSel === 1) html.push('<div class="pebar"><button id="peEdgeJoin" title="この辺の両端の角を、辺の真ん中の 1 つの角にまとめる（とがった形・屋根の形になる）">辺を 1 つの角にまとめる</button></div>');
+      if (st.mode === 'face' && st.face >= 0 && nSel === 1) html.push('<div class="pebar"><button id="peFaceCorner" title="この面の真ん中に角を 1 つ足す（引き出すと、とがった形・屋根の形になる）">面の真ん中に角を足す</button><button id="peFaceDel" title="この面をなくす（となりの面が伸びてふさぐ）">この面をなくす</button></div>');
       html.push('<h2>辺の面取り</h2>', slider('面取り幅', 'bevel', 0, +(S * 0.25).toFixed(4), +(S / 400).toPrecision(1)), slider('段数', 'bevelSegs', 1, 6, 1), '<div class="hint">段数 1 は斜めに落とす、2 以上は丸める</div>');
     } else if (kind === 'bellows') {
       const F = [['rings', '輪の数', 1, 60, 1], ['rOut', '外の半径（山）', 0, S, step], ['rIn', '内の半径（谷）', 0, S, step], ['len', '長さ', 0, S * 2, step], ['bend', '曲がり（度）', -180, 180, 1],
@@ -752,7 +801,7 @@ export function initPartEdit(ctx) {
     if (!used.has(name)) return name;
     for (let k = 2; ; k++) if (!used.has(`${name} ${k}`)) return `${name} ${k}`;
   }
-  function selectBlock(i) { st.sel = i; st.corner = st.face = st.edge = -1; refresh(); flashBlock(); }
+  function selectBlock(i) { st.sel = i; clearSel(); refresh(); flashBlock(); }
   // ---- 選んだブロックを光らせて知らせる（機体の画面と同じ）：3D のそのブロックと、左の一覧の行が 2 回点滅する。引くブロックは赤い影が光る
   const flashMat = new THREE.MeshBasicMaterial({ color: 0x6fb3ff, transparent: true, opacity: 0, depthTest: false, depthWrite: false });
   let fl = null;
@@ -789,7 +838,7 @@ export function initPartEdit(ctx) {
     return b;
   }
   function pushBlock(pc) {
-    st.def.pieces.push(pc); st.sel = st.def.pieces.length - 1; st.mode = 'block'; st.corner = st.face = st.edge = -1; gizmo.setMode('translate');
+    st.def.pieces.push(pc); st.sel = st.def.pieces.length - 1; st.mode = 'block'; clearSel(); gizmo.setMode('translate');
     changed(true); flashBlock();
   }
   /** 面で囲った形を足す：選んだブロックの上に、半分ほどの大きさで。cut：引くブロックとして、前の面に埋めて */
@@ -837,13 +886,13 @@ export function initPartEdit(ctx) {
     if (hullEdit(pc)) c.planes = mirror ? pc.planes.map(p => [-p[0], p[1], p[2], p[3]]) : movePlanes(pc.planes, off).map(p => p.map(r5));
     else if (mirror) c.tf = { p: [-pc.tf.p[0], pc.tf.p[1], pc.tf.p[2]], r: [pc.tf.r[0], -pc.tf.r[1], -pc.tf.r[2]], s: [-pc.tf.s[0], pc.tf.s[1], pc.tf.s[2]] };
     else c.tf.p = c.tf.p.map((v, i) => r5(v + off[i]));
-    st.def.pieces.splice(st.sel + 1, 0, c); st.sel += 1; st.corner = st.face = st.edge = -1;
+    st.def.pieces.splice(st.sel + 1, 0, c); st.sel += 1; clearSel();
     changed(true); flashBlock();
   }
   function removeBlock() {
     const pc = block(); if (!pc) return;
     if (!isSub(pc) && st.def.pieces.filter(p => !isSub(p)).length <= 1) { ctx.note('足すブロックの最後の 1 個は消せません（パーツごと消すときは、機体の画面で「この自分のパーツをカタログから消す」）', true); return; }
-    st.def.pieces.splice(st.sel, 1); st.sel = Math.min(st.sel, st.def.pieces.length - 1); st.corner = st.face = st.edge = -1;
+    st.def.pieces.splice(st.sel, 1); st.sel = Math.min(st.sel, st.def.pieces.length - 1); clearSel();
     changed(true);
   }
   function moveBlock(dir) {
@@ -865,13 +914,16 @@ export function initPartEdit(ctx) {
   function reselectCorner(at) {
     const pts = cornersOf(block().planes);
     let bi = -1, bd = 1e-3; pts.forEach((p, i) => { const d = Math.hypot(p[0] - at[0], p[1] - at[1], p[2] - at[2]); if (d < bd) { bd = d; bi = i; } });
-    st.corner = bi;   // 動かした角が立体の内側に入って消えたら、選びなおし
+    st.corner = bi; st.more = [];   // 動かした角が立体の内側に入って消えたら、選びなおし
   }
   function removeCorner() {
-    const pc = block(), pts = cornersOf(pc.planes).filter((_, i) => i !== st.corner && i !== st.twin);
+    // 選んだ角ぜんぶ（左右対称なら反対側の角も）
+    const pc = block(), all = cornersOf(pc.planes), drop = new Set(selOf());
+    if (symOn()) for (const i of [...drop]) { const t = mirrorIndex(all, i); if (t >= 0) drop.add(t); }
+    const pts = all.filter((_, i) => !drop.has(i));
     const pl = planesOf(pts);
     if (!pl) { ctx.note('これ以上角を消すと、形がなくなります', true); return; }
-    pc.planes = pl; st.corner = -1; changed(false);
+    pc.planes = pl; clearSel(); changed(false);
   }
   function addCornerOnFace() {
     const pc = block(), f = faceInfo(pc, st.face); if (!f) return;
@@ -895,7 +947,7 @@ export function initPartEdit(ctx) {
     // 面をなくして形が開いてしまわないか（角が遠くへ飛ばないか）を確かめる
     const pts = pl.length >= 4 ? cornersOf(pl) : [];
     if (pts.length < 4 || pts.some(p => Math.max(Math.abs(p[0]), Math.abs(p[1]), Math.abs(p[2])) > reach * 0.9)) { ctx.note('この面をなくすと、形が閉じなくなります', true); return; }
-    pc.planes = pl; st.face = -1; changed(false);
+    pc.planes = pl; clearSel(); changed(false);
   }
   /** 面で囲った形の置き方（位置・回転・拡大）を、形に焼き込む（角・面を直せるようになる） */
   function bakeTf() {
@@ -954,7 +1006,7 @@ export function initPartEdit(ctx) {
     for (const pc of def.pieces) { if (pc.pos && pc.pos.some(v => v)) { if (kindOf(pc) === 'hull') pc.planes = movePlanes(pc.planes, pc.pos).map(p => p.map(r5)); else if (pc.tf) pc.tf.p = pc.tf.p.map((v, k) => r5(v + pc.pos[k])); } pc.pos = [0, 0, 0]; }
     const seen = new Set();
     for (const pc of def.pieces) { let n = pc.name; for (let k = 2; seen.has(n); k++) n = `${pc.name} ${k}`; pc.name = n; seen.add(n); }
-    st = { def, replaced, isNew, sel: 0, mode: 'block', corner: -1, face: -1, handles: [], helper: null, ghosts: new Map(), others: 'faint', showSubs: true, showBlock: true, sym: true, snap: true, face2d: 'front',
+    st = { def, replaced, isNew, sel: 0, mode: 'block', corner: -1, edge: -1, face: -1, more: [], handles: [], helper: null, ghosts: new Map(), others: 'faint', showSubs: true, showBlock: true, sym: true, snap: true, face2d: 'front',
       hist: [], hpos: -1, cam: { pos: camera.position.clone(), target: orbit.target.clone() } };
     st.backup = structuredClone({ name: def.name, pieces: def.pieces });
     st.hist.push({ s: snapshot(), sel: 0 }); st.hpos = 0;
@@ -987,16 +1039,17 @@ export function initPartEdit(ctx) {
   }
 
   // ---- 3D の操作（v2.js から呼ばれる） ----
-  /** クリック：角の印 → 角を選ぶ。面を選ぶ動きなら面。それ以外はブロックを選ぶ */
-  function pick(ndc) {
+  /** クリック：角の印 → 角を選ぶ。面を選ぶ動きなら面。それ以外はブロックを選ぶ。add（Ctrl・Shift を押しながら）：角・辺・面を選び足す・外す（issue #242） */
+  function pick(ndc, add = false) {
     ray.setFromCamera(ndc, camera);
+    holder.updateMatrixWorld(true);   // （作り直したばかりの角の丸は、描くまで大きさが位置の行列に入っていない：続けて押すと、ほかの丸に当たる）
     if (st.mode === 'corner' && st.handles.length) {
       const h = ray.intersectObjects(st.handles, false)[0];
-      if (h) { st.corner = h.object.userData.corner; refresh(); return; }
+      if (h) { choose(h.object.userData.corner, add); return; }
     }
     if (st.mode === 'edge') {
       const k = pickEdge(ndc);
-      if (k >= 0) { st.edge = k; refresh(); return; }
+      if (k >= 0) { choose(k, add); return; }
     }
     const ins = instance(); if (!ins?.group) return;
     const meshes = [];
@@ -1011,7 +1064,7 @@ export function initPartEdit(ctx) {
       const p = hit.object.worldToLocal(hit.point.clone()), n = hit.face.normal, pc = st.def.pieces[i];
       let best = -1, bd = 0.9;
       pc.planes.forEach((pl, k) => { const l = Math.hypot(pl[0], pl[1], pl[2]) || 1, dotn = (pl[0] * n.x + pl[1] * n.y + pl[2] * n.z) / l; if (dotn > bd && Math.abs((pl[0] * p.x + pl[1] * p.y + pl[2] * p.z - pl[3]) / l) < 2e-3) { bd = dotn; best = k; } });
-      if (best >= 0) { st.face = best; refresh(); }
+      if (best >= 0) choose(best, add);
       return;
     }
     selectBlock(i);
@@ -1019,18 +1072,18 @@ export function initPartEdit(ctx) {
   /** つまみを動かしている間 */
   function onGizmoChange() {
     const pc = block(); if (!pc) return;
-    if (st.mode === 'corner' && st.corner >= 0) {
+    if (st.mode === 'corner' && st.corner >= 0 && !st.helper) {
       const h = st.handles[st.corner], at = h.position.toArray();
       const pts = st.pts.map((p, i) => (i === st.corner ? at : p));
       if (st.twin >= 0) { if (st.twin === st.corner) pts[st.corner] = [0, at[1], at[2]]; else pts[st.twin] = [-at[0], at[1], at[2]]; }
       const pl = planesOf(pts);
       if (pl) { pc.planes = pl; st.ptsNow = pts; live(); }
-    } else if ((st.mode === 'face' || st.mode === 'edge') && st.helper) {
+    } else if (st.mode !== 'block' && st.helper) {
       // 辺・面：つまみの動き（つかんだ時からの移動・回転・拡大）を、その辺・面の角にだけ掛けて、凸の立体を作り直す（となりの面が傾く）。
       // 平面だけを動かすと、丸めた形ではとなりの面にすぐ閉じられて、面が出てこない。反対側の角には左右を返した動きを掛ける。
       // 片側だけを選んで左右対称に直すとき、x = 0 の上の角は x = 0 に残す
       const h = st.helper; h.updateMatrix();
-      const M = h.matrix.clone().multiply(st.H0i), Ms = MIRROR.clone().multiply(M).multiply(MIRROR), keep0 = st.twinIx.size > 0;
+      const M = h.matrix.clone().multiply(st.H0i), Ms = MIRROR.clone().multiply(M).multiply(MIRROR), keep0 = st.keep0;
       const pts = st.pts0.map((p, i) => {
         if (st.selIx.has(i)) { const q = V(p).applyMatrix4(M).toArray(); if (keep0 && Math.abs(p[0]) < 1e-4) q[0] = 0; return q; }
         return st.twinIx.has(i) ? V(p).applyMatrix4(Ms).toArray() : p;
@@ -1051,9 +1104,9 @@ export function initPartEdit(ctx) {
   /** つまみを離した：印を作り直す（角・面は、動かしたものを選んだまま）。元に戻すの 1 区切り */
   function onDragEnd() {
     if (!st) return;
-    if (st.mode === 'corner' && st.corner >= 0 && st.ptsNow) { const at = st.ptsNow[st.corner]; st.ptsNow = null; reselectCorner(at); }
-    // 動かした辺・面を選んだままにする（面・辺の並びは作り直されるので、動いた角の位置で探し直す）
-    if ((st.mode === 'face' || st.mode === 'edge') && st.ptsNow) { const at = [...st.selIx].map(i => st.ptsNow[i]); st.ptsNow = null; reselectPart(at); }
+    if (st.mode === 'corner' && st.corner >= 0 && !st.helper && st.ptsNow) { const at = st.ptsNow[st.corner]; st.ptsNow = null; reselectCorner(at); }
+    // 動かした角・辺・面を選んだままにする（角・面・辺の並びは作り直されるので、動いた角の位置で探し直す）
+    if (st.mode !== 'block' && st.helper && st.selAt && st.ptsNow) { const ats = st.selAt.map(g => g.map(i => st.ptsNow[i])); st.ptsNow = null; reselectParts(ats); }
     if (st.def.free) ctx.rebuild(); else refresh();
     commit();
   }
@@ -1064,7 +1117,7 @@ export function initPartEdit(ctx) {
     if (mod && k === 'd') { e.preventDefault(); copyBlock(false); return true; }
     if (mod) return false;
     if (k === 'delete') { removeBlock(); return true; }
-    if (k === 'escape') { st.corner = st.face = st.edge = -1; refresh(); return true; }
+    if (k === 'escape') { clearSel(); refresh(); return true; }
     if (k === 'f') { frame(); return true; }
     if (['1', '2', '3', '4'].includes(k)) { setEditMode(['block', 'corner', 'edge', 'face'][+k - 1]); return true; }
     if (['w', 'e', 'r'].includes(k)) { setGizmoMode({ w: 'translate', e: 'rotate', r: 'scale' }[k]); return true; }
@@ -1072,7 +1125,7 @@ export function initPartEdit(ctx) {
   }
   /** つまみの種類（移動・回転・拡大）。角を動かしている間は移動だけ。辺・面はその辺・面の向きのつまみ */
   function setGizmoMode(m) {
-    if (!st || st.mode === 'corner') return;
+    if (!st || (st.mode === 'corner' && selOf().length < 2)) return;
     gizmo.setMode(m);
     gizmo.setSpace(st.mode !== 'block' || (m === 'scale' && block() && !hullEdit(block())) ? 'local' : 'world');
   }
