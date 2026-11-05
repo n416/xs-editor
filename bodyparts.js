@@ -139,7 +139,8 @@ export function bodyParts(items, adj = {}, colorOf = null) {
     return shapesOf(def).map(({ pc, shape }) => {
       const off = new THREE.Vector3(...(pc.pos ?? [0, 0, 0])).multiply(new THREE.Vector3(...it.scal)).applyMatrix4(R);
       const { pos, hinge, center, ...rest } = pc;
-      const bone = pc.bone ?? (upper ? 'torso' : 'hips'), at = [it.mov[0] + off.x, it.mov[1] + off.y, it.mov[2] + off.z];
+      // 付ける骨を選んだ部品（src.bone、機体エディタ Ver2 の「付ける骨」）は、ブロックの骨の決まりより先。回る中心はその骨のもの
+      const bone = src.bone ?? pc.bone ?? (upper ? 'torso' : 'hips'), at = [it.mov[0] + off.x, it.mov[1] + off.y, it.mov[2] + off.z];
       const M = new THREE.Matrix4().compose(new THREE.Vector3(...at), q, new THREE.Vector3(...it.scal));
       // その骨が回る点を、部品の座標で持たせる（エディタはこれを骨の位置にする。スカートは蝶番の部品が決める）
       const pv = J[SIDED.includes(bone) ? `${bone}_${sideOf(it)}` : bone];
@@ -150,7 +151,7 @@ export function bodyParts(items, adj = {}, colorOf = null) {
         const ps = shape.tris ?? buildHull(pc.planes, { reach: hullReach(pc.planes) }).positions;
         for (let i = 0; i < ps.length; i += 3) hand.expandByPoint(v.set(ps[i], ps[i + 1], ps[i + 2]).applyMatrix4(M));
       }
-      return { ...rest, ...(colorOf ? { color: colorOf(pc, def) } : {}), name: `${HALF_LABEL[half]}・${it.name ?? def.name}・${pc.name}`, bone, pivot: pc.pivot ?? 'none', glow: !!pc.glow, gun: false, noHit: !!pc.noHit, noHeight: half === 'back',
+      return { ...rest, ...(colorOf ? { color: colorOf(pc, def) } : {}), name: `${HALF_LABEL[half]}・${it.name ?? def.name}・${pc.name}`, bone, pivot: src.bone ? 'none' : pc.pivot ?? 'none', glow: !!pc.glow, gun: false, noHit: !!pc.noHit, noHeight: half === 'back',
         ...(joint ? { joint } : {}), ...(orb ? { orb } : {}), ...shape, pos: at, rot: [e.x, e.y, e.z], scl: it.scal.slice() };
     });
   });

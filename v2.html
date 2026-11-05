@@ -37,6 +37,10 @@
   #catalog h2 { display: flex; align-items: baseline; gap: 6px; color: var(--text); }
   #catalog h2 i { font-style: normal; font-weight: 400; font-size: 10.5px; color: var(--dim); letter-spacing: 0; }
   #newPart { padding: 6px 8px; border-top: 1px solid var(--line); }
+  #addMoreBox { display: flex; align-items: center; gap: 5px; padding: 4px 10px 6px; font-size: 11px; color: var(--dim); border-bottom: 1px solid var(--line); cursor: pointer; }
+  #sel .one[hidden], #sel [hidden] { display: none; }
+  .items > div b.grp { color: #8fc1ff; font-weight: 400; }
+  .items > div i.bone { color: var(--dim); font-style: normal; }
   .cat { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .cat button { padding: 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: normal; }
   .cat canvas { width: 96px; height: 72px; background: #0f1114; border-radius: 4px; }
@@ -187,6 +191,7 @@
 </header>
 <aside class="left">
   <div id="tabs" class="asm"></div>
+  <label id="addMoreBox" class="asm" title="入れると、1 つしか付かない部位（腕・脚・肩など）も、入れ替えずに足して置く。足したものは、移動のつまみや「付ける骨」で好きな所へ"><input type="checkbox" id="addMore"> 1 つだけの部位も、入れ替えずに足す</label>
   <div id="catalog" class="asm"></div>
   <div id="peLeft" class="peonly"></div>
   <div id="shipInfo" class="asm hint">
@@ -232,13 +237,17 @@
         <button id="bEditPart" class="acc" title="このパーツをパーツエディタで開く（画面がパーツ用に切り替わる：ブロックを足す・削る・断面を描く・角や面を動かす）。カタログのパーツは、写しを作って直す（元は変わらない）">パーツエディタで開く</button>
         <button id="bDup" title="同じパーツをもう 1 つ、少しずらして置く">複製</button>
         <button id="bMirror" title="左右を反転した写しを、反対側に置く">反対側にも</button>
-        <button id="bDel" title="このパーツを機体から外す（Delete）">外す</button>
+        <button id="bDel" title="このパーツを機体から外す（Delete）。いくつか選んでいれば全部">外す</button>
       </div>
-      <div class="row"><label>名前</label><input type="text" id="fName"></div>
-      <div class="row"><label>位置</label><input type="number" step="0.01" id="mx"><input type="number" step="0.01" id="my"><input type="number" step="0.01" id="mz"></div>
-      <div class="row"><label>回転</label><input type="number" step="5" id="rx"><input type="number" step="5" id="ry"><input type="number" step="5" id="rz"></div>
-      <div class="row"><label>拡大</label><input type="number" step="0.1" id="sx"><input type="number" step="0.1" id="sy"><input type="number" step="0.1" id="sz"></div>
-      <div class="hint">3 つの欄は 左右・上下・前後。回転は度。3D のつまみ（右上の 移動・回転・拡大）でも動かせる</div>
+      <div class="bar"><button id="bGroup" class="small" title="選んでいるものを 1 つのグループにする（Ctrl+G）。押すと全部が選ばれ、まとめて動く・回る・大きさが変わる" hidden>グループにする</button><button id="bUngroup" class="small" title="選んでいるもののグループを解く（Ctrl+Shift+G）" hidden>グループを解く</button></div>
+      <div id="multiInfo" class="hint" hidden></div>
+      <div class="row one"><label>名前</label><input type="text" id="fName"></div>
+      <div class="row one"><label>位置</label><input type="number" step="0.01" id="mx"><input type="number" step="0.01" id="my"><input type="number" step="0.01" id="mz"></div>
+      <div class="row one"><label>回転</label><input type="number" step="5" id="rx"><input type="number" step="5" id="ry"><input type="number" step="5" id="rz"></div>
+      <div class="row one"><label>拡大</label><input type="number" step="0.1" id="sx"><input type="number" step="0.1" id="sy"><input type="number" step="0.1" id="sz"></div>
+      <div class="row one"><label>付ける骨</label><select id="fBone" title="このパーツが、動く時にどの骨と一緒に動くか。自動は部位の決まり。置いた位置はそのまま"></select></div>
+      <div class="hint one">3 つの欄は 左右・上下・前後。回転は度。3D のつまみ（右上の 移動・回転・拡大）でも動かせる</div>
+      <div class="hint">Ctrl か Shift を押しながら押すと、いくつも選べる（もう一度押すと外れる）。選んだものは「グループにする」で 1 つにまとまる。グループの中の 1 つだけは、Alt を押して押すか、ダブルクリック</div>
       <div class="bar"><button id="bDropPart" class="small" title="★ の付いた自分のパーツを、カタログから消す（置いてあるものも外れる）">この自分のパーツをカタログから消す</button></div>
     </div>
   </details>
@@ -326,6 +335,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=bdc0bc4"></script>
+<script type="module" src="./v2.js?v=ce40511"></script>
 </body>
 </html>

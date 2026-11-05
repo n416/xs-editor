@@ -77,6 +77,12 @@ const randomHeadV2 = () => randomHead(Math.random, HEAD_RAW).map(asHead);
  *  左右の対は、左右で 1 組。オーブ・挿せるタンクは収納口の数まで増える */
 const MULTI = new Set(['ベルト', '腰の筒', '動力パイプ', '胸の飾り', '胴の動力パイプ', '肩の動力パイプ', 'バックパックの装備', '翼の装備', 'エフェクト（光）', '前腕の飾り', '顔', '飾り', 'トサカ', 'アンテナ（額）', 'アンテナの中央（額）', '首当て']);   // （首当ては首に足して付ける。首と同じ部位にしていたら、首当てを選ぶと首が外れた）
 const isMulti = def => MULTI.has(def.cat);
+const TRACK_CAT = 'キャタピラ';
+// 「1 つだけの部位も足す」（issue #185、テスター 静流りおさん 2026-11-05「いくつも付けたい」）：入れると、1 つだけの部位も入れ替えずに足して置く（同じ所に置いたものは 4 cm ずつ下へずれる）。
+// 足したものは、移動のつまみか「付ける骨」で好きな所へ。入り切りはこの画面を開いた人のブラウザだけで覚える
+const ADD_MORE_KEY = 'xsv2.addMore';
+const addMore = () => !!document.querySelector('#addMore')?.checked;
+let addMoreLabel = () => {};
 /** 1 つだけの部位：置いてある同じ部位（同じ部分の、同じ部位名）のパーツを外す */
 function dropSameCat(def) {
   const half = halfOf(def.id), n = items.length;
@@ -113,8 +119,8 @@ const guideGroup = new THREE.Group(); scene.add(guideGroup);   // 艦のガイ�
 const root = new THREE.Group(); scene.add(root);
 const gizmo = new TransformControls(camera, canvas);
 gizmo.setSize(0.8);
-gizmo.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; if (PE.active()) { if (!e.value) PE.onDragEnd(); return; } if (!e.value) { save(); rebuild(); } });
-gizmo.addEventListener('objectChange', () => { if (PE.active()) { PE.onGizmoChange(); return; } if (selected >= 0) { readBackFromGroup(items[selected], gizmo.object); applyToGroup(items[selected], groups[selected]); fillFields(); } });
+gizmo.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; if (PE.active()) { if (!e.value) PE.onDragEnd(); return; } if (e.value) { if (gizmo.object === pivot) pivotStart(); return; } save(); rebuild(); });
+gizmo.addEventListener('objectChange', () => { if (PE.active()) { PE.onGizmoChange(); return; } if (gizmo.object === pivot) { pivotMove(); return; } if (selected >= 0) { readBackFromGroup(items[selected], gizmo.object); applyToGroup(items[selected], groups[selected]); fillFields(); } });
 scene.add(gizmo);
 
 /** 関節のまわりに回す入れ物：outer は関節の位置で回り、inner は元の座標（中の物は立った姿勢の世界の座標のまま置く） */
@@ -293,7 +299,7 @@ function groupOf(item, index) {
       const sub = subs.get(k);
       m.position.copy(pos.sub(sub.position));
       sub.add(m);
-    } else if (pc.bone && pc.bone !== b0) {
+    } else if (pc.bone && pc.bone !== b0 && !item.bone) {   // （付ける骨を選んだ部品は、ブロックごとの骨を使わず、全部をその骨へ）
       if (!g.userData.extra.has(pc.bone)) { const e = new THREE.Group(); e.userData.index = index; g.userData.extra.set(pc.bone, e); }
       m.position.copy(pos); g.userData.extra.get(pc.bone).add(m);
     } else { m.position.copy(pos); g.add(m); }
@@ -302,9 +308,14 @@ function groupOf(item, index) {
   applyToGroup(item, g);
   return g;
 }
+/** 部品ごとに選べる付ける骨（item.bone。issue #185、テスター vault さん 2026-11-05）：無ければ部位の決まり（boneOf）。腕・脚は置いた x の向きの側。
+ *  頭は、首の付け根で回る体の座標の入れ物（自由な部品の頭と同じ）。ひじ・ひざの節（2 重関節）は、節の部品のある時だけ骨があるので選ばせない */
+const BONE_PICK = [['hips', '腰'], ['torso', '胴'], ['head', '頭'], ['arm', '上腕'], ['fore', '前腕'], ['leg', '太もも'], ['shin', 'すね'], ['foot', '足']];
+const BONE_HOLDER = { head: 'headw' };
+const canPickBone = it => !!it && !isHead(it.part) && !byId[it.part]?.free;
 /** 置いた部品を入れる骨の入れ物（腕・脚の骨は置いた x の向きで左右） */
 const holderFor = (b, item) => itemsIn[b] ?? (SIDED.includes(b) ? itemsIn[`${b}_${sideOf(item)}`] : root);
-const holderOf = item => holderFor(boneOf(byId[item.part]), item);
+const holderOf = item => holderFor(item.bone ? BONE_HOLDER[item.bone] ?? item.bone : boneOf(byId[item.part]), item);
 /** 置いたパーツを Group に写す。腕・脚のパーツは、寸法の調整（関節の間の長さ）を掛けた置き方で（fitItem） */
 function applyToGroup(item, g) {
   const f = fitItem(item, adj);
@@ -389,7 +400,7 @@ function updateGhostChest() {
   { const any = items.some(it => halfOf(it.part) === 'head'); for (const m of ghostHead) m.visible = $('#ghost').checked && !any; }
   const has = items.some(it => halfOf(it.part) === 'upper' && ['胸', '背中', '腹', '脇腹'].includes(byId[it.part].cat)); for (const m of ghostChest.meshes) m.visible = $('#ghost').checked && !has;
   { const has = cat => items.some(it => halfOf(it.part) === 'lower' && byId[it.part].cat === cat); ghostHips.forEach((m, i) => { m.visible = $('#ghost').checked && !has(i < 2 ? '腰' : '腰の関節'); }); }
-  for (const [k, list] of Object.entries(ghostLimb)) { const [h, s] = k.split('_'), any = items.some(it => halfOf(it.part) === h && sideOf(it) === s); for (const m of list) m.visible = $('#ghost').checked && !any; }
+  for (const [k, list] of Object.entries(ghostLimb)) { const [h, s] = k.split('_'), any = items.some(it => halfOf(it.part) === h && (sideOf(it) === s || byId[it.part]?.cat === TRACK_CAT)); for (const m of list) m.visible = $('#ghost').checked && !any; }
 }
 
 // ---- 姿勢：ゲームと同じ回転（ゲームの骨の回転を、正面が逆向きのエディタの座標へ：Ry(π) で挟む） ----
@@ -597,7 +608,7 @@ function rebuildMain() {
   placeLegJoints();
   placeHead();
   placeFreeJoints();
-  if (selected >= 0 && selected < items.length) gizmo.attach(groups[selected]); else gizmo.detach();
+  attachGizmo();
   renderList();
   fillFields();
   markCatalog();
@@ -655,9 +666,19 @@ canvas.addEventListener('pointerup', e => {
   const r = canvas.getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   if (PE.active()) { PE.pick(ndc, e.ctrlKey || e.shiftKey || e.metaKey); return; }   // パーツを直している間は、ブロック・角・辺・面を選ぶ（Ctrl・Shift で選び足す）
+  const i = hitAt(ndc);
+  if (e.altKey) selectOne(i); else select(i, e.ctrlKey || e.shiftKey || e.metaKey);   // Ctrl・Shift で選び足す・外す。Alt はグループの中の 1 つだけ
+});
+/** 画面の点（-1〜1）にある置いたパーツの番号（無ければ -1） */
+function hitAt(ndc) {
   ray.setFromCamera(ndc, camera);
   const hits = ray.intersectObjects(groups, true);
-  select(hits.length ? hits[0].object.userData.index : -1);
+  return hits.length ? hits[0].object.userData.index : -1;
+}
+canvas.addEventListener('dblclick', e => {   // ダブルクリック：グループの中の 1 つだけを選ぶ
+  if (PE.active()) return;
+  const r = canvas.getBoundingClientRect();
+  selectOne(hitAt(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)));
 });
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
@@ -665,6 +686,7 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); $('#bSave').onclick(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') { e.preventDefault(); e.shiftKey ? ungroupPicked() : groupPicked(); return; }
   if (e.key === 'w') gizmo.setMode('translate'); else if (e.key === 'e') gizmo.setMode('rotate'); else if (e.key === 'r') gizmo.setMode('scale');
   else if (e.key === 'Delete' && selected >= 0) removeSelected();
 });
@@ -672,7 +694,80 @@ for (const b of document.querySelectorAll('#gizmo button')) b.onclick = () => (P
 
 // ---- 一覧と欄 ----
 const labelOf = it => (it.name ?? byId[it.part]?.name ?? it.part) + (placeOf(byId[it.part]).pair ? (it.mov[0] >= 0 ? '（+x）' : '（−x）') : '');
-function select(i) { if (PE.active()) return; selected = i; if (i >= 0 && items[i]) showTab(halfOf(items[i].part)); if (i >= 0) gizmo.attach(groups[i]); else gizmo.detach(); renderList(); fillFields(); if (i >= 0) flash([i]); }
+// ---- 選ぶ・グループ（issue #170、テスター 静流りおさん 2026-11-05）：グループ（item.grp が同じパーツ）は、押すと全部が選ばれ、つまみでまとめて動く・回る・大きさが変わる。
+// Ctrl・Shift を押しながら押すと選び足す（もう一度押すと外す）。2 つ以上を選ぶと、つまみは選んだもの全部の真ん中に出る（向きは左右・上下・前後）。
+// 骨の違うパーツ（胴と腕など）も、世界の座標でまとめて動かして、それぞれの骨の入れ物の数値に戻す。Alt を押して押すか、ダブルクリックで、グループの中の 1 つだけ
+let picked = [];   // 選んでいるパーツの番号（selected はその中の、欄に出す 1 つ）
+const membersOf = i => (items[i]?.grp ? items.flatMap((it, j) => (it.grp === items[i].grp ? [j] : [])) : i >= 0 && items[i] ? [i] : []);
+/** 選んでいるものを今の items に合わせる（items を入れ替えて selected を −1 にした所・足して selected を変えた所の後） */
+function syncPicked() {
+  picked = picked.filter(i => i >= 0 && i < items.length);
+  if (selected < 0 || selected >= items.length) picked = [];
+  else if (!picked.includes(selected)) picked = membersOf(selected);
+}
+function select(i, add = false) {
+  if (PE.active()) return;
+  const m = membersOf(i);
+  if (add && m.length) {
+    if (m.every(j => picked.includes(j))) { picked = picked.filter(j => !m.includes(j)); selected = picked.length ? picked[picked.length - 1] : -1; }
+    else { picked = [...picked.filter(j => !m.includes(j)), ...m]; selected = i; }
+  } else if (!add) { picked = m; selected = m.length ? i : -1; }
+  if (selected >= 0 && items[selected]) showTab(halfOf(items[selected].part));
+  attachGizmo(); renderList(); fillFields(); if (picked.length) flash(picked);
+}
+/** グループの中の 1 つだけを選ぶ */
+function selectOne(i) { if (PE.active()) return; picked = i >= 0 && items[i] ? [i] : []; selected = picked.length ? i : -1; attachGizmo(); renderList(); fillFields(); if (picked.length) flash(picked); }
+// まとめて動かすつまみの点：選んだもの全部（骨の入れ物に分けたブロックも）の箱の真ん中
+const pivot = new THREE.Object3D(); scene.add(pivot);
+let pivotFrom = null;   // { P: つまみを掴んだ時のつまみの行列, W: その時の選んだもの 1 つずつの行列 }
+function attachGizmo() {
+  syncPicked();
+  if (picked.length > 1) {
+    scene.updateMatrixWorld(true);
+    const b = new THREE.Box3();
+    for (const i of picked) for (const t of groups[i] ? [groups[i], ...groups[i].userData.extra.values()] : []) b.expandByObject(t);
+    pivot.position.copy(b.isEmpty() ? new THREE.Vector3() : b.getCenter(new THREE.Vector3())); pivot.quaternion.identity(); pivot.scale.set(1, 1, 1); pivot.updateMatrixWorld(true);
+    gizmo.attach(pivot);
+  } else if (selected >= 0 && groups[selected]) gizmo.attach(groups[selected]);
+  else gizmo.detach();
+}
+function pivotStart() { scene.updateMatrixWorld(true); pivotFrom = { P: pivot.matrixWorld.clone(), W: picked.map(i => groups[i].matrixWorld.clone()) }; }
+const _d = new THREE.Matrix4(), _m = new THREE.Matrix4();
+function pivotMove() {
+  if (!pivotFrom) pivotStart();
+  pivot.updateMatrixWorld(true);
+  _d.copy(pivot.matrixWorld).multiply(_m.copy(pivotFrom.P).invert());   // 掴んでからつまみが動いた分（世界の座標で）
+  picked.forEach((i, k) => {
+    const g = groups[i]; if (!g?.parent) return;
+    g.parent.updateMatrixWorld(true);
+    _m.copy(g.parent.matrixWorld).invert().multiply(_d).multiply(pivotFrom.W[k]);
+    _m.decompose(g.position, g.quaternion, g.scale);
+    readBackFromGroup(items[i], g); applyToGroup(items[i], g);
+  });
+  placeArmJoints(); applyPose(); fillFields();
+}
+const newGrp = () => { for (let n = 1; ; n++) if (!items.some(it => it.grp === `g${n}`)) return `g${n}`; };
+/** 選んでいるもの（2 つ以上）を 1 つのグループに（中に別のグループがあれば、それも含めて 1 つに） */
+function groupPicked() {
+  if (PE.active()) return;
+  if (picked.length < 2) { note('グループにするには、Ctrl か Shift を押しながら 2 つ以上を選びます'); return; }
+  const g = newGrp(); for (const i of picked) items[i].grp = g;
+  rebuild(); save(); note(`${picked.length} 個をグループにしました（押すと全部が選ばれる。1 つだけ選ぶのは Alt を押して押すか、ダブルクリック）`);
+}
+function ungroupPicked() {
+  if (PE.active() || !picked.some(i => items[i]?.grp)) return;
+  for (const i of picked) delete items[i].grp;
+  rebuild(); save(); note('グループを解きました（今は選んだままなので、このまま動かすとまとめて動く）');
+}
+/** 写した並びのグループを、元と別の新しいグループにする（写したものどうしは同じグループのまま） */
+function regroup(list) {
+  const map = new Map(), used = new Set(items.map(it => it.grp).filter(Boolean));
+  let n = 1;
+  for (const it of list) if (it.grp) { if (!map.has(it.grp)) { while (used.has(`g${n}`)) n++; map.set(it.grp, `g${n}`); used.add(`g${n}`); } it.grp = map.get(it.grp); }
+  return list;
+}
+/** 足したもの（items の後ろ n 個）を選ぶ */
+const pickLast = n => { picked = items.map((_, j) => j).slice(-n); selected = items.length - 1; attachGizmo(); renderList(); fillFields(); };
 // ---- 選んだパーツを光らせて知らせる：3D のそのパーツ・カタログのそのパーツのボタン・一覧の行が、2 回点滅する（依頼主の案）。
 // 3D で押せば「カタログのどれか」が、一覧・カタログから選べば「機体のどこか」が分かる
 const flashMat = new THREE.MeshBasicMaterial({ color: 0x6fb3ff, transparent: true, opacity: 0, depthTest: false, depthWrite: false });
@@ -702,20 +797,28 @@ function renderList() {
   el.innerHTML = '';
   items.forEach((it, i) => {
     const d = document.createElement('div');
-    d.className = i === selected ? 'sel' : '';
+    d.className = picked.includes(i) ? 'sel' : '';
     // 1 か所に 1 つの部位（スカート・太もも・すね・足）が同じ側に 2 つ以上あれば、重なっていると知らせる（別々に動くので、板が 2 枚に見える）
     const cat = byId[it.part]?.cat, dup = ONE_EACH.has(cat) ? items.findIndex((o, j) => j !== i && byId[o.part]?.cat === cat && sideOf(o) === sideOf(it)) : -1;
-    d.innerHTML = `<span>${i + 1}. ${labelOf(it)}${dup >= 0 ? ` <b style="color:#e8a33d">⚠ ${dup + 1} 番と同じ部位（重なっている）</b>` : ''}</span>`;
-    d.onclick = () => select(i);
+    d.innerHTML = `<span>${i + 1}. ${labelOf(it)}${it.grp ? ` <b class="grp" title="グループ（押すと全部が選ばれる。1 つだけはダブルクリック）">［${it.grp.replace(/^g/, 'グループ ')}］</b>` : ''}${it.bone ? ` <i class="bone">骨：${BONE_PICK.find(([b]) => b === it.bone)?.[1] ?? it.bone}</i>` : ''}${dup >= 0 ? ` <b style="color:#e8a33d">⚠ ${dup + 1} 番と同じ部位（重なっている）</b>` : ''}</span>`;
+    d.onclick = e => (e.detail >= 2 && !(e.ctrlKey || e.shiftKey || e.metaKey) ? selectOne(i) : select(i, e.ctrlKey || e.shiftKey || e.metaKey));   // 2 度目の押し（ダブルクリック）はグループの中の 1 つだけ（行は押すたびに作り直すので dblclick は届かない）
     el.appendChild(d);
   });
   $('#sel').hidden = selected < 0;
+  const many = picked.length > 1, grouped = picked.some(i => items[i]?.grp), oneGroup = many && picked.every(i => items[i]?.grp && items[i].grp === items[picked[0]].grp);
+  for (const r of document.querySelectorAll('#sel .one')) r.hidden = many;
+  $('#multiInfo').hidden = !many;
+  if (many) $('#multiInfo').textContent = `${picked.length} 個を選んでいます${oneGroup ? `（${items[picked[0]].grp.replace(/^g/, 'グループ ')}）` : ''}。つまみ（移動・回転・拡大）でまとめて動く`;
+  $('#bGroup').hidden = !many || oneGroup; $('#bUngroup').hidden = !grouped;
 }
 const FIELDS = { mx: ['mov', 0], my: ['mov', 1], mz: ['mov', 2], rx: ['rot', 0], ry: ['rot', 1], rz: ['rot', 2], sx: ['scal', 0], sy: ['scal', 1], sz: ['scal', 2] };
 function fillFields() {
   if (selected < 0) return;
   const it = items[selected];
   $('#fName').value = it.name ?? byId[it.part]?.name ?? it.part;
+  const b0 = canPickBone(it) ? boneOf(byId[it.part]) : '', auto = BONE_PICK.find(([b]) => b === b0)?.[1] ?? '部位の決まり';
+  $('#fBone').innerHTML = `<option value="">自動（${auto}）</option>` + BONE_PICK.map(([b, l]) => `<option value="${b}">${l}${['arm', 'fore', 'leg', 'shin', 'foot'].includes(b) ? `（${sideOf(it) === 'l' ? '+x' : '−x'} の側）` : ''}</option>`).join('');
+  $('#fBone').value = it.bone ?? ''; $('#fBone').disabled = !canPickBone(it);
   for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).value = it[k][j];
 }
 for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).oninput = () => {
@@ -725,12 +828,26 @@ for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).oninput = () => {
   it[k][j] = v; applyToGroup(it, groups[selected]); placeArmJoints(); applyPose(); save();
 };
 $('#fName').oninput = () => { if (selected >= 0) { items[selected].name = $('#fName').value; renderList(); save(); } };
+// 付ける骨：立った姿勢の位置はそのまま（骨の入れ物は、どれも立った姿勢の世界の座標）、動かす時にその骨と一緒に動く
+$('#fBone').onchange = () => { const it = items[selected]; if (!canPickBone(it)) return; const b = $('#fBone').value; if (b) it.bone = b; else delete it.bone; rebuild(); save(); };
+$('#bGroup').onclick = groupPicked;
+$('#bUngroup').onclick = ungroupPicked;
 
 function addItems(list) { items.push(...list); selected = items.length - 1; rebuild(); save(); if (!PE.active() && !addOnly) flash(list.map((_, k) => items.length - list.length + k)); }
-function removeSelected() { if (selected < 0) return; items.splice(selected, 1); selected = Math.min(selected, items.length - 1); rebuild(); save(); }
+function removeSelected() {
+  if (selected < 0) return;
+  const out = new Set(picked.length ? picked : [selected]);
+  items = items.filter((_, j) => !out.has(j)); picked = []; selected = out.size > 1 ? -1 : Math.min(selected, items.length - 1); rebuild(); save();
+}
 $('#bDel').onclick = removeSelected;
-$('#bDup').onclick = () => { if (selected < 0) return; const it = structuredClone(items[selected]); it.mov = [it.mov[0] + 0.05, it.mov[1], it.mov[2]]; addItems([it]); };
-$('#bMirror').onclick = () => { if (selected < 0) return; const src = items[selected], m = mirrorOf(structuredClone(src)); if (src.name) m.name = src.name.replace(/（鏡像）$/, '') + '（鏡像）'; else delete m.name; addItems([m]); };   // 名前を付けていないパーツは、カタログの名前のまま（左右は一覧の（±x）で分かる）
+// 複製・反対側にも：選んでいるもの全部を写す。グループは写した方が新しいグループになり、写したものを選ぶ
+const pickedList = () => (picked.length ? picked : [selected]).filter(i => items[i]);
+$('#bDup').onclick = () => { if (selected < 0) return; const list = regroup(pickedList().map(i => { const it = structuredClone(items[i]); it.mov = [it.mov[0] + 0.05, it.mov[1], it.mov[2]]; return it; })); addItems(list); pickLast(list.length); };
+$('#bMirror').onclick = () => {
+  if (selected < 0) return;
+  const list = regroup(pickedList().map(i => { const src = items[i], m = mirrorOf(structuredClone(src)); if (src.name) m.name = src.name.replace(/（鏡像）$/, '') + '（鏡像）'; else delete m.name; return m; }));   // 名前を付けていないパーツは、カタログの名前のまま（左右は一覧の（±x）で分かる）
+  addItems(list); pickLast(list.length);
+};
 
 // ---- 寸法の調整：上半身の部品をまとめて上下、肩関節と肩アーマーをまとめて左右・上下に動かす。つまみの値は組み立てと一緒に保存し、
 // 動かした量（前の値との差）だけ置いた部品の位置を変える（元に戻すでも戻る）
@@ -833,7 +950,11 @@ function placeFree(def) {
   if (def.tab === 'head') {
     if (!addOnly) { const n = items.length; items = items.filter(it => halfOf(it.part) !== 'head'); if (items.length !== n) selected = -1; }
     addItems([{ part: def.id, mov: [0, round(S.neck.y + 0.02 + adj.up + adj.neck - (def.bottom ?? S.neck.y), 4), round(adj.headZ, 4)], rot: [0, 0, 0], scal: [1, 1, 1] }]);
-  } else addItems([{ part: def.id, mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] }]);
+  } else {
+    // 脚・背中のタブの自由なパーツ（キャタピラの車体・大砲）：同じ部位のものと入れ替える。キャタピラの車体は脚そのものなので、置いてある脚の部品も外す
+    if (def.tab && !addOnly && !addMore()) { dropSameCat(def); if (def.cat === TRACK_CAT) { const n = items.length; items = items.filter(it => !(halfOf(it.part) === 'leg' && !byId[it.part]?.free)); if (items.length !== n) selected = -1; } }
+    addItems([{ part: def.id, mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] }]);
+  }
 }
 function place(def) {
   if (busy()) return;
@@ -860,7 +981,8 @@ function place(def) {
   // エフェクト・遠隔砲台は、ほかの部品と同じく押すたびに増える（いくつ置いてもよい。入れ替えたいときは「同じ部位は入れ替える」）
   const { mov, pair, based, rot: rot0 = [0, 0, 0] } = placeOf(def);
   if (withUpper(def.id) && !based) { mov[1] += adj.up + (followsShoulder(def) ? adj.shY : 0); if (followsShoulder(def)) mov[0] += adj.sh; }
-  if (!isMulti(def) && !grp && !addOnly) dropSameCat(def);   // （背中の入れ替えは上で済んでいる）
+  if (!isMulti(def) && !grp && !addOnly && !addMore()) dropSameCat(def);   // （背中の入れ替えは上で済んでいる）
+  if (halfOf(def.id) === 'leg' && !addOnly && !addMore()) { const n = items.length; items = items.filter(it => byId[it.part]?.cat !== TRACK_CAT); if (items.length !== n) selected = -1; }   // 脚の部品を置いたら、キャタピラの車体は外す
   const same = m => items.some(it => it.part === def.id && Math.abs(it.mov[0] - m[0]) < 1e-6 && Math.abs(it.mov[1] - m[1]) < 1e-6 && Math.abs(it.mov[2] - m[2]) < 1e-6);
   const at = mov.slice();
   for (let k = 0; k < 20 && same(at); k++) at[1] = round(at[1] - 0.04, 4);
@@ -922,7 +1044,8 @@ const catButtons = new Map();
 // 左のタブ：部位ごとにカタログを出す
 const TABS = [['head', '頭', HEAD], ['upper', '上半身', UPPER], ['back', '背中', BACK], ['arm', '腕', ARM], ['lower', '下半身', LOWER], ['leg', '脚', LEG], ['weapon', '武器', []], ['free', '取り込み', []]];
 /** そのタブに並べるパーツ：頭のタブには「頭まるごと」（機体エディタの機体から取り出した頭）、取り込みのタブには自由な機体 */
-const tabList = (half, list) => (half === 'head' ? [...list.filter(d => !d.retired), ...FREE.filter(d => d.tab === 'head')] : half === 'weapon' ? FREE.filter(d => d.tab === 'weapon') : half === 'free' ? FREE.filter(d => !d.tab) : list);
+// 脚のタブには自由なパーツの「キャタピラの車体」、背中のタブには「大砲」も（目次に入っていたのに、どのタブにも出ていなかった。issue #185）
+const tabList = (half, list) => (half === 'head' ? [...list.filter(d => !d.retired), ...FREE.filter(d => d.tab === 'head')] : half === 'weapon' ? FREE.filter(d => d.tab === 'weapon') : half === 'free' ? FREE.filter(d => !d.tab) : [...list, ...FREE.filter(d => d.tab === half)]);
 let tab = 'head';
 function showTab(t) {
   tab = t;
@@ -946,7 +1069,7 @@ function renderCatalog() {
     }
     if (half === 'free' && !list.length) sec.innerHTML = '<div class="hint" style="margin-top:8px">機体エディタ（1）の形式の機体を開くと、ここに並ぶ。「開く」→「機体エディタ 1 に残っているもの」か、ファイルから</div>';
     for (const cat of [...new Set(list.map(p => p.cat))]) {
-      const h = document.createElement('h2'); h.innerHTML = `${cat}<i>${cat === '頭まるごと' ? '押すと、今の頭と入れ替わる' : cat === WEAPON_CAT ? '押すと、右手に持つ（今の武器と入れ替わる）' : cat === '自由な機体' ? '押すと、今の機体に足して置く' : isMulti({ cat }) ? 'いくつでも（押すと増える）' : '1 つ（押すと入れ替わる）'}</i>`; sec.appendChild(h);
+      const h = document.createElement('h2'); h.innerHTML = `${cat}<i>${cat === '頭まるごと' ? '押すと、今の頭と入れ替わる' : cat === WEAPON_CAT ? '押すと、右手に持つ（今の武器と入れ替わる）' : cat === '自由な機体' ? '押すと、今の機体に足して置く' : isMulti({ cat }) ? 'いくつでも（押すと増える）' : cat === TRACK_CAT ? '1 つ（押すと脚と入れ替わる）' : '<span class="oneLabel">1 つ（押すと入れ替わる）</span>'}</i>`; sec.appendChild(h);
       const grid = document.createElement('div'); grid.className = 'cat'; sec.appendChild(grid);
       for (const def of list.filter(p => p.cat === cat)) {
         const b = document.createElement('button');
@@ -967,7 +1090,14 @@ function renderCatalog() {
         try { thumbnail(def, cv); } catch (e) { console.warn('thumbnail', def.id, e); }
       }
     }
-  }
+  }  addMoreLabel();
+}
+{
+  const box = $('#addMore');
+  try { box.checked = localStorage.getItem(ADD_MORE_KEY) === '1'; } catch { /* storage blocked */ }
+  const label = () => { for (const el of document.querySelectorAll('#catalog .oneLabel')) el.textContent = box.checked ? '1 つ（入れ替えずに足す）' : '1 つ（押すと入れ替わる）'; };
+  box.onchange = () => { try { localStorage.setItem(ADD_MORE_KEY, box.checked ? '1' : '0'); } catch { /* storage blocked */ } label(); };
+  addMoreLabel = label;
 }
 function markCatalog() { for (const [id, b] of catButtons) b.classList.toggle('on', items.some(it => it.part === id)); }
 
@@ -1004,7 +1134,7 @@ const adjusted = list => list.map(it => {
   m[1] += adj.up + (sh ? adj.shY : 0); if (sh) m[0] += Math.sign(m[0] || 1) * adj.sh;
   return { ...it, mov: m };
 });
-const tidy = list => register(list).filter(it => byId[it.part]).map(it => ({ part: it.part, name: it.name, ...(it.gen ? { gen: it.gen } : {}), ...(it.tilt != null ? { tilt: it.tilt } : {}), mov: it.mov ?? [0, 0, 0], rot: it.rot ?? [0, 0, 0], scal: it.scal ?? [1, 1, 1] }));
+const tidy = list => register(list).filter(it => byId[it.part]).map(it => ({ part: it.part, name: it.name, ...(it.gen ? { gen: it.gen } : {}), ...(it.tilt != null ? { tilt: it.tilt } : {}), ...(it.bone ? { bone: it.bone } : {}), ...(it.grp ? { grp: it.grp } : {}), mov: it.mov ?? [0, 0, 0], rot: it.rot ?? [0, 0, 0], scal: it.scal ?? [1, 1, 1] }));
 $('#bApply').onclick = () => {
   try {
     const d = JSON.parse($('#paste').value.trim());
@@ -1164,7 +1294,7 @@ const PE = initPartEdit({
   dropTmp: () => dropTmp(),
   removeUserPart: (id, dropItems) => { if (dropItems) { items = items.filter(it => it.part !== id); selected = -1; } unregisterUser(id); delete userParts[id]; persistUser(); },
 });
-$('#bEditPart').onclick = () => { if (selected >= 0 && !PE.active()) { const i = selected; gizmo.detach(); PE.start(i); } };
+$('#bEditPart').onclick = () => { if (selected >= 0 && !PE.active()) { const i = selected; picked = [i]; gizmo.detach(); PE.start(i); } };
 /** 自分のパーツをカタログから消す（確かめてから）。機体に置いてあるものも外れる。保存した機体は、自分の中にそのパーツの写しを持っているので、開けばまた使える */
 function dropUserPart(def) {
   if (busy()) return;
@@ -1836,7 +1966,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'bdc0bc4';
+const BUILD = 'ce40511';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
@@ -1970,7 +2100,7 @@ save();
 showUnitName();
 requestAnimationFrame(tick);
 // 確かめるための出口（画面の外から、置いた部品と視点を見る）
-window.__asm = { exportWeaponGlb, ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, userParts, byId };
+window.__asm = { exportWeaponGlb, ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, selectOne, picked: () => picked, pivot, groupPicked, ungroupPicked, userParts, byId };
 // ?unit=<機体ファイル（この画面からの相対パス）>：開いたときにその機体を読み込む（試作を見せる用。&save=<名前> を付けると「つづきから」の保存を別の場所にする）
 {
   const u = new URLSearchParams(location.search).get('unit');
