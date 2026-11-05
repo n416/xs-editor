@@ -631,7 +631,7 @@ export function initAi(ctx) {
           return;
         }
         XS.load({ parts: aiCandidate.list, ai: aiCandidate.ai, role: aiRole() });
-        const r = lastCheck = XS.report(checkId());
+        const r = lastCheck = await XS.reportAsync(checkId());
         fixText = fixReport(`【つながりチェック】\n${r.conn}\n\n【関節チェック】\n${r.joint}`, XS.doc().parts, aiCandidate.ai);
         say('#aCheckMsg', attachNote + (r.ok ? '問題ありません。この機体にしますか？'
           : '離れている部品や、動かすとぶつかる所が見つかりました。\nAI に直してもらうか、このままこの機体にするかを選んでください。') + (r.ok ? '' : `\n\n${r.connOk ? '' : r.conn + '\n'}${r.jointOk ? '' : r.joint}`), r.ok ? 'ok' : 'ng');

@@ -3,7 +3,7 @@
 // 投稿するのは機体の JSON（Ver2 の形：置いたパーツ・寸法・色・作ったパーツ）と小さな絵。取り込んだ形（.glb）の入った機体と艦は投稿できない。
 // 機体エディタ 1 から投稿された機体（部品の並び）は、「機体エディタの部品でできた機体」として開く。
 // ctx（v2.js が渡す）：{ busy(), okToLeave(what), doc() 今の機体の JSON, name() 今の機体の名前, problem() 投稿できない理由（無ければ ''）,
-//   check() → Promise<{ ok, text }> つながりと関節, role() 用途（raid など）, thumb() 小さな絵（JPEG の data URL）,
+//   check(onStep) → Promise<{ ok, text }> つながりと関節（onStep(done, total)：進み具合）, role() 用途（raid など）, thumb() 小さな絵（JPEG の data URL）,
 //   openUnit(doc, title) Ver2 の機体を開く, openScene(parts, title, role, ai) 機体エディタ 1 の機体を開く, kinds 用途の名前 }
 const CENTRAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? (new URLSearchParams(location.search).get('central') || 'http://localhost:8787') : 'https://ex-online-central.tobira-sys.workers.dev';
 const TOKEN_KEY = 'xs_token';
@@ -193,10 +193,11 @@ export function initShare(ctx) {
     if (ctx.busy()) { sNote('パーツエディタを閉じてから、もう一度押してください。', true); return null; }
     const why = ctx.problem();
     if (why) { sNote(why, true); return null; }
-    const out = $('#shCheck'); out.hidden = false; out.style.color = ''; out.textContent = 'つながりと関節を調べています…（10〜20 秒）';
+    const out = $('#shCheck'); out.hidden = false; out.style.color = ''; out.textContent = 'つながりと関節を調べています…';
     await new Promise(r => setTimeout(r, 30));
     let c;
-    try { c = await ctx.check(); } catch (e) { out.textContent = '調べられませんでした：' + (e?.message ?? e); out.style.color = 'var(--warn)'; return null; }
+    // （調べている間もページは動く。進み具合を出す）
+    try { c = await ctx.check((done, total) => { out.textContent = `つながりと関節を調べています…（姿勢 ${done} / ${total}）`; }); } catch (e) { out.textContent = '調べられませんでした：' + (e?.message ?? e); out.style.color = 'var(--warn)'; return null; }
     out.textContent = c.text; out.style.color = c.ok ? '' : 'var(--warn)';
     // チェックで問題が出ても止めない（依頼主：チェックだめでも登録出来た方が良い）。出た問題は上の欄に残し、投稿の知らせに一言足す
     share.checkNote = c.ok ? '' : 'つながり・関節のチェックで問題が出ています（上の一覧）。そのまま出しました。';

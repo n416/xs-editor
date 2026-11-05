@@ -1183,14 +1183,16 @@ $('#bPaintGrid').onclick = () => {
 /** Claws (parts whose name starts with 爪): hands that hold nothing, so no sample gun or bazooka is put in them */
 const clawHands = () => kept().some(it => (byId[it.part]?.pieces ?? []).some(pc => /^爪/.test(pc.name ?? '') && !pc.blockout));
 async function editorWorker() { await XS.ready(); return XS; }
+/** 関節のチェックの進み具合を out に出す（onStep(done, total)。チェックの間もページは動く） */
+const stepNote = (out, what) => (done, total) => { out.textContent = `${what}（姿勢 ${done} / ${total}）`; };
 /** 機体 id（a_raid など）で書き出す → { glb (base64), report, floating（つながっていない部品）, loose（関節で外れる・めり込む）, weapons } */
-async function exportGame(id) {
+async function exportGame(id, onStep) {
   const X = await editorWorker();
   const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
   const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));   // 自由な機体が自分の武器を持っている
   X.load({ parts: own || clawHands() ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
   const applied = await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
-  const chk = X.check(id), out = await X.exportNow(id, true);
+  const chk = await X.checkAsync(id, onStep), out = await X.exportNow(id, true);
   return { ...out, floating: chk.floating, loose: chk.loose, depths: chk.depths, weapons: applied.weapons, own };
 }
 const GAME_LIMIT = [30000, 5000, 800];
@@ -1214,9 +1216,9 @@ $('#bGame').onclick = async () => {
     } catch (e) { box.textContent = '書き出せませんでした：' + (e?.message ?? e); }
     return;
   }
-  box.textContent = '書き出しています…（つながりと関節のチェックを含めて 10〜20 秒）';
+  box.textContent = '書き出しています…';
   try {
-    const r = await exportGame(id);
+    const r = await exportGame(id, stepNote(box, '書き出しています…つながりと関節を調べています'));
     const bin = atob(r.glb), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type: 'model/gltf-binary' })); a.download = `${id}.glb`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     const ok = (v, lim) => (v <= lim ? '✓' : '✗');
@@ -1231,7 +1233,7 @@ $('#bGame').onclick = async () => {
 $('#bCheck').onclick = async () => {
   if (busy()) return;
   const id = $('#gameId').value, box = $('#gameOut'), esc2 = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-  box.textContent = '調べています…（10〜20 秒）';
+  box.textContent = '調べています…';
   try {
     const X = await editorWorker();
     if (shipKind()) {   // 艦：つながりだけ（関節は無い）
@@ -1245,7 +1247,7 @@ $('#bCheck').onclick = async () => {
     const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));
     X.load({ parts: own || clawHands() ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
     await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
-    const r = X.report(id); window.__lastCheck = r;   // （確かめる道具が、めり込みの深さ r.depths を読む）
+    const r = await X.reportAsync(id, stepNote(box, '調べています…')); window.__lastCheck = r;   // （確かめる道具が、めり込みの深さ r.depths を読む）
     const line = (t, ok) => `<div style="white-space:pre-line${ok ? '' : ';color:var(--warn)'}">${esc2(t)}</div>`;
     box.innerHTML = `<b>${$('#gameId').selectedOptions[0].textContent} として調べました</b>${line(r.conn, r.connOk)}${line(r.joint, r.jointOk)}`;
     // 機体エディタの部品でできた機体（AI で作った機体・機体エディタ 1 の機体）：結果を AI に渡して直してもらえる
@@ -1735,13 +1737,13 @@ const SHARE = initShare({
     return '';
   },
   // つながりと関節（「チェックだけする」と同じ調べ方）
-  check: async () => {
+  check: async onStep => {
     const id = $('#gameId').value, X = await editorWorker();
     const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
     const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));
     X.load({ parts: own || clawHands() ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
     await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
-    const r = X.report(id);
+    const r = await X.reportAsync(id, onStep);
     return { ok: r.ok, text: `${$('#gameId').selectedOptions[0].textContent} として調べました\n${r.conn}\n${r.joint}` };
   },
   openUnit: (doc, title) => { openDoc(doc, title); note(`「${title}」を開きました（このブラウザにはまだ保存していません。「保存」で残せます）`); },
@@ -1759,7 +1761,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'f20b4b1';
+const BUILD = '4cc9706';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

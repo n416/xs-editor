@@ -934,7 +934,51 @@ function fitKneel(moves, pieces, at, H) {
 
 // ---- range check: every pose, parts coming off the body and parts newly cutting into others
 const pieceLabel = pc => pc.part.name + (pc.bone.endsWith('_l') ? '（左）' : pc.bone.endsWith('_r') ? '（右）' : '');
+const NOTHING_TO_CHECK = { ok: false, connOk: false, jointOk: false, conn: 'チェックする部品がありません。', joint: 'チェックする部品がありません。' };
+// both checks as the text a person (or the AI that made the model) reads (XS.report)
+function reportText(rid, { total, floating }, rep) {
+  const label = it => (getPart(it.id)?.name ?? '?') + (it.side ? `（${it.side}）` : '');
+  const conn = !floating.length ? `✓ すべての部品（${total} 個）がつながっています。`
+    : [`つながっていない部品が ${floating.length} グループあります。別の部品でつないでください。`, ...floating.map(f => {
+      const names = [...new Set(f.members.map(label))];
+      return `・${names.slice(0, 3).join('、')}${names.length > 3 ? ` ほか${names.length - 3}` : ''} — ${f.gap === undefined ? '本体から離れています' : `本体まで ${f.gap.toFixed(3)}（近い部品: ${label(f.near)}）`}`;
+    })].join('\n');
+  const bad = Object.entries(rep).filter(([k, r]) => !k.startsWith('__') && (r.off.length || r.cut.length));
+  const role = rid.replace(/^[ab]_/, '');
+  const skipped = rep.__skipped ? `（用途が${ROLES[role]}なので、起こらない動き ${rep.__skipped} 個（${rep.__skippedKinds}）は調べていません。格闘は${MELEE_NAMES[XS_INFO[rid]?.melee] ?? 'ありません'}）` : '';
+  const joint = !bad.length ? `✓ ${Object.keys(rep).filter(k => !k.startsWith('__')).length} 個の姿勢・動きで、外れる部品・めり込む部品はありません。${skipped}`
+    : [`関節で問題が出る姿勢が ${bad.length} 個あります。${skipped}`, ...bad.map(([name, r]) => {
+      const bits = [];
+      if (r.off.length) bits.push(`外れる: ${r.off.slice(0, 4).join('、')}${r.off.length > 4 ? ` ほか${r.off.length - 4}` : ''}`);
+      if (r.cut.length) bits.push(`めり込む: ${r.cut.slice(0, 3).join('、')}${r.cut.length > 3 ? ` ほか${r.cut.length - 3}` : ''}`);
+      return `・${name}${r.frames.length ? `（フレーム ${r.frames.join(',')}）` : ''} — ${bits.join(' ／ ')}`;
+    })].join('\n');
+  return { ok: !floating.length && !bad.length, connOk: !floating.length, jointOk: !bad.length, conn, joint, depths: rep.__depths ?? {} };   // depths：めり込む組ごとの、いちばん深い所（ゲームの m、全高 18 m）
+}
+
 function jointCheck(id = roleId()) {
+  const it = jointSteps(id);
+  let r;
+  while (!(r = it.next()).done) { /* every pose at once */ }
+  return r.value;
+}
+// The same check, giving the browser its turn between poses (a model of many parts takes 15-40 s: done at once it froze the
+// page, テスター 2026-11-05 「みんなの機体」に投稿しようとするとブラウザが止まる). onStep(done, total) says how far it has got.
+// Throws if the engine is given another model meanwhile.
+async function jointCheckAsync(id = roleId(), onStep) {
+  const it = jointSteps(id), mine = parts;
+  let r, t = performance.now();
+  while (!(r = it.next()).done) {
+    if (performance.now() - t < 40) continue;
+    onStep?.(...r.value);
+    await new Promise(res => setTimeout(res, 0));
+    if (parts !== mine) throw new Error('調べている間に、別の機体の調べものが始まりました。もう一度押してください。');
+    t = performance.now();
+  }
+  return r.value;
+}
+// yields [poses done, poses in all] after each pose; returns the report
+function* jointSteps(id) {
   rebuild();
   const pieces = currentPieces();
   const { at, whole } = jointPositions(pieces);
@@ -1003,7 +1047,9 @@ function jointCheck(id = roleId()) {
   const checks = basic.map(k => [k, POSES[k], null]);
   for (const [k, frames] of Object.entries(fitKneel(MOVES, pieces, at, H))) if (movePlayed(k, id)) frames.forEach((pose, i) => { if (i % 2 === 1) checks.push([k, pose, i]); });
   const skirts = skirtOutlines(pieces, at);
+  let step = 0;
   for (const [name, pose, frame] of checks) {
+    yield [step++, checks.length];
     const M = poseMatrices(at, withSkirts(pose, skirts, H), H);
     const cur = pieces.map(pc => (pc.blend ? posed(pc, M) : pc));   // (a bent part: its vertices already in place)
     const moved = pc => (pc.world ? I : M[pc.bone]);
@@ -1588,27 +1634,24 @@ export const XS = {
   },
   /** both checks as the text a person (or the AI that made the model) reads: what is floating, what comes off or cuts in, in which move */
   report: id => {
-    const solid = parts.some(p => p.op === 'add' && !p.blockout);
-    if (!solid) return { ok: false, connOk: false, jointOk: false, conn: 'チェックする部品がありません。', joint: 'チェックする部品がありません。' };
-    const label = it => (getPart(it.id)?.name ?? '?') + (it.side ? `（${it.side}）` : '');
-    const { total, floating } = checkConnections();
-    const conn = !floating.length ? `✓ すべての部品（${total} 個）がつながっています。`
-      : [`つながっていない部品が ${floating.length} グループあります。別の部品でつないでください。`, ...floating.map(f => {
-        const names = [...new Set(f.members.map(label))];
-        return `・${names.slice(0, 3).join('、')}${names.length > 3 ? ` ほか${names.length - 3}` : ''} — ${f.gap === undefined ? '本体から離れています' : `本体まで ${f.gap.toFixed(3)}（近い部品: ${label(f.near)}）`}`;
-      })].join('\n');
-    const rid = XS_INFO[id] ? id : '', rep = jointCheck(rid);
-    const bad = Object.entries(rep).filter(([k, r]) => !k.startsWith('__') && (r.off.length || r.cut.length));
-    const role = rid.replace(/^[ab]_/, '');
-    const skipped = rep.__skipped ? `（用途が${ROLES[role]}なので、起こらない動き ${rep.__skipped} 個（${rep.__skippedKinds}）は調べていません。格闘は${MELEE_NAMES[XS_INFO[rid]?.melee] ?? 'ありません'}）` : '';
-    const joint = !bad.length ? `✓ ${Object.keys(rep).filter(k => !k.startsWith('__')).length} 個の姿勢・動きで、外れる部品・めり込む部品はありません。${skipped}`
-      : [`関節で問題が出る姿勢が ${bad.length} 個あります。${skipped}`, ...bad.map(([name, r]) => {
-        const bits = [];
-        if (r.off.length) bits.push(`外れる: ${r.off.slice(0, 4).join('、')}${r.off.length > 4 ? ` ほか${r.off.length - 4}` : ''}`);
-        if (r.cut.length) bits.push(`めり込む: ${r.cut.slice(0, 3).join('、')}${r.cut.length > 3 ? ` ほか${r.cut.length - 3}` : ''}`);
-        return `・${name}${r.frames.length ? `（フレーム ${r.frames.join(',')}）` : ''} — ${bits.join(' ／ ')}`;
-      })].join('\n');
-    return { ok: !floating.length && !bad.length, connOk: !floating.length, jointOk: !bad.length, conn, joint, depths: rep.__depths ?? {} };   // depths：めり込む組ごとの、いちばん深い所（ゲームの m、全高 18 m）
+    if (!parts.some(p => p.op === 'add' && !p.blockout)) return NOTHING_TO_CHECK;
+    const rid = XS_INFO[id] ? id : '';
+    return reportText(rid, checkConnections(), jointCheck(rid));
+  },
+  /** report, giving the browser its turn while it works (onStep(done, total): the joint check's poses) */
+  reportAsync: async (id, onStep) => {
+    if (!parts.some(p => p.op === 'add' && !p.blockout)) return NOTHING_TO_CHECK;
+    const rid = XS_INFO[id] ? id : '', mine = parts, conns = checkConnections();
+    await new Promise(res => setTimeout(res, 0));
+    if (parts !== mine) throw new Error('調べている間に、別の機体の調べものが始まりました。もう一度押してください。');
+    return reportText(rid, conns, await jointCheckAsync(rid, onStep));
+  },
+  /** check, giving the browser its turn while it works */
+  checkAsync: async (id, onStep) => {
+    const label = it => getPart(it.id)?.name ?? '?';
+    const floating = checkConnections().floating.map(f => [...new Set(f.members.map(label))].slice(0, 4).join('、') + (f.gap === undefined ? '' : `（本体まで ${f.gap.toFixed(3)}）`));
+    const joints = await jointCheckAsync(XS_INFO[id] ? id : '', onStep);
+    return { floating, loose: findings(joints, 4), depths: joints.__depths };
   },
   /** the connection check alone, as text (a part on its own has no bones to check). word: what a piece is called */
   connect: (word = '部品') => {
