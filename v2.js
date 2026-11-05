@@ -30,7 +30,7 @@ import { FORM_MAX, FORM_MS, formsUsed, keepBase, showForms } from './v2-forms.js
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
-import { DEFAULT_PAINT, ROLE_LABEL, colorOf, randomPalette, randomVivid, hexToHsl } from './paint.js';
+import { DEFAULT_PAINT, ROLE_LABEL, GLOW_ROLES, colorOf, loadPaint, randomPalette, randomVivid, hexToHsl } from './paint.js';
 import { buildHull, hullReach } from './hull.js';
 import { makeSheet } from './xsbody.js';
 import { hull2, pushAngle, bandedOutlines } from './skirtpush.js';
@@ -997,7 +997,7 @@ function restore(pos) {
 const undo = () => restore(histPos - 1), redo = () => restore(histPos + 1);
 $('#bUndo').onclick = () => (PE.active() ? PE.undo() : undo());
 $('#bRedo').onclick = () => (PE.active() ? PE.redo() : redo());
-function load() { try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null'); if (d && Array.isArray(d.items)) { items = register(d.items).filter(it => byId[it.part] && !it.tmp); adj = { ...ADJ0, ...(d.adj ?? {}) }; toNewBody(items, adj); if (d.paint?.pal) paint = { ...DEFAULT_PAINT(), ...d.paint }; unitName = d.name ?? ''; saveId = d.saveId ?? ''; savedHash = d.savedHash ?? ''; return true; } } catch { /* storage blocked */ } return false; }
+function load() { try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null'); if (d && Array.isArray(d.items)) { items = register(d.items).filter(it => byId[it.part] && !it.tmp); adj = { ...ADJ0, ...(d.adj ?? {}) }; toNewBody(items, adj); unitName = d.name ?? ''; saveId = d.saveId ?? ''; savedHash = d.savedHash ?? ''; if (d.paint?.pal) { paint = d.paint; const same = savedHash && (() => { try { return savedHash === docHash(); } catch { return false; } })(); paint = loadPaint(d.paint); if (same) savedHash = docHash(); /* 足した色の枠で埋めただけなら、保存した時のままと見る */ } return true; } } catch { /* storage blocked */ } return false; }
 /** 上半身・腕の見本・ランダムの部品を、今の寸法の調整の位置へずらす */
 const adjusted = list => list.map(it => {
   const sh = followsShoulder(byId[it.part]), m = (it.mov ?? [0, 0, 0]).slice();
@@ -1016,7 +1016,7 @@ $('#bApply').onclick = () => {
     // 部位だけの JSON（half 付き）：その部位だけを入れ替える。色・寸法の調整は今のまま
     if (d.half) { replaceHalf(d.half, list.filter(it => halfOf(it.part) === d.half)); note(`${HALF_NAME[d.half] ?? d.half}だけ入れ替えました`); return; }
     if (d.adj) adj = { ...adj, std: 0, ...d.adj };
-    if (d.paint?.pal) { paint = { ...DEFAULT_PAINT(), ...d.paint }; showPaint(); }
+    if (d.paint?.pal) { paint = loadPaint(d.paint); showPaint(); }
     items = tidy(list); const fixed = d.adj && toNewBody(items, adj); showAdj(); selected = -1; rebuild(); save(); note(fixed ? '読みました。前の頭身の機体なので、新しい頭身（上半身を腰の帯に載せる）に直しました' : '読みました（保存した機体としては、まだ保存していません）');
   } catch (e) { note('読めません：' + e.message, true); }
 };
@@ -1194,11 +1194,14 @@ function applyPaint() {
   for (const g of groups) for (const t of [g, ...g.userData.extra.values()]) t.traverse(o => { if (o.isMesh && o.userData.pc && !o.userData.meshPart) o.material = formMat(o); });
   showFormNow();
 }
-const ROLE_KEYS = ['main', 'sub', 'frame', 'accent', 'glow'];
+const ROLE_KEYS = Object.keys(ROLE_LABEL);
 function showPaint() {
   $('#paintTeam').checked = !!paint.team;
-  const el = $('#paintBox');
-  el.innerHTML = ROLE_KEYS.map(r => `<div class="pal"><input type="color" data-role="${r}" value="${paint.pal[r]}"><span>${ROLE_LABEL[r]}</span><label title="「いい感じに塗る」でこの色を変えない"><input type="checkbox" data-lock="${r}" ${paint.lock?.[r] ? 'checked' : ''}>固定</label></div>`).join('')
+  const el = $('#paintBox'), row = r => `<div class="pal"><input type="color" data-role="${r}" value="${paint.pal[r]}"><span>${ROLE_LABEL[r]}</span><label title="「いい感じに塗る」でこの色を変えない"><input type="checkbox" data-lock="${r}" ${paint.lock?.[r] ? 'checked' : ''}>固定</label></div>`;
+  // 光らない色・光る色に分けて並べる。追加の色・発光 2〜3 は、パーツエディタでブロックの「色の役」に選んだ所だけに付く
+  el.innerHTML = '<div class="hint">光らない色</div>' + ROLE_KEYS.filter(r => !GLOW_ROLES.has(r)).map(row).join('')
+    + '<div class="hint">光る色</div>' + ROLE_KEYS.filter(r => GLOW_ROLES.has(r)).map(row).join('')
+    + '<div class="hint">追加の色 1〜3・発光 2〜3 は、パーツエディタでブロックの「色の役」に選ぶと使える</div>'
     + `<div class="hint">${paint.type ? `型：${paint.type}` : '塗る前の色（パーツを作ったときの色）'}</div>`
     + `<h2>ビビッド</h2>` + (paint.vivid.colors.length
       ? paint.vivid.colors.map((c, k) => `<div class="pal"><input type="color" data-vivid="${k}" value="${c}"><span>${Object.keys(paint.vivid.on).filter(cat => paint.vivid.on[cat] === k).join('・') || '差し色だけ'}</span></div>`).join('')
@@ -1424,7 +1427,7 @@ function openDoc(d, name = '', id = '') {
   registerUnit(d); for (const def of Object.values(d.userParts ?? {})) if (def?.id && byId[def.id] === def) userParts[def.id] = def;
   persistUser(); renderCatalog(); showTab(tab);
   adj = { ...ADJ0, ...(d.adj ?? {}) };
-  paint = d.paint?.pal ? { ...DEFAULT_PAINT(), ...d.paint } : DEFAULT_PAINT(); showPaint();
+  paint = loadPaint(d.paint); showPaint();
   items = tidy(list); selected = -1; resetForms();
   const fixed = toNewBody(items, adj); showAdj();   // 前の頭身の機体は新しい頭身へ（保存してある方は、保存し直すまで前のまま）
   unitName = name || d.name || ''; saveId = id; savedHash = '';
@@ -1833,7 +1836,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '7b7656e';
+const BUILD = '332f97b';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

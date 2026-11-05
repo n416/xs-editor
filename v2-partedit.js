@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { buildHull, hullReach, movePlanes } from './hull.js';
 import { planesFromPoints } from './xsasm-lib.js';
-import { ROLE_LABEL, roleOf } from './paint.js';
+import { ROLE_LABEL, ROLE_COLOR, GLOW_ROLES, roleOf } from './paint.js';
 import { KIND_LABEL, BLOCK0, kindOf, isSub, soloGeo, boxOf, pointsOf, roundCorners, latheLoop, tfMatrix, loftSecs } from './partgeo.js';
 import { BONE_CHOICES, PIVOT_CHOICES, groupOfPart, pivotOfPart, isGlowPart, isTrackedSet } from './freeparts.js';
 import { profileEditor } from './v2-profile.js';
@@ -21,7 +21,6 @@ import { FORM_MAX, formOf, setForm } from './v2-forms.js';
 export const MOUTH_CHOICES = { '': 'なし（名前に「銃口」「ビームの口」があればそこ）', muzzle: '手に持つ武器の銃口', arm: '腕の武器の口（ビーム・腕の銃）', head: '頭の機関砲の口', chest: '胸の武器の口', belly: '腹の武器の口', shoulder: '肩の砲・ロケットの口', back: 'ミサイルの発射口（背中・肩当て）', shield: '盾の武器の口' };
 const mouthRow = pc => `<div class="row"><label>武器の口</label><select id="peMouth">${Object.entries(MOUTH_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.mouth ?? '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select><button id="peFire" class="small" title="選んだ口から、試しにビームを撃って見せる（このブロックの真ん中から機体の前へ）">試し撃ち</button></div>
   <div class="hint">その種類の武器を撃つと、弾やビームがこのブロックの真ん中から出る（ゲーム用に書き出した形で）。決まるのは出る場所だけで、武器の種類と強さは機体の種別で決まる。左右のある口（腕・頭・肩・ミサイル）は、ブロックが機体のどちら側にあるかで左右が決まる</div>`;
-const ROLE_COLOR = { main: '#c3c9d2', sub: '#6b727d', frame: '#23262c', accent: '#b8483e', glow: '#ffd257' };
 const r5 = v => Math.round(v * 1e5) / 1e5, r12 = v => Math.round(v * 1e12) / 1e12, r4 = v => Math.round(v * 1e4) / 1e4, r1 = v => Math.round(v * 10) / 10;
 const fmt = v => String(+(+v).toFixed(4));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -697,7 +696,7 @@ export function initPartEdit(ctx) {
       $('#peFReset').onclick = () => { formSet(null); commit(); renderRight(); };
     }
     if ($('#peBlend')) $('#peBlend').onchange = e => { if (e.target.value) pc.blendTo = e.target.value; else delete pc.blendTo; commit(); };
-    if ($('#peRole')) $('#peRole').onchange = e => { const r = e.target.value; pc.color = ROLE_COLOR[r]; if (r === 'glow') pc.glow = true; else delete pc.glow; ctx.repaint(); dimOthers(); commit(); renderLeft(); };
+    if ($('#peRole')) $('#peRole').onchange = e => { const r = e.target.value; pc.color = ROLE_COLOR[r]; if (GLOW_ROLES.has(r)) pc.glow = true; else delete pc.glow; ctx.repaint(); dimOthers(); commit(); renderLeft(); };
     for (const el of E.right.querySelectorAll('[data-f]')) {
       el.oninput = () => { const v = parseFloat(el.value); if (!Number.isFinite(v)) return; binds[el.dataset.f].set(v); for (const o of E.right.querySelectorAll(`[data-f="${el.dataset.f}"]`)) if (o !== el) o.value = el.type === 'range' ? fmt(v) : v; live(); prof?.draw(); };
       el.onchange = () => { if (st.keepCorner) { reselectCorner(st.keepCorner); st.keepCorner = null; } commit(); refresh(false); };
