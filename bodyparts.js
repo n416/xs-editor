@@ -133,7 +133,7 @@ export function bodyParts(items, adj = {}, colorOf = null) {
         const b = g.boundingBox.clone().applyMatrix4(M);
         if (!g.boundingBox.isEmpty() && b.min.x + b.max.x < 0) hand.union(b);
       }
-      return freeParts(def, src, freeShapes);
+      return freeParts(def, src, freeShapes).map(p => (src._i === undefined ? p : { ...p, src: src._i }));   // （src：置いたパーツの番号。unitparts.js）
     }
     const it = fitItem(src, adj);   // 関節の間の長さを掛けた置き方
     const R = rotMatrix(it.rot), e = new THREE.Euler().setFromRotationMatrix(R, 'XYZ');
@@ -156,7 +156,7 @@ export function bodyParts(items, adj = {}, colorOf = null) {
         for (let i = 0; i < ps.length; i += 3) hand.expandByPoint(v.set(ps[i], ps[i + 1], ps[i + 2]).applyMatrix4(M));
       }
       return { ...rest, ...(colorOf ? { color: colorOf(pc, def) } : {}), name: deco ? `飾り・${decoName(it.name ?? def.name)}・${decoName(pc.name)}` : `${HALF_LABEL[half]}・${it.name ?? def.name}・${pc.name}`, bone, pivot: src.bone ? 'none' : pc.pivot ?? 'none', glow: !!pc.glow, gun: false, noHit: !!pc.noHit, noHeight: half === 'back' || deco,
-        ...(joint ? { joint } : {}), ...(orb ? { orb } : {}), ...shape, pos: at, rot: [e.x, e.y, e.z], scl: it.scal.slice() };
+        ...(joint ? { joint } : {}), ...(orb ? { orb } : {}), ...shape, pos: at, rot: [e.x, e.y, e.z], scl: it.scal.slice(), ...(src._i === undefined ? {} : { src: src._i }) };
     });
   });
   return { parts, anchors: { neck: [0, S.neck.y + (adj.up ?? 0), 0], hand_r: hand.isEmpty() ? null : hand.getCenter(new THREE.Vector3()).toArray() } };

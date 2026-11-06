@@ -35,6 +35,7 @@ import { buildHull, hullReach } from './hull.js';
 import { makeSheet } from './xsbody.js';
 import { hull2, pushAngle, bandedOutlines } from './skirtpush.js';
 import { fitTiltBoth, tilted, TILT_GRID } from './kneetilt.js';
+import { autoFix } from './v2-autofix.js';
 import { P, XH, XL, YH, YL, ZH, ZL, box } from './xsasm-lib.js';
 import { byId, register, boneOf as boneOf0, SIDED, sideOf, hasLink as hasLinkIn, bodyParts, fitItem, kneeAxesOf, SEG, ADJ0 } from './bodyparts.js';
 
@@ -1457,13 +1458,17 @@ $('#bCheck').onclick = async () => {
       box.innerHTML = `<b>艦として調べました</b><div style="white-space:pre-line${c.ok ? '' : ';color:var(--warn)'}">${esc2(c.text)}</div>`;
       return;
     }
-    const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
-    const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));
-    X.load({ parts: own || clawHands() ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
-    await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
+    await loadForCheck(X, id, unitDoc());
     const r = await X.reportAsync(id, stepNote(box, '調べています…')); window.__lastCheck = r;   // （確かめる道具が、めり込みの深さ r.depths を読む）
     const line = (t, ok) => `<div style="white-space:pre-line${ok ? '' : ';color:var(--warn)'}">${esc2(t)}</div>`;
     box.innerHTML = `<b>${$('#gameId').selectedOptions[0].textContent} として調べました</b>${line(r.conn, r.connOk)}${line(r.joint, r.jointOk)}`;
+    // めり込む組があれば：置いたパーツを少しずらす・縮めて直すボタン（issue #264。v2-autofix.js）
+    if (r.detail.pairs.some(p => fixable(p.a) || fixable(p.b))) {
+      const bar = document.createElement('div'); bar.className = 'bar';
+      bar.innerHTML = '<button class="small acc" id="bAutoFix" title="めり込むパーツを、少しずらす・縮める（形は変えない。左右の対は両方）。直した後にもう一度調べて、通るまで繰り返す。Ctrl+Z で直す前に戻る">めり込みを自動で直す</button>';
+      box.appendChild(bar);
+      $('#bAutoFix').onclick = () => runAutoFix(id, box);
+    }
     // 機体エディタの部品でできた機体（AI で作った機体・機体エディタ 1 の機体）：結果を AI に渡して直してもらえる
     const frees = kept().map(it => byId[it.part]);
     if (!r.ok && frees.length && frees.every(d => d?.free && !d.tab)) {
@@ -1480,6 +1485,50 @@ ${r.joint}`, X.doc().parts, frees[0].ai ?? '');
     }
   } catch (e) { box.textContent = '調べられませんでした：' + (e?.message ?? e); }
 };
+/** 関節のチェックの前に：機体をチェックの部品にする（手持ちの武器が無ければ、陣営の強襲の銃とバズーカを右手に持たせる） */
+const checkWeapons = {};   // （陣営ごとの銃とバズーカ：自動の直しは何十回も読み込むので、1 度だけ取ってくる）
+async function loadForCheck(X, id, doc) {
+  const f = id[0] === 'b' ? 'b' : 'a', w = structuredClone(checkWeapons[f] ??= await (await fetch(`./samples/weapons-${f}.json`)).json());
+  const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));
+  X.load({ parts: own || clawHands() ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
+  await X.applyUnit(structuredClone(doc), { weaponHand: w.hand_r });
+}
+// ---- めり込みを自動で直す（issue #264、テスター るぅてしぁさん 2026-11-06「自分じゃ直せないので、良い感じに調節してくれる機能が欲しい」）----
+// 置いたパーツの位置・大きさ・付ける骨だけを変える（形は変えない）。直し方の決まりは v2-autofix.js。直した後は Ctrl+Z の 1 回で直す前に戻る
+// 動かさないパーツ：手持ちの武器（ゲームが持たせる物）、機体まるごとの部品（機体エディタ 1 の機体：動かすと全部が動く）、頭の殻（頭の置き方そのものが変わる）、下の FIX_CORE
+// 体の芯（胸・背中・腹・腰の殻）と腕・脚の区間のパーツ（上腕・前腕・太もも・すね：長さは骨格が決め、ずらすと関節から離れて見える）も動かさない：相手の小さい方を動かす
+const FIX_CORE = new Set(['頭蓋', '胸', '背中', '腹', '腰', '上腕', '前腕', '太もも', 'すね']);
+const fixable = i => { const it = kept()[i], def = it && byId[it.part]; return !!def && def.tab !== 'weapon' && !(def.free && !def.tab) && !FIX_CORE.has(def.cat); };
+async function runAutoFix(id, box) {
+  if (busy()) return;
+  const X = await editorWorker(), base = unitDoc(), hash = docHash(), orig = kept(), { k } = headPlaceIn(orig, adj);
+  const sideWord = it => (it.mov[0] > 1e-3 ? '（左）' : it.mov[0] < -1e-3 ? '（右）' : '');
+  const info = i => ({ name: (it => `${byId[it.part]?.name ?? '?'}${sideWord(it)}`)(orig[i]), head: isHead(orig[i].part), k, movable: fixable(i), bone: canPickBone(orig[i]) });
+  const docOf = list => ({ ...base, items: list });
+  const btn = $('#bAutoFix'); if (btn) btn.disabled = true;
+  try {
+    const res = await autoFix({
+      items: orig.map(it => structuredClone(it)), info,
+      check: async list => { await loadForCheck(X, id, docOf(list)); return X.reportAsync(id); },
+      probe: async (list, only) => { await loadForCheck(X, id, docOf(list)); return X.probe(id, only); },
+      onStep: t => { box.textContent = t; },
+    });
+    window.__lastFix = res; window.__lastCheck = res.after;
+    if (docHash() !== hash) { box.textContent = '直している間に機体が変わったので、直した結果は入れませんでした。もう一度押してください。'; return; }
+    for (const [i, it] of res.items.entries()) { orig[i].mov = it.mov; orig[i].scal = it.scal; if (it.bone) orig[i].bone = it.bone; else delete orig[i].bone; }
+    if (res.changes.length) { histAt = 0; rebuild(); save(); }
+    const e = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+    const dir = (v, c) => (Math.abs(v) < 0.005 ? '' : `${[['左', '右'], ['上', '下'], ['前', '後ろ']][c][v > 0 ? 0 : 1]}へ ${Math.abs(v).toFixed(2)} m`);
+    const li = list => list.map(t => `<div>・${e(t)}</div>`).join('');
+    box.innerHTML = `<b>${res.changes.length ? 'めり込みを自動で直しました（Ctrl+Z で直す前に戻る）' : '直せる所がありませんでした（機体は変えていません）'}</b>`
+      + (res.fixed.length ? `<div>直った組 ${res.fixed.length}：</div>${li(res.fixed.map(f => `${f.pair} — ${f.how}`))}` : '')
+      + (res.changes.length ? `<div>変えたパーツ：</div>${li(res.changes.map(c => `${c.name}：${[...c.move.map(dir).filter(Boolean), ...(Math.abs(c.scale - 1) > 1e-3 ? [`${c.scale} 倍`] : []), ...(c.bone ? [`付ける骨 ${c.bone}`] : [])].join('・')}`))}` : '')
+      + (res.failed.length ? `<div style="color:var(--warn)">直せなかった組 ${res.failed.length}：</div><div style="color:var(--warn)">${li(res.failed.map(f => `${f.pair}（${f.depth.toFixed(2)} m）— ${f.why}`))}</div>` : '')
+      + `<div style="white-space:pre-line${res.after.jointOk ? '' : ';color:var(--warn)'}">${e(res.after.joint)}</div>`
+      + `<div style="white-space:pre-line${res.after.connOk ? '' : ';color:var(--warn)'}">${e(res.after.conn)}</div>`
+      + '<span class="hint">直したのは置き方（位置・大きさ・付ける骨）だけ。見た目が気に入らなければ Ctrl+Z で戻し、自分でずらしてください</span>';
+  } catch (err) { box.textContent = '直せませんでした：' + (err?.message ?? err); }
+}
 /** 持っている武器だけを、武器のモデルとして書き出す（w_<陣営>_<形の名前>.glb：骨なし・メートル・握る所が原点・長さは -Z。docs/model-delivery-design.md）。
  *  機体の腕の長さや置いた向きには関係なく、その武器を作ったときの形のまま出す */
 async function exportWeaponGlb(def, name) {
@@ -2000,7 +2049,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '0ecdbdb';
+const BUILD = '4ec834b';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

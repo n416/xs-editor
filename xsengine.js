@@ -61,6 +61,7 @@ let nextId = 1;
 function makePart(data) {
   const p = { id: nextId++ };
   for (const k of FIELDS) p[k] = structuredClone(data[k] ?? DEFAULTS[k]);
+  p.src = data.src ?? null;   // the placed part of 機体エディタ Ver2 it came from (its number in the unit's items; unitparts.js). Not saved with the part
   p.proxy = new THREE.Object3D();   // where the part is (position, rotation, scale)
   p.proxy.position.fromArray(p.pos);
   p.proxy.rotation.set(...p.rot);
@@ -983,7 +984,8 @@ function reportText(rid, { total, floating }, rep) {
       if (r.cut.length) bits.push(`めり込む: ${r.cut.slice(0, 3).join('、')}${r.cut.length > 3 ? ` ほか${r.cut.length - 3}` : ''}`);
       return `・${name}${r.frames.length ? `（フレーム ${r.frames.join(',')}）` : ''} — ${bits.join(' ／ ')}`;
     })].join('\n');
-  return { ok: !floating.length && !bad.length, connOk: !floating.length, jointOk: !bad.length, conn, joint, depths: rep.__depths ?? {} };   // depths：めり込む組ごとの、いちばん深い所（ゲームの m、全高 18 m）
+  return { ok: !floating.length && !bad.length, connOk: !floating.length, jointOk: !bad.length, conn, joint, depths: rep.__depths ?? {},
+    detail: { pairs: rep.__pairs ?? [], offs: rep.__offs ?? [], boxes: rep.__boxes ?? {}, H: rep.__H, floating: floating.length } };   // （機体エディタ Ver2 の自動の直し：v2-autofix.js）   // depths：めり込む組ごとの、いちばん深い所（ゲームの m、全高 18 m）
 }
 
 function jointCheck(id = roleId()) {
@@ -995,8 +997,8 @@ function jointCheck(id = roleId()) {
 // The same check, giving the browser its turn between poses (a model of many parts takes 15-40 s: done at once it froze the
 // page, テスター 2026-11-05 「みんなの機体」に投稿しようとするとブラウザが止まる). onStep(done, total) says how far it has got.
 // Throws if the engine is given another model meanwhile.
-async function jointCheckAsync(id = roleId(), onStep) {
-  const it = jointSteps(id), mine = parts;
+async function jointCheckAsync(id = roleId(), onStep, only = null) {
+  const it = jointSteps(id, only), mine = parts;
   let r, t = performance.now();
   while (!(r = it.next()).done) {
     if (performance.now() - t < 40) continue;
@@ -1007,21 +1009,26 @@ async function jointCheckAsync(id = roleId(), onStep) {
   }
   return r.value;
 }
-// yields [poses done, poses in all] after each pose; returns the report
-function* jointSteps(id) {
+// yields [poses done, poses in all] after each pose; returns the report.
+// only (a Set of Ver2 placed-part numbers, part.src): look only at the pairs with a piece of those in them, and take every other
+// rest contact as holding (the automatic fix of 機体エディタ Ver2 trying a change to a few placed parts, v2-autofix.js); also
+// measures how deep those pieces sit in others at rest (a change must not hide a cut by starting inside the other)
+function* jointSteps(id, only = null) {
   rebuild();
   const pieces = currentPieces();
   const { at, whole } = jointPositions(pieces);
   const H = whole.max.y - whole.min.y;
   const I = new THREE.Matrix4(), v = new THREE.Vector3(), hit = { point: new THREE.Vector3() };
-  for (const pc of pieces) pc.bvh = new MeshBVH(pc.geo);
+  // a piece's BVH is made when it is first needed (with `only`, most pieces are never looked into)
+  for (const pc of pieces) Object.defineProperty(pc, 'bvh', { get() { return this._bvh ??= new MeshBVH(this.geo); }, configurable: true });
+  const want = only ? (a, b) => only.has(pieces[a].part.src) || only.has(pieces[b].part.src) : () => true;
   // parts bending over a joint: moved vertex by vertex in every pose, by their two bones' share (as the game's skin does)
   for (const pc of pieces) { const bl = blendOfPiece(pc); if (bl) pc.blend = { ...bl, w: blendWeights(pc, bl) }; }
   const posed = (pc, M) => {
     const g = pc.geo.clone(), pos = g.attributes.position, A = M[pc.bone], B = M[pc.blend.to] ?? A, p = new THREE.Vector3(), q = new THREE.Vector3();
     for (let i = 0; i < pos.count; i++) { p.fromBufferAttribute(pos, i); q.copy(p).applyMatrix4(B); p.applyMatrix4(A).lerp(q, pc.blend.w[i]); pos.setXYZ(i, p.x, p.y, p.z); }
     g.computeBoundingBox();
-    return { ...pc, geo: g, bvh: new MeshBVH(g), world: true };
+    return { part: pc.part, bone: pc.bone, mesh: pc.mesh, blend: pc.blend, geo: g, bvh: new MeshBVH(g), world: true };
   };
   ankleNow = safeAnkle(pieces, at, H);   // the feet turn as far as this model's ankles can (the game reads the same from the model)
   // b moved into a's rest frame; three-mesh-bvh's intersectsGeometry(geometry, matrix) reports false hits,
@@ -1045,12 +1052,20 @@ function* jointSteps(id) {
   for (let a = 0; a < n; a++) {
     const near = pieces[a].geo.boundingBox.clone().expandByScalar(0.05);
     for (let b = a + 1; b < n; b++) {
-      if (!near.intersectsBox(pieces[b].geo.boundingBox)) continue;
+      if (!want(a, b) || !near.intersectsBox(pieces[b].geo.boundingBox)) continue;
       if (pieces[a].bvh.intersectsGeometry(pieces[b].geo, I)) { touch.push([a, b]); inside.add(a + ',' + b); }
       else if (gapUnder(pieces[a], I, pieces[b], I, TOUCH) || gapUnder(pieces[b], I, pieces[a], I, TOUCH)) touch.push([a, b]);
     }
   }
   const restPair = new Set(touch.map(([a, b]) => a + ',' + b));
+  // with `only`: the pairs that can be cut, listed once (going through every pair in every pose took most of the time)
+  const onlyPairs = [];
+  if (only) for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
+    const pa = pieces[a], pb = pieces[b];
+    if (want(a, b) && !(pa.bone === pb.bone && !pa.blend && !pb.blend) && !restPair.has(a + ',' + b) && !pa.part.noHit && !pb.part.noHit && !atWaist(pa.bone, pb.bone)) onlyPairs.push([a, b]);
+  }
+  // with `only`: those placed parts that touch no other placed part at rest (moved off the body)
+  const detached = only ? [...only].filter(s => !touch.some(([a, b]) => (pieces[a].part.src === s) !== (pieces[b].part.src === s))) : [];
   const depths = new Map();   // deepest cut per pair, in game metres (18 m tall)
   // how deep g's vertices sit inside a (0 if none): distance to a's surface for vertices behind it
   const tri = new THREE.Triangle(), nrm = new THREE.Vector3(), d = new THREE.Vector3();
@@ -1063,12 +1078,24 @@ function* jointSteps(id) {
       const r = a.bvh.closestPointToPoint(v, hit);
       if (!r) continue;
       const f = r.faceIndex * 3;
-      tri.set(new THREE.Vector3().fromBufferAttribute(ap, idx.getX(f)), new THREE.Vector3().fromBufferAttribute(ap, idx.getX(f + 1)), new THREE.Vector3().fromBufferAttribute(ap, idx.getX(f + 2)));
+      const at = k => (idx ? idx.getX(f + k) : f + k);   // (a shape without an index: its triangles in order)
+      tri.set(new THREE.Vector3().fromBufferAttribute(ap, at(0)), new THREE.Vector3().fromBufferAttribute(ap, at(1)), new THREE.Vector3().fromBufferAttribute(ap, at(2)));
       tri.getNormal(nrm);
       if (d.subVectors(v, r.point).dot(nrm) < 0) deep = Math.max(deep, r.distance);
     }
     return deep;
   };
+  // with `only`: how deep the pieces of those placed parts sit in others at rest (pairs deeper than a reported cut)
+  const restDeep = [];
+  if (only) for (const k of inside) {
+    const [a, b] = k.split(',').map(Number), deep = Math.max(depthIn(pieces[a], pieces[b].geo), depthIn(pieces[b], pieces[a].geo));
+    if (deep > CUT_DEPTH * H / 3) restDeep.push({ a: pieces[a].part.src, b: pieces[b].part.src, la: pieceLabel(pieces[a]), lb: pieceLabel(pieces[b]), depth: deep * 18 / H });
+  }
+  // each cut as numbers (the automatic fix reads them): the placed parts of the two pieces, the deepest cut (game m), the poses,
+  // and which way each piece would have to go (in its own rest frame) to leave the other, at the deepest
+  const pairs = new Map(), offs = new Map();
+  const centre = b => b.getCenter(new THREE.Vector3());
+  const away = (box, other) => { const x = box.clone().intersect(other); return x.isEmpty() ? [0, 0, 0] : centre(box).sub(centre(x)).normalize().toArray(); };
   const report = {};
   // with the game's real frames loaded, those plus the basic poses; the hand-made extremes are for preview only
   const tracked = isTracked();
@@ -1081,7 +1108,9 @@ function* jointSteps(id) {
   for (const [name, pose, frame] of checks) {
     yield [step++, checks.length];
     const M = poseMatrices(at, withSkirts(pose, skirts, H), H);
-    const cur = pieces.map(pc => (pc.blend ? posed(pc, M) : pc));   // (a bent part: its vertices already in place)
+    // (a bent part: its vertices already in place. With `only`, made when a pair needs it: most are never looked at)
+    const cur = only ? pieces.map(pc => (pc.blend ? null : pc)) : pieces.map(pc => (pc.blend ? posed(pc, M) : pc));
+    const C = only ? k => (cur[k] ??= posed(pieces[k], M)) : k => cur[k];
     const moved = pc => (pc.world ? I : M[pc.bone]);
     const hidden = /^saber|^knife|^throw/.test(name) ? pc => isHeld(pc.part) : () => false;   // the game hides the gun then
     const same = (a, b) => !a.world && !b.world && moved(a).equals(moved(b));
@@ -1090,7 +1119,8 @@ function* jointSteps(id) {
     // 1) off the body: keep the rest contacts that still hold in this pose, then look for islands
     const adj = pieces.map(() => []);
     for (const [a, b] of touch) {
-      const pa = cur[a], pb = cur[b];
+      if (only && !want(a, b)) { adj[a].push(b); adj[b].push(a); continue; }   // (not changed: taken as holding)
+      const pa = C(a), pb = C(b);
       if (same(pa, pb) || gapUnder(pa, moved(pa), pb, moved(pb), TOUCH * 2) || gapUnder(pb, moved(pb), pa, moved(pa), TOUCH * 2)) { adj[a].push(b); adj[b].push(a); }
     }
     const comp = new Array(n).fill(-1); let c = 0;
@@ -1102,25 +1132,49 @@ function* jointSteps(id) {
     }
     const sizes = new Array(c).fill(0); comp.forEach(k => sizes[k]++);
     const body = sizes.indexOf(Math.max(...sizes));
-    const off = [...new Set(pieces.filter((pc, k) => comp[k] !== body && !hidden(pc) && !isLight(pc.part)).map(pieceLabel))];
+    const offK = pieces.map((pc, k) => k).filter(k => comp[k] !== body && !hidden(pieces[k]) && !isLight(pieces[k].part));
+    const off = [...new Set(offK.map(k => pieceLabel(pieces[k])))];
+    for (const k of offK) { const l = pieceLabel(pieces[k]); const o = offs.get(l) ?? offs.set(l, { src: pieces[k].part.src, label: l, poses: new Set() }).get(l); o.poses.add(name); }
     // 2) cutting in: pairs moving differently that intersect now but were apart at rest (parts marked 当たり判定なし, like power pipes, are skipped)
     const cut = new Set();
-    const boxes = cur.map(pc => pc.geo.boundingBox.clone().applyMatrix4(moved(pc)));
-    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
-      const pa = cur[a], pb = cur[b];
-      if (same(pa, pb) || hidden(pa) || hidden(pb) || twoHands(pa, pb) || atWaist(pa.bone, pb.bone) || pa.part.noHit || pb.part.noHit || restPair.has(a + ',' + b) || !boxes[a].intersectsBox(boxes[b])) continue;
+    const boxOf = pc => pc.geo.boundingBox.clone().applyMatrix4(moved(pc));
+    const boxes = only ? new Array(n) : cur.map(boxOf), B = only ? k => (boxes[k] ??= boxOf(C(k))) : k => boxes[k];
+    const cutAt = (a, b) => {
+      const pa = C(a), pb = C(b);
+      if (same(pa, pb) || hidden(pa) || hidden(pb) || twoHands(pa, pb) || atWaist(pa.bone, pb.bone) || pa.part.noHit || pb.part.noHit || restPair.has(a + ',' + b) || !B(a).intersectsBox(B(b))) return;
       const gb = into(pa, moved(pa), pb, moved(pb));
-      if (!pa.bvh.intersectsGeometry(gb, I)) continue;
+      if (!pa.bvh.intersectsGeometry(gb, I)) return;
       // grazing contact at a joint's rim is fine; only real cutting-in counts
-      const deep = Math.max(depthIn(pa, gb), depthIn(pb, into(pb, moved(pb), pa, moved(pa))));
-      if (deep > CUT_DEPTH * H / 3) { const key = `${pieceLabel(pa)} ↔ ${pieceLabel(pb)}`; cut.add(key); depths.set(key, Math.max(depths.get(key) || 0, deep * 18 / H)); }
-    }
+      const ga = into(pb, moved(pb), pa, moved(pa));
+      const deep = Math.max(depthIn(pa, gb), depthIn(pb, ga));
+      if (deep > CUT_DEPTH * H / 3) {
+        const key = `${pieceLabel(pa)} ↔ ${pieceLabel(pb)}`; cut.add(key); depths.set(key, Math.max(depths.get(key) || 0, deep * 18 / H));
+        const rec = pairs.get(a + ',' + b) ?? pairs.set(a + ',' + b, { a: pa.part.src, b: pb.part.src, la: pieceLabel(pa), lb: pieceLabel(pb), ba: pa.bone, bb: pb.bone, depth: 0, poses: new Set() }).get(a + ',' + b);
+        rec.poses.add(name);
+        if (deep * 18 / H > rec.depth) {
+          if (!gb.boundingBox) gb.computeBoundingBox();
+          if (!ga.boundingBox) ga.computeBoundingBox();
+          Object.assign(rec, { depth: deep * 18 / H, pushA: away(pa.geo.boundingBox, gb.boundingBox), pushB: away(pb.geo.boundingBox, ga.boundingBox), pose: name, frame });
+        }
+      }
+    };
+    if (only) for (const [a, b] of onlyPairs) cutAt(a, b);
+    else for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) cutAt(a, b);
     const r = (report[name] ||= { off: new Set(), cut: new Set(), frames: [] });
     off.forEach(x => r.off.add(x)); cut.forEach(x => r.cut.add(x));
     if ((off.length || cut.size) && frame !== null) r.frames.push(frame);
   }
   for (const r of Object.values(report)) { r.off = [...r.off]; r.cut = [...r.cut]; }
   report.__depths = Object.fromEntries(depths);
+  report.__pairs = [...pairs.values()].map(r => ({ ...r, poses: [...r.poses] }));
+  report.__offs = [...offs.values()].map(r => ({ ...r, poses: [...r.poses] }));
+  report.__restDeep = restDeep;
+  report.__detached = detached;
+  // each placed part's box at rest and the height (to keep a change in proportion: v2-autofix.js)
+  const boxes = {};
+  for (const pc of pieces) if (pc.part.src !== null) (boxes[pc.part.src] ??= new THREE.Box3()).union(pc.geo.boundingBox);
+  report.__boxes = Object.fromEntries(Object.entries(boxes).map(([k, b]) => [k, [b.min.toArray(), b.max.toArray()]]));
+  report.__H = H;
   const skipped = Object.keys(MOVES).filter(k => !movePlayed(k, id));
   report.__skipped = skipped.length;
   report.__skippedKinds = [...new Set(skipped.map(k => (/^kneel_/.test(k) ? '迫撃のひざつき' : /^sit_/.test(k) ? '緊急帰投の片膝' : 'ほかの格闘')))].join('・');
@@ -1675,6 +1729,14 @@ export const XS = {
     await new Promise(res => setTimeout(res, 0));
     if (parts !== mine) throw new Error('調べている間に、別の機体の調べものが始まりました。もう一度押してください。');
     return reportText(rid, conns, await jointCheckAsync(rid, onStep));
+  },
+  /** the joint check of a few placed parts of 機体エディタ Ver2 (part.src in `only`) against all the others, and the floating groups:
+   *  what the automatic fix tries a change by (v2-autofix.js) → { pairs, offs, restDeep, floating: of those, how many touch no other, H } */
+  probe: async (id, only) => {
+    const rid = XS_INFO[id] ? id : '', mine = parts;
+    const rep = await jointCheckAsync(rid, null, new Set(only));
+    if (parts !== mine) throw new Error('調べている間に、別の機体の調べものが始まりました。もう一度押してください。');
+    return { pairs: rep.__pairs, offs: rep.__offs, restDeep: rep.__restDeep, floating: rep.__detached.length, H: rep.__H };   // floating：ほかのパーツに触れていない（only の）パーツの数
   },
   /** check, giving the browser its turn while it works */
   checkAsync: async (id, onStep) => {

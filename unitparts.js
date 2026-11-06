@@ -102,7 +102,8 @@ export function unitParts(doc, { shaped = false } = {}) {
   // 手持ちの武器（def.tab = 'weapon'）は、部品の並びのいちばん前へ：武器の「引く」部品（銃口の穴など）は自分より前の部品だけを削るので、体を削らない
   // 自分のモデルとして書き出す武器（def.shape：ゲームでの形の名前。ヒートアックスなど）は、機体のモデルに入れない（shaped: true のときだけ入れる：その武器だけを書き出すとき）
   refreshDecos();
-  const all = (doc.items ?? []).filter(it => byId[it.part] && (shaped || !byId[it.part].shape)), held = it => byId[it.part].tab === 'weapon';
+  // _i：機体の items の何番目か（書き出す部品の src。関節の自動の直し v2-autofix.js が、めり込む部品から置いたパーツを引く）
+  const all = (doc.items ?? []).map((it, i) => ({ ...it, _i: i })).filter(it => byId[it.part] && (shaped || !byId[it.part].shape)), held = it => byId[it.part].tab === 'weapon';
   const items = [...all.filter(held), ...all.filter(it => !held(it))], adj = { ...ADJ0, ...(doc.adj ?? {}) }, paint = doc.paint ?? null;
   const team = !!paint?.team && !(paint.vivid?.colors?.length);
   const paintOf = (pc, def) => (team && roleOf(pc) === 'accent' ? { color: '#f2f2f2', team: true } : { color: colorOf(pc, def.cat, paint) });
@@ -115,7 +116,7 @@ export function unitParts(doc, { shaped = false } = {}) {
     return shapesOf(def).map(({ pc, shape }) => {
       const off = new THREE.Vector3(pc.pos[0] * scal[0], pc.pos[1] * scal[1], pc.pos[2] * scal[2]).applyMatrix4(R), { pos, ...rest } = pc;
       return { ...rest, name: `頭・${it.name ?? def.name}・${pc.name}`, ...shape, pos: [mov[0] + off.x, mov[1] + off.y, mov[2] + off.z], rot: [e.x, e.y, e.z], scl: scal.slice(),
-        bone: onBody ? 'torso' : 'head', pivot: onBody && pc.pivot === 'head' ? 'head' : 'none', gun: false, glow: !!pc.glow, noHit: !!pc.noHit, ...paintOf(pc, def) };
+        bone: onBody ? 'torso' : 'head', pivot: onBody && pc.pivot === 'head' ? 'head' : 'none', gun: false, glow: !!pc.glow, noHit: !!pc.noHit, ...paintOf(pc, def), src: it._i };
     });
   });
   const body = bodyParts(items.filter(it => !isHead(it.part)), adj, null);
