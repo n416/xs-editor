@@ -41,7 +41,7 @@ const CSS = `
 `;
 const HTML = `<div class="box">
   <div class="top"><b>みんなの機体</b><button id="shClose">閉じる（Esc）</button></div>
-  <div class="rule" role="note">著作権に違反するような機体は運営が削除する可能性があります。ご注意下さい<small lang="en">Machines that infringe copyright may be deleted by the operators. Please take care.</small></div>
+  <div class="rule" role="note"><b>著作権に違反する機体は、運営が削除することがあります。</b>ほかの作品のロボットをそのまま写した機体や、ほかの人が作った機体を自分の物として投稿するのはやめてください。<small lang="en">Machines that infringe copyright may be deleted by the operators. Please do not post a copy of a robot from another work, or a machine someone else made as your own.</small></div>
   <div class="bar2" id="shAuth"></div>
   <div class="bar2"><input type="text" id="shTitle" placeholder="機体名（40 文字まで）" maxlength="40"><input type="text" id="shAi" placeholder="使った AI（なければ空欄）" maxlength="40"><button id="shUpload" class="acc" title="今の機体を、だれでも見られる所に出す（つながりと関節を調べて、問題があれば知らせる。問題があっても投稿はできる）">今の機体を投稿</button></div>
   <div class="hint" id="shCheck" hidden></div>
