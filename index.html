@@ -4,9 +4,76 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>機体エディタ</title>
-<!-- the editor is v2.html (機体エディタ Ver2); this address is kept so that old links open it -->
-<script>location.replace('./v2.html' + location.search + location.hash);</script>
-<meta http-equiv="refresh" content="0; url=./v2.html">
+<style>
+  :root { --bg: #14161a; --panel: #1d2026; --line: #2c3038; --text: #d6dae2; --dim: #8b919c; --acc: #6fb3ff; --acc2: #ffb86b; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.7 system-ui, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 16px 56px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .lead { color: var(--dim); margin: 0 0 28px; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .card h2 { font-size: 22px; margin: 0; }
+  .card .tag { font-size: 13px; color: var(--dim); }
+  .card p { margin: 0; }
+  .card .go { margin-top: auto; display: inline-block; text-align: center; padding: 10px 14px; border-radius: 8px; background: #2b4a6f; border: 1px solid #3d6a9c; color: #fff; text-decoration: none; font-weight: 600; }
+  .card.v3 .go { background: #5a4126; border-color: #8a6233; }
+  .card .go:hover { filter: brightness(1.15); }
+  h2.sec { font-size: 18px; margin: 40px 0 12px; }
+  .tbl { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  thead th { background: #23272e; font-size: 13px; }
+  tbody th { color: var(--dim); font-weight: 600; white-space: nowrap; }
+  tr:last-child th, tr:last-child td { border-bottom: 0; }
+  .guide { display: flex; align-items: center; gap: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; text-decoration: none; color: var(--text); }
+  .guide:hover { border-color: #3d6a9c; }
+  .guide b { font-size: 18px; color: var(--acc); }
+  .guide span { color: var(--dim); font-size: 13px; }
+  .guide .arrow { margin-left: auto; font-size: 22px; color: var(--acc); }
+  @media (max-width: 760px) { .cards { grid-template-columns: 1fr; } h1 { font-size: 24px; } }
+</style>
+<!-- links made before this page (a login's return, ?save=, ?central=) still open the editor -->
+<script>if (location.search || location.hash) location.replace('./v2.html' + location.search + location.hash);</script>
 </head>
-<body><a href="./v2.html">機体エディタを開く</a></body>
+<body>
+<main>
+  <h1>機体エディタ</h1>
+  <p class="lead">XS の形をブラウザで作る道具です。エディタは 2 つあり、全身を組むのは機体エディタ Ver2、作り込んだ頭を作るのはリアルパーツエディタです。</p>
+
+  <div class="cards">
+    <div class="card">
+      <h2>機体エディタ Ver2</h2>
+      <div class="tag">全身を組んで、ゲームに出す</div>
+      <p>頭・胴・背中・腕・腰・脚・武器を、カタログのパーツを押して組み立てます。長さ・色を整え、ゲームの動きで確かめ、ゲーム用の .glb に書き出すか「みんなの機体」に投稿します。カタログに無い形はパーツエディタで作れます。</p>
+      <a class="go" href="./v2.html">機体エディタ Ver2 を開く</a>
+    </div>
+    <div class="card v3">
+      <h2>リアルパーツエディタ</h2>
+      <div class="tag">つまみで作り込んだ頭を作り、Ver2 へ持って行く</div>
+      <p>兜・顔・目・耳・顎・前立・角などを、つまみと種で細かく作ります。できた頭は「Ver2 の頭として書き出し」でファイルにして、Ver2 で開くと頭だけが入れ替わります。</p>
+      <a class="go" href="./v3.html">リアルパーツエディタを開く</a>
+    </div>
+  </div>
+
+  <h2 class="sec">2 つの違い</h2>
+  <div class="tbl"><table>
+    <thead><tr><th></th><th>機体エディタ Ver2</th><th>リアルパーツエディタ</th></tr></thead>
+    <tbody>
+      <tr><th>作る物</th><td>全身（頭から脚・武器・艦まで）</td><td>頭（体の欄もあるが、まだ書き出せない）</td></tr>
+      <tr><th>作り方</th><td>カタログのパーツを押して置く。置いたパーツを動かす・回す・大きくする。無い形はパーツエディタで箱から作る</td><td>部位ごとのつまみと種（形・色・塗り分け）を回す。形は平面で切った塊を組み合わせてできる</td></tr>
+      <tr><th>向いていること</th><td>機体 1 体を最後まで仕上げること</td><td>Ver2 のカタログより細かく作り込んだ頭</td></tr>
+      <tr><th>色</th><td>パーツは役（主装甲・副装甲・フレーム・差し色・発光）を持ち、色の組は機体が 1 つ持つ</td><td>つまみの色の組。Ver2 へ持って行くと Ver2 の塗りに合わせて塗り替わる（目と前立の金はそのまま）</td></tr>
+      <tr><th>保存</th><td>このブラウザに何体でも。ファイルにも。「みんなの機体」に投稿</td><td>このブラウザに名前を付けて残す。つまみの値をファイルに書き出し・読み込み</td></tr>
+      <tr><th>ゲームへ</th><td>「ゲーム用に書き出す」で .glb（つながりと関節を調べてから）</td><td>直接は出さない。Ver2 に頭を持って行き、Ver2 から出す</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 class="sec">はじめての方へ</h2>
+  <a class="guide" href="./guide.html">
+    <div><b>機体の作り方</b><br><span>パーツを置く → 整える → 形を作る → 確かめる → 出すまでの手順と、リアルパーツエディタの頭を使う手順、形づくりのコツ</span></div>
+    <div class="arrow">→</div>
+  </a>
+</main>
+</body>
 </html>
