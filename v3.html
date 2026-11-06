@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>機体エディタ Ver3</title>
+<title>リアルパーツエディタ</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root{--pw:380px;--bh:44px}
@@ -73,10 +73,10 @@
 </head>
 <body>
 <div id="bar">
-  <h1>機体エディタ Ver3</h1>
+  <h1>リアルパーツエディタ</h1>
   <div class="grp"><button id="undoBtn" disabled title="Ctrl+Z">元に戻す</button><button id="redoBtn" disabled title="Ctrl+Y">やり直す</button></div>
   <div class="grp"><span class="cap">見る</span><button data-v="iso">斜め</button><button data-v="front">正面</button><button data-v="top">上から</button><button data-v="side">横</button><button data-t="edges">稜</button></div>
-  <div class="grp"><button id="libBtn">保存した頭／体</button><button id="exportBtn">書き出し</button><button id="importBtn">読み込み</button><input id="importFile" type="file" accept=".json,application/json" style="display:none"></div>
+  <div class="grp"><button id="libBtn">保存した頭／体</button><button id="exportBtn">書き出し</button><button id="v2ExportBtn" title="今の頭の形を、機体エディタ Ver2 の頭（自分のパーツ ★）のファイルにする。Ver2 の「保存と読み込み」→「ファイルから開く」（または画面に落とす）で、頭だけ入れ替わる">Ver2 の頭として書き出し</button><button id="importBtn">読み込み</button><input id="importFile" type="file" accept=".json,application/json" style="display:none"></div>
   <div class="grp" id="samples"><span style="color:#aaa;align-self:center">見本</span><select id="sampleSel" class="txt"></select><button id="sampleOpen">開く</button></div>
   <div class="grp"><button id="v2Btn">Ver2 の機体</button></div>
   <div class="grp"><span style="color:#aaa;align-self:center">ひざの曲げ</span><input type="range" id="tbKnee" min="0" max="180" step="1" value="0" style="width:120px"><span id="tbKneeV" style="color:#aaa;align-self:center;min-width:3em">0°</span></div>
@@ -333,7 +333,9 @@ function basis(pl) {
 
 // ---- 三角形を集める ----
 class Tris {
-  constructor() { this.pos = []; this.col = []; this.lines = []; this.lid = []; this.part = 0; this.pid = []; }
+  constructor(glow = false) { this.pos = []; this.col = []; this.lines = []; this.lid = []; this.part = 0; this.pid = []; this.glow = glow; }
+  /* 凸の塊を 1 つ覚える（Ver2 の部品への書き出し用。描く物は変えない）：点の集まりか、平面の集まり（内側は n·p ≤ d）。色はその塊の色 */
+  solid(pts, col, planes) { SOLIDS.push({ T: this, part: this.part, glow: this.glow, col: col.clone ? col.clone() : new THREE.Color(col), pts: pts ? pts.map(q => q.clone()) : null, planes: planes ? planes.map(pl => ({ n: pl.n.clone(), d: pl.d })) : null }); }
   tri(a, b, c, col) { for (const p of [a, b, c]) { this.pos.push(p.x, p.y, p.z); this.col.push(col.r, col.g, col.b); this.pid.push(this.part); } }
   quad(a, b, c, d, col) { this.tri(a, b, c, col); this.tri(a, c, d, col); }
   poly(pts, col, edgeOk) { for (let i = 1; i < pts.length - 1; i++) this.tri(pts[0], pts[i], pts[i + 1], col); for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; if (!edgeOk || edgeOk(a, b)) { this.lines.push(a.x, a.y, a.z, b.x, b.y, b.z); this.lid.push(this.part); } } }
@@ -396,6 +398,7 @@ function clipFaces(planes, start) {
 // くり抜きは凸のまま行う：引かれた形を「削る面 i の外側で、面 0..i-1 の内側」という凸のかけらに分け、かけらごとに作る。
 // かけらどうしの境は中に隠れるので描かず、表に出る境の線も引かない
 let REG = [];   // 組み上がりの凸のかけら：{ part, planes }。build の始めに空にする
+let SOLIDS = [];   // 描いた形を凸の塊に分けたもの：{ T, part, glow, col, pts | planes }。Ver2 の部品への書き出し（v2HeadDoc）が使う。build の始めに空にする
 // 腰のひねり（Ver2 と同じ：上半身＝胴の骨 torso は、腹の関節の中心のまわりに回る。腰の骨 hips の部品は回らない）。build() が決める
 let PARTXF = null;
 // 見本の形の足（モノアイの機体の見本から）。つま先・かかとの横の形 [足首からの高さ, 前]、幅 [つま先の下, つま先の上, かかとの下, かかとの上]
@@ -421,10 +424,17 @@ function hullPlanes(pts) {
   }
   return out;
 }
+/** 面の色が分かれた塊の色：いちばん広い面積の色（Ver2 の部品は 1 つの塊に 1 色） */
+function mainCol(faces, col) {
+  const area = new Map();
+  for (const f of faces) { const c = col(f), k = c.getHexString(); let a = 0; for (let i = 1; i < f.pts.length - 1; i++) a += new V().crossVectors(f.pts[i].clone().sub(f.pts[0]), f.pts[i + 1].clone().sub(f.pts[0])).length(); const o = area.get(k) || { c, a: 0 }; o.a += a; area.set(k, o); }
+  let best = null; for (const o of area.values()) if (!best || o.a > best.a) best = o;
+  return best ? best.c : new THREE.Color(0xc3c9d2);
+}
 function crystal(T, planes, col0, cutters) {
   if (PARTXF && !PARTXF.hips.has(T.part)) { planes = planes.map(PARTXF.fn); if (cutters) cutters = cutters.map(C => C.map(PARTXF.fn)); }
   const col = typeof col0 === 'function' ? col0 : () => col0;
-  if (!cutters || !cutters.length) { const fs = clipFaces(planes); if (fs.length) REG.push({ part: T.part, planes }); for (const f of fs) T.poly(f.pts, col(f)); return fs.map(f => f.pts); }
+  if (!cutters || !cutters.length) { const fs = clipFaces(planes); if (fs.length) { REG.push({ part: T.part, planes }); T.solid(null, mainCol(fs, col), planes); } for (const f of fs) T.poly(f.pts, col(f)); return fs.map(f => f.pts); }
   const f0 = clipFaces(planes); if (!f0.length) return [];
   let pieces = [{ planes, internal: [], faces: f0 }];
   // かけらの点が全部、削る形のどれか 1 枚の平面の外にあれば、その削りには当たらない（切らずに分かる）
@@ -445,6 +455,7 @@ function crystal(T, planes, col0, cutters) {
   const out = [];
   for (const pc of pieces) {
     REG.push({ part: T.part, planes: pc.planes });
+    T.solid(null, mainCol(pc.faces.filter(f => !pc.internal.includes(f.pl)), col), pc.planes);
     const edgeOk = (a, b) => !pc.internal.some(pl => Math.abs(pl.n.dot(a) - pl.d) < 1e-6 && Math.abs(pl.n.dot(b) - pl.d) < 1e-6);
     for (const f of pc.faces) {
       if (pc.internal.includes(f.pl)) continue;   // かけらどうしの境：中に隠れる
@@ -475,6 +486,7 @@ function block(T, base, axis, e1, e2, w, h, L, tw, th, col) {
   const S = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
   const b = S.map(([s1, s2]) => base.clone().addScaledVector(e1, s1 * w / 2).addScaledVector(e2, s2 * h / 2));
   const t = S.map(([s1, s2]) => base.clone().addScaledVector(axis, L).addScaledVector(e1, s1 * w * tw / 2).addScaledVector(e2, s2 * h * th / 2));
+  T.solid([...b, ...t], col);
   T.poly(t, col);
   for (let i = 0; i < 4; i++) T.poly([b[i], b[(i + 1) % 4], t[(i + 1) % 4], t[i]], col);
   T.poly([b[3], b[2], b[1], b[0]], col);
@@ -483,6 +495,7 @@ function polyBlock(T, base, axis, e1, e2, k, r, L, taper, col) {
   if (new V().crossVectors(e1, e2).dot(axis) < 0) e1 = e1.clone().negate();
   const ring = (rr, off) => { const o = []; for (let i = 0; i < k; i++) { const a = (i + 0.5) / k * 2 * PI; o.push(base.clone().addScaledVector(axis, off).addScaledVector(e1, rr * Math.cos(a)).addScaledVector(e2, rr * Math.sin(a))); } return o; };
   const b = ring(r, 0), t = ring(r * taper, L);
+  T.solid([...b, ...t], col);
   T.poly(t, col);
   for (let i = 0; i < k; i++) T.poly([b[i], b[(i + 1) % k], t[(i + 1) % k], t[i]], col);
 }
@@ -493,7 +506,7 @@ function extrude(T, mount, u, v, w, outline, S, t, col, sink = 0) {
   const tris = THREE.ShapeUtils.triangulateShape(pts, []);
   const to3 = (q, off) => mount.clone().addScaledVector(u, q.x).addScaledVector(v, q.y).addScaledVector(w, off);
   const back = pts.map(q => to3(q, -t / 2)), front = pts.map(q => to3(q, t / 2));
-  for (const [a, b, c] of tris) { T.tri(front[a], front[b], front[c], col); T.tri(back[c], back[b], back[a], col); }
+  for (const [a, b, c] of tris) { T.tri(front[a], front[b], front[c], col); T.tri(back[c], back[b], back[a], col); T.solid([front[a], front[b], front[c], back[a], back[b], back[c]], col); }   /* 凹んだ輪郭も、三角形ごとの柱なら凸 */
   const n = pts.length;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
@@ -548,6 +561,7 @@ function ringBlock(T, base, axis, e1, e2, k, R, Ri, L, col) {
   const ob = ring(R, 0), of = ring(R, L), ib = ring(Ri, 0), iff = ring(Ri, L);
   for (let i = 0; i < k; i++) {
     const j = (i + 1) % k;
+    T.solid([ob[i], ob[j], of[i], of[j], ib[i], ib[j], iff[i], iff[j]], col);
     T.poly([ob[i], ob[j], of[j], of[i]], col);        // 外の側面
     T.poly([iff[i], iff[j], ib[j], ib[i]], col);      // 内の側面
     T.poly([of[i], of[j], iff[j], iff[i]], col);      // 前の輪
@@ -562,7 +576,7 @@ function facePlate(T, c, n, tU, tV, pts, t, col) {
   if (THREE.ShapeUtils.isClockWise(v2)) tris = tris.map(([a, b, cc]) => [cc, b, a]);
   const to3 = (q, off) => c.clone().addScaledVector(tU, q.x).addScaledVector(tV, q.y).addScaledVector(n, off);
   const back = v2.map(q => to3(q, 0)), front = v2.map(q => to3(q, t));
-  for (const [a, b, cc] of tris) T.tri(front[a], front[b], front[cc], col);
+  for (const [a, b, cc] of tris) { T.tri(front[a], front[b], front[cc], col); T.solid([front[a], front[b], front[cc], back[a], back[b], back[cc]], col); }
   const m = v2.length;
   for (let i = 0; i < m; i++) { const j = (i + 1) % m; T.poly([back[i], back[j], front[j], front[i]], col); }
 }
@@ -574,7 +588,7 @@ function taperPlate(T, c, axis, e1, e2, pts, L, taper, col) {
   if (THREE.ShapeUtils.isClockWise(v2)) tris = tris.map(([a, b, cc]) => [cc, b, a]);
   const to3 = (q, off, k) => c.clone().addScaledVector(e1, q.x * k).addScaledVector(e2, q.y * k).addScaledVector(axis, off);
   const back = v2.map(q => to3(q, 0, 1)), front = v2.map(q => to3(q, L, taper));
-  for (const [a, b, cc] of tris) { T.tri(front[a], front[b], front[cc], col); T.tri(back[cc], back[b], back[a], col); }
+  for (const [a, b, cc] of tris) { T.tri(front[a], front[b], front[cc], col); T.tri(back[cc], back[b], back[a], col); T.solid([front[a], front[b], front[cc], back[a], back[b], back[cc]], col); }
   const m = v2.length;
   for (let i = 0; i < m; i++) { const j = (i + 1) % m; T.poly([back[i], back[j], front[j], front[i]], col); }
 }
@@ -585,7 +599,7 @@ function loftPlate(T, c, n, tU, tV, ptsA, ptsB, t, col) {
   const v2 = ptsB.map(([a, b]) => new THREE.Vector2(a, b));
   let tris = THREE.ShapeUtils.triangulateShape(v2, []);
   if (THREE.ShapeUtils.isClockWise(v2)) tris = tris.map(([a, b, cc]) => [cc, b, a]);
-  for (const [a, b, cc] of tris) T.tri(Bp[a], Bp[b], Bp[cc], col);
+  for (const [a, b, cc] of tris) { T.tri(Bp[a], Bp[b], Bp[cc], col); T.solid([Bp[a], Bp[b], Bp[cc], A[a], A[b], A[cc]], col); }
   const m = A.length;
   for (let i = 0; i < m; i++) { const j = (i + 1) % m; T.poly([A[i], A[j], Bp[j], Bp[i]], col); }
 }
@@ -733,7 +747,8 @@ function head() {
     const onSplit = p => Math.abs(p.z) < 1e-6;
     for (const [extra, part] of [[{ n: new V(0, 0, -1), d: 0 }, PART.helmet], [{ n: new V(0, 0, 1), d: 0 }, PART.occ]]) {
       setPart(part);
-      for (const f of clipFaces([...hp, extra])) { if (f.pl === extra) continue; M.poly(f.pts, PC('helmet'), (a, b) => !(onSplit(a) && onSplit(b))); }
+      const hf = clipFaces([...hp, extra]); if (hf.length) M.solid(hf.flatMap(f => f.pts), PC('helmet'));
+      for (const f of hf) { if (f.pl === extra) continue; M.poly(f.pts, PC('helmet'), (a, b) => !(onSplit(a) && onSplit(b))); }
     }
   }
   window.__dbgHelmet = { planes: hp.map(p => [p.a, p.e, +p.d.toFixed(4)]), faces: helmetFaces.map(f => f.length) };
@@ -1070,6 +1085,7 @@ function head() {
         const outerT = i => ring(th(i), yTop, 0), outerB = i => ring(th(i), yBot, hB * flare);
         const innerT = i => ring(th(i), yTop, -P.muffT), innerB = i => ring(th(i), yBot, hB * flare - P.muffT);
         for (let i = 0; i < n; i++) {
+          M.solid([outerT(i), outerB(i), outerB(i + 1), outerT(i + 1), innerT(i), innerB(i), innerB(i + 1), innerT(i + 1)], col);
           quad(outerT(i), outerB(i), outerB(i + 1), outerT(i + 1));
           quad(innerT(i + 1), innerB(i + 1), innerB(i), innerT(i));
           quad(innerT(i), outerT(i), outerT(i + 1), innerT(i + 1));
@@ -1165,6 +1181,7 @@ function tubeSeg(S, base, axis, r, L, col, k = 8) {
   const e1 = Math.abs(axis.y) < 0.9 ? new V().crossVectors(UP, axis).normalize() : new V(1, 0, 0), e2 = new V().crossVectors(axis, e1).normalize();
   const ring = off => { const o = []; for (let i = 0; i < k; i++) { const a = (i + 0.5) / k * 2 * PI; o.push(S.p(base.clone().addScaledVector(axis, off).addScaledVector(e1, r * Math.cos(a)).addScaledVector(e2, r * Math.sin(a)))); } return S.mirror ? o.reverse() : o; };
   const b0 = ring(0), t0 = ring(L);
+  M.solid([...b0, ...t0], col);
   M.poly(t0, col); M.poly(b0.slice().reverse(), col);
   for (let i = 0; i < k; i++) M.poly([b0[i], b0[(i + 1) % k], t0[(i + 1) % k], t0[i]], col);
 }
@@ -2713,6 +2730,7 @@ function dropHeadParts() {
     T.pos = pos; T.col = col; T.pid = pid; T.lines = lines; T.lid = lid;
   }
   REG = REG.filter(r => !off.has(r.part));
+  SOLIDS = SOLIDS.filter(r => !off.has(r.part));
 }
 // ---- バックパックの本体：付け方は Ver2 の背中の部品（parts/back）と同じ。胴体の背中の真ん中に、前の面を背中へ差し込んで付ける。
 // 上の端は胴体の上の端から「上の端の下がり」だけ下。肩アーマーの振れる所（肩のまわり）へは出さない（幅は胴体の幅の内）。
@@ -2790,6 +2808,65 @@ function buildPack() {
 // ---- 頭を胴体に載せる：胴体の上の端（頭の幅の内で一番高い所、その高さの前後の真ん中）に、頭の首のつなぎ目を合わせる。頭は下にある一番高い物に載る
 // 頭の「上下のずれ」「前後のずれ」はここからのずれ。胴体が無ければ頭はそのまま ----
 let GXF = {}, NECK_BASE = null;
+/** 覚えた塊を、点の写し f（拡大と移動だけ）で動かす。平面は、面の上の 1 点を写して d を決め直す（向きは拡大と移動では変わらない） */
+function moveSolid(r, f) {
+  if (r.pts) for (const q of r.pts) f(q);
+  if (r.planes) for (const pl of r.planes) { const q = f(pl.n.clone().multiplyScalar(pl.d)); pl.d = pl.n.dot(q); }
+}
+// ---- 「リアルパーツエディタ」の頭を、機体エディタ Ver2 の頭の部品（自分のパーツ ★、部位「頭蓋」）にする ----
+// 書き出すのは今の形の写し：つまみは持って行かない（直す時はここで直して、もう一度書き出す）。首はここの物を入れない（Ver2 の首を使う）。
+// Ver2 の頭の座標：標準の殻を大きさ 1 で置いた時の寸法（xsasm-random.js headDims）に合わせる。高さ 0.22、下の端 -0.074、前後の真ん中 (0.152 + -0.142) / 2。
+// 前は両方とも +z。体に載せる大きさは Ver2 が決める（殻の高さを頭の骨の 0.3 に、頭の大きさの調整を掛ける）
+const V2_HEAD = { h: 0.22, chin: -0.074, zMid: (0.152 - 0.142) / 2 };
+const r7 = v => Math.round(v * 1e7) / 1e7;
+/** 頭の部位（首を除く）と、その凸の塊：{ r, planes, corners } */
+function headSolids() {
+  const hn = TREE.children.find(n => n.id === 'head'), head = partsUnder(hn); head.delete(PART.neck);
+  const list = SOLIDS.filter(r => head.has(r.part) && (r.T === M || r.T === G));
+  return { head, solids: list.map(r => {
+    let planes = r.planes, pts = r.pts;
+    if (pts) { const u = []; for (const q of pts) if (!u.some(o => o.distanceToSquared(q) < 1e-12)) u.push(q); pts = u; planes = u.length >= 4 ? hullPlanes(u) : []; }
+    const fs = planes.length >= 4 ? clipFaces(planes) : [];
+    return { r, planes, corners: fs.flatMap(f => f.pts) };
+  }).filter(o => o.corners.length) };
+}
+/** 確かめ：描いた頭の三角形の真ん中が、どれかの塊の中（面の上も）にあるか。外れた三角形の数と部位 */
+window.__v2HeadCheck = () => {
+  const { head, solids } = headSolids(); let tris = 0, glowTris = 0; const miss = {};
+  for (const T of [M, G]) for (let i = 0; i < T.pid.length; i += 3) {
+    if (!head.has(T.pid[i])) continue; tris++; if (T === G) glowTris++;
+    const c = new V(); for (let k = 0; k < 3; k++) c.add(new V(T.pos[3 * (i + k)], T.pos[3 * (i + k) + 1], T.pos[3 * (i + k) + 2])); c.multiplyScalar(1 / 3);
+    if (!solids.some(o => o.planes.every(pl => pl.n.dot(c) <= pl.d + 2e-4))) miss[T.pid[i]] = (miss[T.pid[i]] || 0) + 1;
+  }
+  const bx = new THREE.Box3(); for (const o of solids) for (const q of o.corners) bx.expandByPoint(q);
+  return { tris, glowTris, glowSolids: solids.filter(o => o.r.glow).length, solids: solids.length, miss, box: [bx.min.toArray(), bx.max.toArray()], partNames: Object.fromEntries(Object.entries(PART).map(([k, v]) => [v, k])) };
+};
+function v2HeadDoc(name) {
+  const { solids } = headSolids();
+  if (!solids.length) return null;
+  const b = new THREE.Box3(); for (const o of solids) for (const q of o.corners) b.expandByPoint(q);
+  const k = V2_HEAD.h / (b.max.y - b.min.y), zc = (b.min.z + b.max.z) / 2;
+  // 頭の座標の点 p' = k (p − (0, min.y, zc)) + (0, chin, zMid)。平面 n·p ≤ d は n·p' ≤ k (d − n·o) + n·o'
+  const o0 = new V(0, b.min.y, zc), o1 = new V(0, V2_HEAD.chin, V2_HEAD.zMid);
+  // 色の役：Ver2 は色でなく役で塗る（機体の塗りで主装甲・副装甲・差し色…を塗り替える）。ここの色の組の何番の色かで役を決める。
+  // 目（目の色・光る目）と前立・角の金（fin）は Ver2 の塗りに替えず、この色のまま（role keep）。自分で選んだ色は Ver2 が明るさと鮮やかさで振り分ける
+  const ROLE_OF = { main: 'main', face: 'main', sub: 'sub', accent: 'accent', dark: 'frame', fin: 'keep', eye: 'keep' }, roleByHex = {};
+  for (const k in ROLE_OF) if (COL[k] && !(COL[k].getHexString() in roleByHex)) roleByHex[COL[k].getHexString()] = ROLE_OF[k];
+  const eyeHex = new Set([P.twinColor, P.monoColor].filter(Boolean).map(c => new THREE.Color(c).getHexString()));
+  const roleOf = r => { const h = r.col.getHexString(); return eyeHex.has(h) || (r.glow && (r.part === PART.twin || r.part === PART.mono)) ? 'keep' : roleByHex[h]; };
+  const pieces = solids.map((o, i) => ({
+    name: `塊${i + 1}`, kind: 'hull', bevel: 0, bevelSegs: 1, pos: [0, 0, 0],
+    color: '#' + o.r.col.getHexString(), ...(o.r.glow ? { glow: true } : {}), ...(roleOf(o.r) ? { role: roleOf(o.r) } : {}),
+    planes: o.planes.map(pl => [r7(pl.n.x), r7(pl.n.y), r7(pl.n.z), r7(k * (pl.d - pl.n.dot(o0)) + pl.n.dot(o1))]),
+  }));
+  const id = 'h·u·real·' + Date.now().toString(36);
+  const sz = b.getSize(new V()).multiplyScalar(k);
+  // 首の入る所（殻の下面）は頭の下の端。目の溝・口もと・額は標準の殻の値のまま（Ver2 で目やマスクを足す時の目安）
+  const def = { id, name: name || 'リアルの頭', cat: '頭蓋', size: [r7(sz.x), r7(sz.y), r7(sz.z)], pieces, user: true, half: 'head', base: 'headshell', from: 'real',
+    face: { under: [V2_HEAD.chin + 0.004, 0] } };
+  return { format: 'xs-unit-part', version: 2, half: 'head', items: [{ part: id, mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] }], userParts: { [id]: def } };
+}
+window.__v2HeadDoc = v2HeadDoc;
 function seatHead() {
   NECK_BASE = null;
   if (!P.headOn || !P.g_torsoOn || typeof TREE !== 'object' || !ANCHOR.neckTop) return;
@@ -2809,6 +2886,7 @@ function seatHead() {
     for (let i = 0; i < Tr.lid.length; i++) if (head.has(Tr.lid[i])) for (const o of [0, 3]) { Tr.lines[6 * i + o] += d.x; Tr.lines[6 * i + o + 1] += d.y; Tr.lines[6 * i + o + 2] += d.z; }
   }
   for (const r of REG) if (head.has(r.part)) r.planes = r.planes.map(pl => ({ ...pl, d: pl.d + pl.n.dot(d) }));
+  for (const r of SOLIDS) if (head.has(r.part)) moveSolid(r, q => q.add(d));
   NECK_BASE = { T, top: A.clone().add(d) };
 }
 // 首：胴体の上の端から（中へ 0.2 埋めて）頭のつなぎ目の 0.05 上までの、上から見た多角形の筒（断面は「首」の欄で描く形）。頭を上下・前後・大きさで動かしても付いて行く
@@ -2845,6 +2923,7 @@ function applyGroupXf() {
       for (let i = 0; i < T.pid.length; i++) if (set.has(T.pid[i])) xf(T.pos, 3 * i);
       for (let i = 0; i < T.lid.length; i++) if (set.has(T.lid[i])) { xf(T.lines, 6 * i); xf(T.lines, 6 * i + 3); }
     }
+    for (const r of SOLIDS) if (set.has(r.part)) moveSolid(r, q => q.set(c.x + (q.x - c.x) * sc, c.y + (q.y - c.y) * sc + y, c.z + (q.z - c.z) * sc + z));
   };
   walk(TREE);
 }
@@ -3124,9 +3203,9 @@ let group = null;
 function build() {
   clearHL();
   if (group) { scene.remove(group); group.traverse(o => o.geometry && o.geometry.dispose()); }
-  rnd = rng(P.seed * 7919 + 17); JT = {}; REG = [];
+  rnd = rng(P.seed * 7919 + 17); JT = {}; REG = []; SOLIDS = [];
   COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed); grpColors();
-  M = new Tris(); G = new Tris();
+  M = new Tris(); G = new Tris(true);
   SKIN.on.value = P.texOn === false ? 0 : 1; SKIN.scale.value = (P.texM || 2.5) / 6;
   // 腰のひねり：腹の関節の中心（体の中心、上端からの下がり wsY・前後 wsZ）のまわりに、ゲームの胴の骨と同じ回し方（Euler YXZ）。
   // 腰の骨に付く物（腰・股の塊・スカート・腹の関節の柱）は回らず、ほか（胸・腹・柱・肩と腕・頭・パイプ）は回る（Ver2：腹は上半身の部品、腹の関節の柱は腰の部品）
@@ -3138,7 +3217,7 @@ function build() {
   }
   let nf;
   if (P.headOn) nf = head();
-  else { const km = M, kg = G; M = new Tris(); G = new Tris(); nf = head(); M = km; G = kg; }
+  else { const km = M, kg = G; M = new Tris(); G = new Tris(true); nf = head(); M = km; G = kg; }
   dropHeadParts();
   drawHeadTpls();
   body();
@@ -3635,8 +3714,8 @@ function probeTris(mut) {   // 値を一時に変えて組み、三角形だけ�
   try {
     mut();
     rnd = rng(P.seed * 7919 + 17); JT = {}; COL = palette(P.colorSeed); PAINT = paintMap(P.paintSeed); grpColors();
-    M = new Tris(); G = new Tris();
-    if (P.headOn) head(); else { const km = M, kg = G; M = new Tris(); G = new Tris(); head(); M = km; G = kg; }
+    M = new Tris(); G = new Tris(true);
+    if (P.headOn) head(); else { const km = M, kg = G; M = new Tris(); G = new Tris(true); head(); M = km; G = kg; }
     body();
     applyGroupXf();
     out = { m: { pos: M.pos, pid: M.pid }, g: { pos: G.pos, pid: G.pid } };
@@ -4207,6 +4286,14 @@ document.getElementById('exportBtn').onclick = () => {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `head-${P.seed}-${P.colorSeed}.json`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
+document.getElementById('v2ExportBtn').onclick = () => {
+  if (!P.headOn) { document.getElementById('err').textContent = '頭を出していないので書き出せません（右の一覧で「頭」を出す）'; return; }
+  const nm = prompt('Ver2 のカタログに出す名前', 'リアルの頭'); if (nm === null) return;
+  const doc = v2HeadDoc(nm.trim()); if (!doc) { document.getElementById('err').textContent = '頭の形がありません'; return; }
+  const blob = new Blob([JSON.stringify(doc)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(nm.trim() || 'head').replace(/[\/:*?"<>|]/g, '_')}.xsunit-head.json`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
 document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
 document.getElementById('importFile').addEventListener('change', e => {
   const f = e.target.files && e.target.files[0]; if (!f) return;
@@ -4353,7 +4440,7 @@ for (const el of document.querySelectorAll('input[type=color][id^=g_]')) el.addE
 for (const b of document.querySelectorAll('button.wb')) b.onclick = () => { const k = b.dataset.w, w = WORD[k]; P[k] = Math.min(w.max, Math.max(w.min, +(P[k] + w.step * +b.dataset.d).toFixed(6))); save(); build(); syncUI(); };
 for (const pre of COLOR_PRES.slice(6)) { const el = document.getElementById(pre + 'Color'); if (el) el.addEventListener('input', e => { P[pre + 'Color'] = e.target.value; save(); build(); }); }
 if (document.getElementById('chestEyeColor')) document.getElementById('chestEyeColor').addEventListener('input', e => { P.chestEyeColor = e.target.value; save(); build(); });
-// ガチャ：その欄のつまみを乱数で引き直す。戻すで 1 つ前へ
+// くじ：その欄のつまみを乱数で引き直す。戻すで 1 つ前へ
 const GACHA_HIST = { crest: [], horn: [] };
 const CREST_KEYS = ['Kind', 'Size', 'T', 'Y', 'Z', 'Fold', 'Split', 'RotX', 'RotY', 'VOpen'];
 function gacha(pre) {
