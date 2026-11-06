@@ -20,7 +20,7 @@ import { rotMatrix } from './xsasm.js';
 import { mirrorOf, randomHead, placementsFor, headDims } from './xsasm-random.js';
 import { PARTS as HEAD_RAW } from './xsasm-parts.js';
 import { f1HeadSample } from './parts/index.js';
-import { HP, HEAD, FREE, isHead, rawHead, asHead, halfOf, registerUser, unregisterUser, headShell as headShellIn, headPlace as headPlaceIn, unitParts, registerUnit } from './unitparts.js';
+import { HP, HEAD, FREE, isHead, rawHead, asHead, halfOf, registerUser, unregisterUser, headShell as headShellIn, headPlace as headPlaceIn, unitParts, registerUnit, DECO, DECO_CAT, refreshDecos } from './unitparts.js';
 import { XS, VEHICLES, UNIT_M, ROLES, DEFAULTS, shipSeat, gameToEditor } from './xsengine.js';
 import { initAi } from './v2-ai.js';
 import { initShare } from './v2-share.js';
@@ -91,7 +91,7 @@ function dropSameCat(def) {
 }
 // 塗り（paint.js）：機体が持つ色の組とビビッド
 let paint = DEFAULT_PAINT();
-const placeOf = def => (def.free ? { mov: [0, 0, 0], pair: false } : { head: () => ({ mov: [0, 0, 0], pair: false }), upper: placementOfUpper, back: d => placementOfBack(d, items), arm: placementOfArm, leg: placementOfLeg, lower: placementOf }[halfOf(def.id)](def));
+const placeOf = def => (def.free ? { mov: [0, 0, 0], pair: false } : { head: () => ({ mov: [0, 0, 0], pair: false }), weapon: () => ({ mov: [0, 0, 0], pair: false }), upper: placementOfUpper, back: d => placementOfBack(d, items), arm: placementOfArm, leg: placementOfLeg, lower: placementOf }[halfOf(def.id)](def));
 /** 寸法の調整で上半身と一緒に動く部分（上半身・背中と腕） */
 const withUpper = id => ['upper', 'back', 'arm'].includes(halfOf(id));
 
@@ -162,7 +162,7 @@ const MATS = new Map();
 // 光る部品（glow）は自分の色で光り、透ける部品（opacity）は奥が見える（光の翼・オーラ・リボン・虫の羽）
 const material = (pc, def) => {
   // 自由な部品（機体エディタの形式）は、塗りではなく自分の色・質感。光るかどうかは名前からも決まる
-  const free = !!def?.free, glow = free ? !!isGlowPart(pc) : !!pc.glow;
+  const free = !!(def?.free || def?.deco), glow = free ? !!isGlowPart(pc) : !!pc.glow;   // （武器の飾りも、武器の色・質感のまま）
   const c = free && !pc.role ? pc.color ?? '#c3c9d2' : colorOf(pc, def?.cat ?? '', paint), k = `${c}|${glow ? 1 : 0}|${pc.opacity ?? 1}|${free ? `${pc.metal}/${pc.rough}` : ''}`;
   if (!MATS.has(k)) MATS.set(k, new THREE.MeshStandardMaterial({ color: c, metalness: free ? pc.metal ?? 0.55 : glow ? 0 : 0.45, roughness: free ? pc.rough ?? 0.38 : 0.5, side: THREE.DoubleSide,
     ...(glow ? { emissive: c, emissiveIntensity: 0.85 } : {}), ...(pc.opacity != null ? { transparent: true, opacity: pc.opacity, depthWrite: false } : {}) }));
@@ -602,6 +602,7 @@ function rebuild() {
 function rebuildMain() {
   applyKind();
   seatWeapons();
+  refreshDecos();
   for (const g of groups) { g.parent?.remove(g); for (const e of g.userData.extra.values()) e.parent?.remove(e); }
   groups = items.map((it, i) => { const g = groupOf(it, i); holderOf(it).add(g); for (const [b, e] of g.userData.extra) holderFor(b, it).add(e); return g; });
   placeArmJoints();
@@ -940,6 +941,14 @@ let addOnly = false;
 function placeNew(def) { const n = items.length; addOnly = true; try { place(def); } finally { addOnly = false; } for (const it of items.slice(n)) it.tmp = true; persist(); }
 /** 仮に置いたものを外す */
 const dropTmp = () => { const n = items.length; items = items.filter(it => !it.tmp); if (items.length !== n) selected = -1; };
+/** 武器の飾りを置く（issue #265）：いくつでも。握る所を背中の右寄りに、骨は胴（銃身は下を向く）。そこから「付ける骨」とつまみで好きな所へ。
+ *  手に持つ武器とは別のもの：持っている武器は入れ替えない */
+function placeDeco(def) {
+  const at = [0.12, round(S.neck.y - 0.12 + adj.up, 4), round(-S.chest.hd - 0.06, 4)];
+  const same = m => items.some(it => it.part === def.id && Math.abs(it.mov[0] - m[0]) < 1e-6 && Math.abs(it.mov[1] - m[1]) < 1e-6 && Math.abs(it.mov[2] - m[2]) < 1e-6);
+  for (let k = 0; k < 20 && same(at); k++) at[1] = round(at[1] - 0.04, 4);
+  addItems([{ part: def.id, bone: 'torso', mov: at, rot: [0, 0, 0], scal: [1, 1, 1] }]);
+}
 /** 自由な部品を置く。頭まるごと：今の頭と入れ替えて、首の付け根の上へ（首のある頭は、首が襟の中へ入る）。自由な機体：そのままの位置に足す */
 function placeFree(def) {
   if (def.tab === 'weapon') {   // 手持ちの武器：今の武器と入れ替えて、右手へ（置き場所は seatWeapons が決める）
@@ -958,6 +967,7 @@ function placeFree(def) {
 }
 function place(def) {
   if (busy()) return;
+  if (def.deco) { placeDeco(def); return; }
   if (def.free) { placeFree(def); return; }
   if (isHead(def.id)) { placeHeadPart(def); return; }
   // 背中：バックパックと翼は一緒に付けられる（Ver2 から。前の画面は、どちらか片方だった）。バックパック・翼そのものはそれぞれ 1 つだけで、
@@ -1045,7 +1055,7 @@ const catButtons = new Map();
 const TABS = [['head', '頭', HEAD], ['upper', '上半身', UPPER], ['back', '背中', BACK], ['arm', '腕', ARM], ['lower', '下半身', LOWER], ['leg', '脚', LEG], ['weapon', '武器', []], ['free', '取り込み', []]];
 /** そのタブに並べるパーツ：頭のタブには「頭まるごと」（機体エディタの機体から取り出した頭）、取り込みのタブには自由な機体 */
 // 脚のタブには自由なパーツの「キャタピラの車体」、背中のタブには「大砲」も（目次に入っていたのに、どのタブにも出ていなかった。issue #185）
-const tabList = (half, list) => (half === 'head' ? [...list.filter(d => !d.retired), ...FREE.filter(d => d.tab === 'head')] : half === 'weapon' ? FREE.filter(d => d.tab === 'weapon') : half === 'free' ? FREE.filter(d => !d.tab) : [...list, ...FREE.filter(d => d.tab === half)]);
+const tabList = (half, list) => (half === 'head' ? [...list.filter(d => !d.retired), ...FREE.filter(d => d.tab === 'head')] : half === 'weapon' ? [...FREE.filter(d => d.tab === 'weapon'), ...DECO] : half === 'free' ? FREE.filter(d => !d.tab) : [...list, ...FREE.filter(d => d.tab === half)]);
 let tab = 'head';
 function showTab(t) {
   tab = t;
@@ -1063,13 +1073,13 @@ function renderCatalog() {
     const sec = document.createElement('div'); sec.className = 'half'; sec.dataset.half = half; sec.hidden = half !== tab; el.appendChild(sec);
     if (half === 'weapon') {   // 手持ちの武器：名前の決まりと、新しく作るボタン
       const top = document.createElement('div'); top.className = 'hint'; top.style.marginTop = '8px';
-      top.innerHTML = '右手に持つ武器。押すと持つ（今の武器と入れ替わる）。腕の長さや手を変えても、手に付いていく。「直す」でパーツエディタ。<br>ブロックの名前で、ゲームでの扱いが決まる：「ライフル」「銃」「マガジン」「マズル」＝銃（格闘・投げる間は隠れる）、「バズーカ」＝バズーカ（選んだときだけ出る）、「マズル」「銃口」＝弾の出る所。<br>機体が武器を持っていなければ、書き出すときに陣営の強襲の 1 式を持たせる。<div class="row" style="margin-top:6px"><button class="small" id="bNewWeapon" style="flex:1">新しい武器を作る</button></div>腕を下ろした姿勢では、銃は下を向く（腕を前へ上げると前を向く）。';
+      top.innerHTML = '右手に持つ武器。押すと持つ（今の武器と入れ替わる）。腕の長さや手を変えても、手に付いていく。「直す」でパーツエディタ。<br>ブロックの名前で、ゲームでの扱いが決まる：「ライフル」「銃」「マガジン」「マズル」＝銃（格闘・投げる間は隠れる）、「バズーカ」＝バズーカ（選んだときだけ出る）、「マズル」「銃口」＝弾の出る所。<br>機体が武器を持っていなければ、書き出すときに陣営の強襲の 1 式を持たせる。<div class="row" style="margin-top:6px"><button class="small" id="bNewWeapon" style="flex:1">新しい武器を作る</button></div>腕を下ろした姿勢では、銃は下を向く（腕を前へ上げると前を向く）。<br>下の「武器の飾り」は、同じ武器の形を見た目だけの部品として足す（いくつでも。腰・背中・腕など好きな骨に付けて、動かす・回す・大きさを変える。撃つ所・強さは変わらない）。';
       sec.appendChild(top);
       top.querySelector('#bNewWeapon').onclick = newWeapon;
     }
     if (half === 'free' && !list.length) sec.innerHTML = '<div class="hint" style="margin-top:8px">機体エディタ（1）の形式の機体を開くと、ここに並ぶ。「開く」→「機体エディタ 1 に残っているもの」か、ファイルから</div>';
     for (const cat of [...new Set(list.map(p => p.cat))]) {
-      const h = document.createElement('h2'); h.innerHTML = `${cat}<i>${cat === '頭まるごと' ? '押すと、今の頭と入れ替わる' : cat === WEAPON_CAT ? '押すと、右手に持つ（今の武器と入れ替わる）' : cat === '自由な機体' ? '押すと、今の機体に足して置く' : isMulti({ cat }) ? 'いくつでも（押すと増える）' : cat === TRACK_CAT ? '1 つ（押すと脚と入れ替わる）' : '<span class="oneLabel">1 つ（押すと入れ替わる）</span>'}</i>`; sec.appendChild(h);
+      const h = document.createElement('h2'); h.innerHTML = `${cat}<i>${cat === '頭まるごと' ? '押すと、今の頭と入れ替わる' : cat === WEAPON_CAT ? '押すと、右手に持つ（今の武器と入れ替わる）' : cat === DECO_CAT ? 'いくつでも。見た目だけ（撃てない・当たりも強さも変わらない）。押すと背中に足す。「付ける骨」とつまみで好きな所へ' : cat === '自由な機体' ? '押すと、今の機体に足して置く' : isMulti({ cat }) ? 'いくつでも（押すと増える）' : cat === TRACK_CAT ? '1 つ（押すと脚と入れ替わる）' : '<span class="oneLabel">1 つ（押すと入れ替わる）</span>'}</i>`; sec.appendChild(h);
       const grid = document.createElement('div'); grid.className = 'cat'; sec.appendChild(grid);
       for (const def of list.filter(p => p.cat === cat)) {
         const b = document.createElement('button');
@@ -1078,7 +1088,7 @@ function renderCatalog() {
         b.title = def.name + (placeOf(def).pair ? '（左右の対）' : '');
         b.onclick = () => place(def);
         // 自分のパーツ（★）：カタログから直接、直す・消す（機体に置かなくてもできる）
-        if (def.user) {
+        if (def.user && !def.deco) {   // （武器の飾りは、元の武器を直す・消すと一緒に変わる）
           const ops = document.createElement('span'); ops.className = 'ops';
           ops.innerHTML = '<span class="edit" title="このパーツをパーツエディタで開いて直す">直す</span><span class="del" title="このパーツをカタログから消す">消す</span>';
           ops.querySelector('.edit').onclick = e => { e.stopPropagation(); if (busy()) return; selected = -1; gizmo.detach(); PE.startDef(def); };
@@ -1151,7 +1161,7 @@ $('#bApply').onclick = () => {
   } catch (e) { note('読めません：' + e.message, true); }
 };
 /** 機体の全部：置いたパーツ・寸法の調整・塗りと、使っている自分のパーツ（ほかのブラウザ・道具でも読めるように） */
-const usedUser = list => Object.fromEntries(Object.entries(userParts).filter(([id]) => list.some(it => it.part === id)));
+const usedUser = list => Object.fromEntries(Object.entries(userParts).filter(([id]) => list.some(it => it.part === id || byId[it.part]?.src === id)));   // （武器の飾りは、元の自分の武器を持っていく：読んだ側で飾りが作られる）
 const unitDoc = () => ({ format: 'xs-unit', version: 2, ...(unitName ? { name: unitName } : {}), items: kept(), adj, paint, userParts: usedUser(kept()) });
 const HALF_NAME = { head: '頭', upper: '上半身', back: '背中', arm: '腕', lower: '下半身', leg: '脚' };
 /** 部位だけ：その部位の置いたパーツ（と、そこで使っている自分のパーツ） */
@@ -1382,7 +1392,7 @@ $('#bPaintGrid').onclick = () => {
 // ---- ゲーム用に書き出す・チェックだけする：xsengine.js（骨・LOD・材質を付けた .glb を作る、つながりと関節を調べる）を使う ----
 // 手持ちの武器はこの画面に無いので、陣営ごとの武器の 1 式（samples/weapons-a.json・weapons-b.json：いまの強襲の銃とバズーカ）を右手に持たせる
 /** Claws (parts whose name starts with 爪): hands that hold nothing, so no sample gun or bazooka is put in them */
-const clawHands = () => kept().some(it => (byId[it.part]?.pieces ?? []).some(pc => /^爪/.test(pc.name ?? '') && !pc.blockout));
+const clawHands = () => kept().some(it => !byId[it.part]?.deco && (byId[it.part]?.pieces ?? []).some(pc => /^爪/.test(pc.name ?? '') && !pc.blockout));
 async function editorWorker() { await XS.ready(); return XS; }
 /** 関節のチェックの進み具合を out に出す（onStep(done, total)。チェックの間もページは動く） */
 const stepNote = (out, what) => (done, total) => { out.textContent = `${what}（姿勢 ${done} / ${total}）`; };
@@ -1966,7 +1976,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '2144f6a';
+const BUILD = '4668c47';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

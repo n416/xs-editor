@@ -12,7 +12,7 @@ import { LEG, legById } from './parts/leg/index.js';
 import { PARTS as HEAD_RAW, byId as headRawById } from './xsasm-parts.js';
 import { rotMatrix } from './xsasm.js';
 import { shapesOf, isSub, freeShapes } from './partgeo.js';
-import { freeParts, freeDef } from './freeparts.js';
+import { freeParts, freeDef, isGlowPart } from './freeparts.js';
 import { FREE_SETS } from './parts/free/artillery.js';
 import { FREE_SETS as EYE_SETS } from './parts/free/eyes.js';
 import * as THREE from 'three';
@@ -31,13 +31,38 @@ export const isHead = id => String(id).startsWith(HP);
 export const rawHead = it => ({ ...it, part: it.part.slice(HP.length) });
 export const asHead = it => ({ ...it, part: HP + it.part });
 /** どの部分か。自由な部品（def.free）は 'free'、頭まるごと（def.tab = 'head'）は 'head' */
-export const halfOf = id => (isHead(id) ? 'head' : byId[id]?.free ? byId[id].tab ?? 'free' : halfOf0(id));
+export const halfOf = id => (isHead(id) ? 'head' : byId[id]?.free ? byId[id].tab ?? 'free' : byId[id]?.deco ? 'weapon' : halfOf0(id));
 /** 自由な部品（機体エディタの形式の機体・頭まるごと）の目次 */
 export const FREE = [], freeById = {};
+
+// ---- 武器の飾り（issue #265、テスター 静流りおさん 2026-11-06「武器のモデル位置を自由変更したい。見た目のモデルとして使いたい」）----
+// 手持ちの武器（def.tab = 'weapon'）を目次に入れると、その写しを「武器の飾り」（id wd·<武器の id>、def.deco）としても入れる。
+// 飾りは見た目だけ：撃つ所・手の点・当たり・ゲームの強さには関わらない。ブロックの付く骨・回転の中心・銃の印・武器の口は外し（付ける骨は置いた部品が持つ）、
+// 握る所（武器を作ったときの右手の中心 def.hand）が部品の原点。色は武器の色のまま（役 keep：塗りの色にしない）。関節のめり込み・機体の高さにも数えない
+export const DECO = [], decoById = {};
+export const DECO_PRE = 'wd·', DECO_CAT = '武器の飾り';
+const r5 = v => Math.round(v * 1e5) / 1e5;
+const decoSig = w => JSON.stringify([w.pieces, w.hand ?? null]);
+function decoPieces(w) {
+  const h = w.hand ?? [0, 0, 0];
+  return w.pieces.filter(pc => !pc.blockout && pc.kind !== 'mesh').map(pc => {
+    const { bone, pivot, gun, mouth, ...rest } = structuredClone(pc), tf = rest.tf ?? {};
+    return { ...rest, tf: { ...tf, p: (tf.p ?? [0, 0, 0]).map((v, k) => r5(v - h[k])) }, pivot: 'none', gun: false, glow: !!isGlowPart(pc), noHit: true, noHeight: true, role: pc.role ?? 'keep' };
+  });
+}
+function registerDeco(w) {
+  const def = { id: DECO_PRE + w.id, name: w.name, cat: DECO_CAT, size: [1, 1, 1], deco: true, src: w.id, half: 'deco', user: !!w.user, sig: decoSig(w), pieces: decoPieces(w) };
+  const old = decoById[def.id], k = old ? DECO.indexOf(old) : -1;
+  if (k >= 0) DECO[k] = def; else DECO.push(def);
+  decoById[def.id] = def; byId[def.id] = def;
+}
+/** 自分の武器をパーツエディタで直した後：その飾りの形を作り直す（置いた飾りも、次に組み直した時から新しい形） */
+export function refreshDecos() { for (const d of DECO) { const w = byId[d.src]; if (w?.user && d.sig !== decoSig(w)) { d.pieces = decoPieces(w); d.sig = decoSig(w); } } }
 
 // ---- 自分のパーツを目次に入れる・外す ----
 const LISTS = { free: [FREE, freeById], lower: [LOWER, lowerById], upper: [UPPER, upperById], back: [BACK, backById], arm: [ARM, armById], leg: [LEG, legById] };
 export function registerUser(def) {
+  if (def.tab === 'weapon') registerDeco(def);
   byId[def.id] = def;
   if (def.half === 'head') {   // 頭：頭の組み立ての目次（h· の無い id）にも入れる。ブロックの並びは同じものを指す
     if (!HEAD.includes(def)) HEAD.push(def);
@@ -48,6 +73,7 @@ export function registerUser(def) {
 export function unregisterUser(id) {
   const def = byId[id]; if (!def?.user) return;
   delete byId[id];
+  { const d = decoById[DECO_PRE + id]; if (d) { delete decoById[d.id]; delete byId[d.id]; DECO.splice(DECO.indexOf(d), 1); } }
   if (def.half === 'head') { const raw = id.slice(HP.length), r = headRawById[raw]; delete headRawById[raw]; for (const [list, o] of [[HEAD, def], [HEAD_RAW, r]]) { const k = list.indexOf(o); if (k >= 0) list.splice(k, 1); } }
   else { const [list, map] = LISTS[def.half] ?? LISTS.lower; delete map[id]; const k = list.indexOf(def); if (k >= 0) list.splice(k, 1); }
 }
@@ -75,6 +101,7 @@ export function headPlace(items, adj = ADJ0) {
 export function unitParts(doc, { shaped = false } = {}) {
   // 手持ちの武器（def.tab = 'weapon'）は、部品の並びのいちばん前へ：武器の「引く」部品（銃口の穴など）は自分より前の部品だけを削るので、体を削らない
   // 自分のモデルとして書き出す武器（def.shape：ゲームでの形の名前。ヒートアックスなど）は、機体のモデルに入れない（shaped: true のときだけ入れる：その武器だけを書き出すとき）
+  refreshDecos();
   const all = (doc.items ?? []).filter(it => byId[it.part] && (shaped || !byId[it.part].shape)), held = it => byId[it.part].tab === 'weapon';
   const items = [...all.filter(held), ...all.filter(it => !held(it))], adj = { ...ADJ0, ...(doc.adj ?? {}) }, paint = doc.paint ?? null;
   const team = !!paint?.team && !(paint.vivid?.colors?.length);

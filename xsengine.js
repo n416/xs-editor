@@ -480,7 +480,10 @@ function lodPieces(level) {
   const simple = p => ({ ...p, bevel: 0, bevelSegs: 1, cornerSegs: 1, corner: Math.min(p.corner, 0.01), segments: Math.min(p.segments, 8), _geo: null, _geoKey: null, _lod: 1 });
   const all = solid.flatMap(p => worldGeometries(simple(p)).map(g => ({ g, p })));
   const diag = g => { g.computeBoundingBox(); return g.boundingBox.getSize(new THREE.Vector3()).length(); };
-  all.sort((a, b) => diag(b.g) - diag(a.g));
+  // the 武器の飾り of 機体エディタ Ver2 (parts named 飾り・…, issue #265: looks only) come after everything else, so that in the
+  // far shapes they never push out the body or the weapon in the hand
+  const isDeco = p => /^飾り・/.test(p.name ?? '');
+  all.sort((a, b) => (isDeco(a.p) - isDeco(b.p)) || diag(b.g) - diag(a.g));
   if (level === 1) {
     let tris = 0;
     for (const { g, p } of all) {

@@ -113,6 +113,9 @@ export function orbNumbers(items) {
 }
 const HALF_LABEL = { upper: '胸', back: '背', arm: '腕', leg: '脚', lower: '腰' };
 const r5 = v => Math.round(v * 1e5) / 1e5;
+/** 武器の飾り（def.deco、unitparts.js）の書き出す名前：書き出し（xsengine.js）が名前で決める扱い（銃・バズーカ・弾の出る所・右手・噴射口・爪・首・大砲・光る所…）に
+ *  当たる言葉を ◇ に替える（飾りは見た目だけ。武器の名前のままだと、ゲームの銃や右手の点と取り違えられる） */
+const decoName = s => String(s ?? '').replace(/ライフル|銃|マガジン|マズル|バズーカ|手|口|噴射|スラスター|ブースター|バーニア|爪|首|大砲|キャノン|砲|キャタピラ|履帯|目|センサー|バイザー|アイ|ORB|艦橋|関節|ひじ|ひざ|足首|腹|旋回|スカート|蝶番/g, '◇');
 /**
  * 置いた部品の並び → { parts: 機体エディタの部品, anchors: { neck: 首の付け根, hand_r: 右手の中心 } }。
  * adj：寸法の調整（up：上半身を上下に動かした量。首の付け根がその分動く）。colorOf(pc, def)：ブロックの色を決める（機体エディタ Ver2 の塗り。無ければ部品の色）
@@ -134,11 +137,12 @@ export function bodyParts(items, adj = {}, colorOf = null) {
     }
     const it = fitItem(src, adj);   // 関節の間の長さを掛けた置き方
     const R = rotMatrix(it.rot), e = new THREE.Euler().setFromRotationMatrix(R, 'XYZ');
-    const half = halfOf(it.part), upper = half === 'upper' || half === 'back', q = new THREE.Quaternion().setFromRotationMatrix(R);
+    const half = halfOf(it.part), upper = half === 'upper' || half === 'back', q = new THREE.Quaternion().setFromRotationMatrix(R), deco = !!def.deco;
     // 書き出すブロック（partgeo.js の shapesOf）：カタログのパーツは凸の形そのまま。パーツエディタで作った押し出し・回転体・削った形は三角形で
     return shapesOf(def).map(({ pc, shape }) => {
       const off = new THREE.Vector3(...(pc.pos ?? [0, 0, 0])).multiply(new THREE.Vector3(...it.scal)).applyMatrix4(R);
       const { pos, hinge, center, ...rest } = pc;
+      if (deco) for (const k of ['tf', 'role', 'pts', 'planes', 'side', 'top', 'secs']) delete rest[k];   // （飾りの形は三角形で渡す：置き方 tf は掛けてある）
       // 付ける骨を選んだ部品（src.bone、機体エディタ Ver2 の「付ける骨」）は、ブロックの骨の決まりより先。回る中心はその骨のもの
       const bone = src.bone ?? pc.bone ?? (upper ? 'torso' : 'hips'), at = [it.mov[0] + off.x, it.mov[1] + off.y, it.mov[2] + off.z];
       const M = new THREE.Matrix4().compose(new THREE.Vector3(...at), q, new THREE.Vector3(...it.scal));
@@ -151,7 +155,7 @@ export function bodyParts(items, adj = {}, colorOf = null) {
         const ps = shape.tris ?? buildHull(pc.planes, { reach: hullReach(pc.planes) }).positions;
         for (let i = 0; i < ps.length; i += 3) hand.expandByPoint(v.set(ps[i], ps[i + 1], ps[i + 2]).applyMatrix4(M));
       }
-      return { ...rest, ...(colorOf ? { color: colorOf(pc, def) } : {}), name: `${HALF_LABEL[half]}・${it.name ?? def.name}・${pc.name}`, bone, pivot: src.bone ? 'none' : pc.pivot ?? 'none', glow: !!pc.glow, gun: false, noHit: !!pc.noHit, noHeight: half === 'back',
+      return { ...rest, ...(colorOf ? { color: colorOf(pc, def) } : {}), name: deco ? `飾り・${decoName(it.name ?? def.name)}・${decoName(pc.name)}` : `${HALF_LABEL[half]}・${it.name ?? def.name}・${pc.name}`, bone, pivot: src.bone ? 'none' : pc.pivot ?? 'none', glow: !!pc.glow, gun: false, noHit: !!pc.noHit, noHeight: half === 'back' || deco,
         ...(joint ? { joint } : {}), ...(orb ? { orb } : {}), ...shape, pos: at, rot: [e.x, e.y, e.z], scl: it.scal.slice() };
     });
   });
