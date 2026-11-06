@@ -48,7 +48,7 @@ const HTML = `<div class="box">
   <div class="bar2 tabs2"><button data-tab="rank" class="on">月間ランキング</button><select id="shMonth"></select><button data-tab="new">新着</button><button data-tab="likes">イイネ順</button><button data-tab="mine">自分の機体</button></div>
   <div class="grid" id="shGrid"></div>
   <div class="foot"><span class="hint" id="shNote"></span><button id="shMore" hidden>もっと見る</button></div>
-  <p class="hint">投稿・イイネには XS オンラインのアカウントに Google か Discord でログインする。月間ランキングは、その月に集まったイイネの数で並べる（日本時間）。原作の固有名詞を使った機体名や、ふさわしくない機体は通報してください。</p>
+  <p class="hint">投稿・イイネには XS オンラインのアカウントに Google か Discord でログインする。月間ランキングは、その月に集まったイイネの数で並べる（日本時間）。原作の固有名詞を使った機体名や、ふさわしくない機体は通報してください。ゲームでは、設定の「自分のスキン」→「みんなの機体から選ぶ」で、ここの機体をそのまま自分の XS のスキンにできる（ファイルの書き出しは要らない）。</p>
 </div>`;
 
 export function initShare(ctx) {

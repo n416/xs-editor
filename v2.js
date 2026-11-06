@@ -41,7 +41,10 @@ import { byId, register, boneOf as boneOf0, SIDED, sideOf, hasLink as hasLinkIn,
 const $ = s => document.querySelector(s);
 const D = Math.PI / 180;
 // 保存先（このブラウザの中）。?save=名前 を付けて開くと、別の保存先になる（ふだんの組み立てを触らずに試すため）
-const SAVE_KEY = 'xsv2.' + (new URLSearchParams(location.search).get('save') ?? 'v1');
+// ?skin=<みんなの機体の id>：ゲームのページの見えない窓の中で開かれ、その機体を書き出してゲームへ渡すだけ（下の「ゲームのスキンにする」）。
+// ふだんの「つづきから」と自分のパーツには触らない
+const SKIN_MODEL = new URLSearchParams(location.search).get('skin');
+const SAVE_KEY = 'xsv2.' + (new URLSearchParams(location.search).get('save') ?? (SKIN_MODEL ? 'skin' : 'v1'));
 const S = makeSheet();
 
 // 部品の目次（byId）・どの部分か（halfOf：upper・back・lower・arm・leg）・動力パイプの登録（register）は bodyparts.js（機体エディタと共通）
@@ -1201,7 +1204,7 @@ $('#bSample').onclick = () => {
 // def = カタログのパーツと同じ形に { user: true, half, base } を足したもの。id は u· で始まる（頭は h·u·）
 // 置き場は IndexedDB（v2-store.js の 'userparts'。前は localStorage の xsv2.userparts：艦 1 隻で 0.66 MB あり、数隻で入らなくなった）
 const userParts = {};
-function persistUser() { Store.set(USER_KEY, JSON.stringify(userParts)).then(ok => { if (!ok) note('自分のパーツを保存できませんでした（ブラウザの保存の容量）', true); }); }
+function persistUser() { if (SKIN_MODEL) return; Store.set(USER_KEY, JSON.stringify(userParts)).then(ok => { if (!ok) note('自分のパーツを保存できませんでした（ブラウザの保存の容量）', true); }); }
 function loadUser() { try { for (const def of Object.values(JSON.parse(Store.get(USER_KEY) ?? '{}'))) if (def?.id && Array.isArray(def.pieces)) { registerUser(def); userParts[def.id] = def; } } catch { /* storage blocked */ } }
 /** パーツ src の写しを、自分のパーツとして目次に入れる（fresh：新しく作るときのひな形として） */
 function makeUserCopy(src, fresh = false) {
@@ -1965,6 +1968,25 @@ const SHARE = initShare({
 $('#bShare').onclick = () => { if (!busy()) SHARE.open(); };
 // ?share：開いたときに「みんなの機体」の一覧を出す（ゲームのロビーのコミュニティから直接開く入口、issue #259）
 if (new URLSearchParams(location.search).has('share')) SHARE.open();
+// ---- ゲームのスキンにする（issue #259 の 2）：?skin=<id>&as=<種別>&reply=<ゲームのページの origin> で、ゲームのページの中の見えない窓として開かれる。
+// みんなの機体のその 1 つを開き、「ゲーム用に書き出す」と同じ exportGame で .glb を作って、親のページ（ゲーム）へ postMessage で渡す。
+// 渡す物：{ xsskin: 'step', done, total } 関節を調べている途中 → { xsskin: 'glb', glb (ArrayBuffer), title, floating, loose } か { xsskin: 'error', error }
+if (SKIN_MODEL && window.parent !== window) (async () => {
+  const q = new URLSearchParams(location.search), as = q.get('as') ?? '', to = q.get('reply') ?? '';
+  const send = (m, tr) => { try { window.parent.postMessage(m, /^https?:\/\/[^/]+$/.test(to) ? to : '*', tr); } catch { /* the game's page went */ } };
+  try {
+    if (!/^[ab]_(raid|heavy|support|sniper|artillery_leg)$/.test(as)) throw new Error('この種別の機体は書き出せません。');
+    const r = await (await fetch(`${SHARE.central}/api/models/${encodeURIComponent(SKIN_MODEL)}`)).json();
+    const title = String(r.model?.title ?? '');
+    if (r.unit) openDoc(r.unit, title);
+    else if (Array.isArray(r.scene)) openE1(r.scene, title, r.model?.role ?? '');
+    else throw new Error(r.error || 'この機体は開けません（形が分かりません）。');
+    if (JSON.stringify(unitDoc()).includes('"kind":"mesh"')) for (let i = 0; i < 300 && !kept().every(it => (byId[it.part]?.pieces ?? []).every(pc => pc.kind !== 'mesh' || MESHES.has(pc.mesh))); i++) await new Promise(ok => setTimeout(ok, 100));
+    const out = await exportGame(as, (done, total) => send({ xsskin: 'step', done, total }));
+    const bin = atob(out.glb), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    send({ xsskin: 'glb', glb: u8.buffer, title, floating: out.floating.length, loose: out.loose.length }, [u8.buffer]);
+  } catch (e) { send({ xsskin: 'error', error: String(e?.message ?? e) }); }
+})();
 $('#bFire').onclick = () => testFire(null);
 renderForms();
 // ---- スマホ：下のタブで、下に出す欄を選ぶ（パーツ＝左の欄、調整＝右の欄、3D だけ）。広い画面では使わない（CSS が無視する）----
@@ -1978,7 +2000,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '5e9ed70';
+const BUILD = '0ecdbdb';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
