@@ -36,9 +36,12 @@ const CSS = `
 #shareBox .foot { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 #shareBox #shNote { flex: 1; }
 #shareBox #shCheck { white-space: pre-line; margin: 4px 0; }
+#shareBox .rule { margin: 8px 0 4px; padding: 7px 10px; border: 1px solid #c9a227; border-radius: 6px; background: #2a2412; color: #f3dc8a; }
+#shareBox .rule small { display: block; color: #cdbb7f; margin-top: 2px; }
 `;
 const HTML = `<div class="box">
   <div class="top"><b>みんなの機体</b><button id="shClose">閉じる（Esc）</button></div>
+  <div class="rule" role="note">著作権に違反するような機体は運営が削除する可能性があります。ご注意下さい<small lang="en">Machines that infringe copyright may be deleted by the operators. Please take care.</small></div>
   <div class="bar2" id="shAuth"></div>
   <div class="bar2"><input type="text" id="shTitle" placeholder="機体名（40 文字まで）" maxlength="40"><input type="text" id="shAi" placeholder="使った AI（なければ空欄）" maxlength="40"><button id="shUpload" class="acc" title="今の機体を、だれでも見られる所に出す（つながりと関節を調べて、問題があれば知らせる。問題があっても投稿はできる）">今の機体を投稿</button></div>
   <div class="hint" id="shCheck" hidden></div>
