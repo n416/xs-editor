@@ -214,6 +214,8 @@ export function initShare(ctx) {
     if (m.rank) th.appendChild(el('span', 'rank', String(m.rank)));
     c.append(th, el('div', 'nm', m.title));
     c.appendChild(el('div', 'meta', `${m.author} ・ ${new Date(m.created_at).toLocaleDateString('ja-JP')} ・ ${m.part_count} 部品` + (ctx.kinds[m.role] ? ` ・ ${ctx.kinds[m.role]}` : '') + (m.month_likes ? ` ・ この月 ${m.month_likes} イイネ` : '')));
+    // the accounts wearing it as their own skin in the game (issue #259 の 3; a central before it sends none, and nothing is shown)
+    if (typeof m.use_count === 'number') c.appendChild(el('div', 'meta uses', `スキンに使っている人：${m.use_count}人`));
     if (m.ai) c.appendChild(el('div', 'meta', `AI: ${m.ai}`));
     if (m.hidden) c.appendChild(el('div', 'meta warn', '通報により非表示中（管理者が確認します）'));
     const btns = el('div', 'btns');
