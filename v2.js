@@ -1327,8 +1327,11 @@ $('#bDropPart').onclick = () => {
 function fillNewPartSel() {
   // 最初は何も選ばれていない（選ぶまで「新しいパーツを作る」は押せない）。こちらで勝手に部位を決めない：前は最初から「頭蓋」が選ばれていた
   $('#newPartSel').innerHTML = '<option value="">作る部位を選ぶ…</option>' + [['頭', HEAD], ['上半身', UPPER], ['背中', BACK], ['腕', ARM], ['下半身', LOWER], ['脚', LEG]].map(([title, list]) =>
-    `<optgroup label="${title}">${[...new Set(list.map(d => d.cat))].map(cat => `<option value="${list.find(d => d.cat === cat && !d.user).id}">${cat}</option>`).join('')}</optgroup>`).join('');
+    `<optgroup label="${title}">${[...new Set(list.map(d => d.cat))].map(cat => `<option value="${tplOf(list, cat, true).id}">${cat}</option>`).join('')}</optgroup>`).join('');
 }
+/** その部位のひな形：カタログの最初のパーツ。自分のパーツ（★）しか無い部位は、own なら自分のパーツの最初、でなければ無し。
+ *  前は自分のパーツしか無い部位で undefined.id になり、起動の途中で落ちて 3D が真っ暗になった（テスター 静流りおさん 2026-11-08） */
+function tplOf(list, cat, own) { return list.find(d => d.cat === cat && !d.user) ?? (own ? list.find(d => d.cat === cat) : undefined); }
 const newPartReady = () => { $('#bNewPart').disabled = !$('#newPartSel').value; };
 $('#newPartSel').onchange = newPartReady;
 $('#bNewPart').onclick = () => { if (busy()) return; const t = byId[$('#newPartSel').value]; if (!t) return; selected = -1; gizmo.detach(); $('#newPartSel').value = ''; newPartReady(); PE.startNew(t); };
@@ -1930,7 +1933,7 @@ function aiPartInfo(id) {
 const AI = initAi({
   busy,
   partSlots: () => [['頭', HEAD], ['上半身', UPPER], ['背中', BACK], ['腕', ARM], ['下半身', LOWER], ['脚', LEG]].flatMap(([group, list]) =>
-    [...new Set(list.map(d => d.cat))].map(cat => ({ group, cat, id: list.find(d => d.cat === cat && !d.user).id })).filter(s => canAsk(s.id))),
+    [...new Set(list.map(d => d.cat))].filter(cat => tplOf(list, cat, false)).map(cat => ({ group, cat, id: tplOf(list, cat, false).id })).filter(s => canAsk(s.id))),
   partInfo: aiPartInfo,
   /** AI のブロックの形（パーツの中の座標）。ひな形から残すブロックも一緒に（暗く） */
   partView: (list, id) => {
@@ -2049,7 +2052,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '1eb0773';
+const BUILD = '1d98bde';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
