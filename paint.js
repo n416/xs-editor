@@ -34,8 +34,11 @@ const KNOWN = Object.fromEntries(Object.entries(ROLE_COLOR).map(([k, v]) => [v, 
 const roleCache = new Map();
 /** ブロックの役。塗らないブロック（光・透けるもの）は null */
 export function roleOf(pc) {
-  if ((pc.glow && pc.noHit) || pc.opacity != null) return null;
-  if (pc.role) return pc.role === 'keep' ? null : pc.role;   // 役を書いてあるブロック（形を取り込んだ自由な部品）：その役。keep は塗らず自分の色のまま
+  if (pc.opacity != null) return null;
+  // 役を書いてあるブロック（形を取り込んだ自由な部品・武器の飾り）：その役。keep は塗らず自分の色のまま。光って当たりの無いブロック
+  // （武器の飾りはどれも当たり無し）も、役を書いてあればその役（発光 2・3 を選んでも塗りの色にならなかった）
+  if (pc.role) return pc.role === 'keep' ? null : pc.role;
+  if (pc.glow && pc.noHit) return null;
   const c = String(pc.color ?? '#c3c9d2').toLowerCase();
   if (pc.glow) return GLOW_ROLES.has(KNOWN[c]) ? KNOWN[c] : 'glow';
   if (KNOWN[c] && !GLOW_ROLES.has(KNOWN[c])) return KNOWN[c];

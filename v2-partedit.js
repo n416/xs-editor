@@ -780,7 +780,8 @@ export function initPartEdit(ctx) {
       $('#peFReset').onclick = () => { formSet(null); commit(); renderRight(); };
     }
     if ($('#peBlend')) $('#peBlend').onchange = e => { if (e.target.value) pc.blendTo = e.target.value; else delete pc.blendTo; commit(); };
-    if ($('#peRole')) $('#peRole').onchange = e => { const r = e.target.value; pc.color = ROLE_COLOR[r]; if (GLOW_ROLES.has(r)) pc.glow = true; else delete pc.glow; ctx.repaint(); dimOthers(); commit(); renderLeft(); };
+    // （役を書いたブロックは役も：武器の飾りの写しは役 keep のままで、選んだ役が塗りの色にならなかった。テスター 静流りおさん 2026-11-08）
+    if ($('#peRole')) $('#peRole').onchange = e => { const r = e.target.value; pc.color = ROLE_COLOR[r]; if (GLOW_ROLES.has(r)) pc.glow = true; else delete pc.glow; if ('role' in pc) pc.role = r; ctx.repaint(); dimOthers(); commit(); renderLeft(); };
     for (const el of E.right.querySelectorAll('[data-f]')) {
       el.oninput = () => { const v = parseFloat(el.value); if (!Number.isFinite(v)) return; binds[el.dataset.f].set(v); for (const o of E.right.querySelectorAll(`[data-f="${el.dataset.f}"]`)) if (o !== el) o.value = el.type === 'range' ? fmt(v) : v; live(); prof?.draw(); };
       el.onchange = () => { if (st.keepCorner) { reselectCorner(st.keepCorner); st.keepCorner = null; } commit(); refresh(false); };
