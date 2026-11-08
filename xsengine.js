@@ -755,6 +755,7 @@ const roleId = (role = sceneRole) => (ROLES[role] ? `a_${role}` : '');
 const MELEE_NAMES = { saber: 'サーベル', knife: 'ナイフ', ram: '砲身打撃' };
 const movePlayed = (name, id) => {
   const x = XS_INFO[id];
+  if (/^look_/.test(name)) return false;   // (only to look at in 「動かして確かめる」: genposes.ts)
   if (!x) return true;
   const m = /^(saber|knife|ram)_/.exec(name);
   if (m) return x.melee === m[1];
@@ -1175,7 +1176,7 @@ function* jointSteps(id, only = null) {
   for (const pc of pieces) if (pc.part.src !== null) (boxes[pc.part.src] ??= new THREE.Box3()).union(pc.geo.boundingBox);
   report.__boxes = Object.fromEntries(Object.entries(boxes).map(([k, b]) => [k, [b.min.toArray(), b.max.toArray()]]));
   report.__H = H;
-  const skipped = Object.keys(MOVES).filter(k => !movePlayed(k, id));
+  const skipped = Object.keys(MOVES).filter(k => !/^look_/.test(k) && !movePlayed(k, id));
   report.__skipped = skipped.length;
   report.__skippedKinds = [...new Set(skipped.map(k => (/^kneel_/.test(k) ? '迫撃のひざつき' : /^sit_/.test(k) ? '緊急帰投の片膝' : 'ほかの格闘')))].join('・');
   return report;

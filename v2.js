@@ -570,7 +570,7 @@ $('#bSwing').onclick = () => { stopMove(); swing = !swing; t0 = performance.now(
 // ゲームの動き（poses.json）：選ぶと 16 コマをくり返し再生する。脚はつまみへ写す（スカートの押し開きもそれで動く）
 const MOVE_LABEL = { saber_0_袈裟斬り: '剣：袈裟斬り', saber_1_横薙ぎ: '剣：横薙ぎ', saber_2_斬り上げ: '剣：斬り上げ', saber_3_唐竹割り: '剣：唐竹割り', saber_dash_唐竹割り: '剣：突進して唐竹割り',
   knife_0_横薙ぎ: 'ナイフ：横薙ぎ', knife_1_突き: 'ナイフ：突き', ram_0_旋回打ち: '打撃：旋回打ち', ram_1_振り下ろし: '打撃：振り下ろし', throw: '投げる', throw_windup_hold: '投げる構え',
-  weapon_change: '持ち替え', crouch: 'しゃがむ', twist_aim: 'ひねって構える', charge: '突進', carry: '運ぶ', walk_aim: '歩いて構える', kneel_迫撃: '片膝（迫撃）', sit_片膝: '片膝をつく' };
+  weapon_change: '持ち替え', crouch: 'しゃがむ', twist_aim: 'ひねって構える', charge: '突進', carry: '運ぶ', walk_aim: '歩いて構える', look_dash: 'ダッシュ', look_aim: '銃を構える', kneel_迫撃: '片膝（迫撃）', sit_片膝: '片膝をつく' };
 let MOVES = {}, playing = false, moveAt = 0;
 fetch('./poses.json').then(r => r.json()).then(j => {
   MOVES = j.moves;
@@ -2098,7 +2098,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'f58bb4e';
+const BUILD = '56fe705';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
