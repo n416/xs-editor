@@ -692,6 +692,8 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') { e.preventDefault(); e.shiftKey ? ungroupPicked() : groupPicked(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && !window.getSelection()?.toString()) { e.preventDefault(); copyParts(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') { e.preventDefault(); pasteParts(); return; }
   if (e.key === 'w') gizmo.setMode('translate'); else if (e.key === 'e') gizmo.setMode('rotate'); else if (e.key === 'r') gizmo.setMode('scale');
   else if (e.key === 'Delete' && selected >= 0) removeSelected();
 });
@@ -848,6 +850,35 @@ $('#bDel').onclick = removeSelected;
 // 複製・反対側にも：選んでいるもの全部を写す。グループは写した方が新しいグループになり、写したものを選ぶ
 const pickedList = () => (picked.length ? picked : [selected]).filter(i => items[i]);
 $('#bDup').onclick = () => { if (selected < 0) return; const list = regroup(pickedList().map(i => { const it = structuredClone(items[i]); it.mov = [it.mov[0] + 0.05, it.mov[1], it.mov[2]]; return it; })); addItems(list); pickLast(list.length); };
+// コピー・貼り付け（テスター 静流りおさん 2026-11-08 #要望用「作った部品…使いたい部品（腕の飾り→盾）などに入れたい」「コピーして他部品で貼り付けて
+// 使うでもいい」; ハブの決め）：選んでいるパーツを覚え、貼る時に選んでいるパーツ（貼り先）の所へ、その骨に付けて置く。形・色・役は覚えた
+// パーツのまま（同じパーツを置く）。貼り先が左右の対の片方なら、反対側にも鏡像を置く。貼り先が無ければ、元の所に少しずらして置く [形 独自]
+let clip = null;
+function copyParts() {
+  const list = pickedList();
+  if (!list.length) return;
+  clip = list.map(i => structuredClone(items[i]));
+  note(`${clip.length} 個のパーツをコピーしました。付けたい所のパーツを選んで「貼り付け」（Ctrl+V）`);
+}
+const BONE_KEYS = new Set(BONE_PICK.map(([b]) => b));
+function pasteParts() {
+  if (!clip?.length) { note('先に、貼りたいパーツを選んで「コピー」（Ctrl+C）', true); return; }
+  const tgt = items[selected], c = [0, 1, 2].map(k => clip.reduce((a, it) => a + (it.mov?.[k] ?? 0), 0) / clip.length);
+  const bone = tgt && canPickBone(tgt) ? tgt.bone ?? (BONE_KEYS.has(boneOf(byId[tgt.part])) ? boneOf(byId[tgt.part]) : null) : null;
+  const out = clip.map(src => {
+    const it = structuredClone(src);
+    if (tgt) { it.mov = [0, 1, 2].map(k => round(tgt.mov[k] + (src.mov?.[k] ?? 0) - c[k], 4)); if (bone && canPickBone(it)) it.bone = bone; }
+    else it.mov = [(it.mov?.[0] ?? 0) + 0.05, it.mov?.[1] ?? 0, it.mov?.[2] ?? 0];
+    return it;
+  });
+  // 貼り先が左右の対の片方（同じパーツが x を返した所にある）：反対側にも
+  const twin = tgt && Math.abs(tgt.mov[0]) > 1e-4 && items.some(o => o !== tgt && o.part === tgt.part && Math.abs(o.mov[0] + tgt.mov[0]) < 1e-3 && Math.abs(o.mov[1] - tgt.mov[1]) < 1e-3);
+  const list = regroup(twin ? [...out, ...out.map(it => mirrorOf(structuredClone(it)))] : out);
+  addItems(list); pickLast(list.length);
+  note(`${clip.length} 個のパーツを貼り付けました${twin ? '（反対側にも）' : ''}${bone ? `。付ける骨：${BONE_PICK.find(([b]) => b === bone)?.[1] ?? bone}` : ''}`);
+}
+$('#bCopyP').onclick = copyParts;
+$('#bPasteP').onclick = pasteParts;
 $('#bMirror').onclick = () => {
   if (selected < 0) return;
   const list = regroup(pickedList().map(i => { const src = items[i], m = mirrorOf(structuredClone(src)); if (src.name) m.name = src.name.replace(/（鏡像）$/, '') + '（鏡像）'; else delete m.name; return m; }));   // 名前を付けていないパーツは、カタログの名前のまま（左右は一覧の（±x）で分かる）
@@ -2052,7 +2083,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '418f888';
+const BUILD = 'ee07b8c';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
