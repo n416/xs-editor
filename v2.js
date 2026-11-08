@@ -865,8 +865,13 @@ function pasteParts() {
   if (!clip?.length) { note('先に、貼りたいパーツを選んで「コピー」（Ctrl+C）', true); return; }
   const tgt = items[selected], c = [0, 1, 2].map(k => clip.reduce((a, it) => a + (it.mov?.[k] ?? 0), 0) / clip.length);
   const bone = tgt && canPickBone(tgt) ? tgt.bone ?? (BONE_KEYS.has(boneOf(byId[tgt.part])) ? boneOf(byId[tgt.part]) : null) : null;
+  // (貼り付けた物は、元の形の写しを持つ自分のパーツ（★）：パーツエディタで直しても元は変わらない。同じパーツから貼った物どうし
+  // （左右の対の両方）は 1 つの写しを分け合う [テスター 静流りおさん 2026-11-08 #要望用「コピーで増やした方は…自由に形状変化させたい」; ハブの決め])
+  const copies = new Map();
+  const ownOf = id => { if (!copies.has(id)) { const def = makeUserCopy(byId[id]); keepUser(def); copies.set(id, def.id); } return copies.get(id); };
   const out = clip.map(src => {
     const it = structuredClone(src);
+    if (byId[src.part]) it.part = ownOf(src.part);
     if (tgt) { it.mov = [0, 1, 2].map(k => round(tgt.mov[k] + (src.mov?.[k] ?? 0) - c[k], 4)); if (bone && canPickBone(it)) it.bone = bone; }
     else it.mov = [(it.mov?.[0] ?? 0) + 0.05, it.mov?.[1] ?? 0, it.mov?.[2] ?? 0];
     return it;
@@ -877,6 +882,16 @@ function pasteParts() {
   addItems(list); pickLast(list.length);
   note(`${clip.length} 個のパーツを貼り付けました${twin ? '（反対側にも）' : ''}${bone ? `。付ける骨：${BONE_PICK.find(([b]) => b === bone)?.[1] ?? bone}` : ''}`);
 }
+/** この片方だけ別にする：選んでいるパーツに、元の形の写しを持つ自分のパーツ（★）を持たせ、同じパーツを指すほかの物（左右の対の反対側など）
+ *  と切り離す。直しても、ほかの物は変わらない */
+function splitParts() {
+  const list = pickedList().filter(i => items.some((o, j) => j !== i && o.part === items[i].part));
+  if (!list.length) { note('選んでいるパーツは、ほかの物と同じ形を分け合っていません（もう別になっています）'); return; }
+  for (const i of list) { const def = makeUserCopy(byId[items[i].part]); keepUser(def); items[i].part = def.id; }
+  rebuild(); save(); renderList(); fillFields();
+  note(`${list.length} 個のパーツを別の形にしました。直しても、ほかの物は変わりません`);
+}
+$('#bSplitP').onclick = splitParts;
 $('#bCopyP').onclick = copyParts;
 $('#bPasteP').onclick = pasteParts;
 $('#bMirror').onclick = () => {
@@ -2083,7 +2098,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'ee07b8c';
+const BUILD = 'f58bb4e';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
