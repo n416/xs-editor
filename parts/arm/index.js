@@ -7,10 +7,11 @@ import forearm from './forearm.js';
 import foredeco from './foredeco.js';
 import hand from './hand.js';
 import mass from './mass.js';   // 厚い塊の腕
-export const ARM = [upperarm, elbow, forearm, foredeco, hand, mass].flat();
+import plate from './plate.js';   // 増加装甲（前腕の籠手）
+export const ARM = [upperarm, elbow, forearm, foredeco, hand, mass, plate].flat();
 export const armById = Object.fromEntries(ARM.map(p => [p.id, p]));
 export const ARM_AT = [0.58, 1.95, 0];
-export const ARM_CAT = new Set(['上腕', 'ひじ', '前腕', '前腕の飾り', '手']);
+export const ARM_CAT = new Set(['上腕', 'ひじ', '前腕', '前腕の飾り', '前腕の増加装甲', '手']);
 export const placementOfArm = () => ({ mov: ARM_AT.slice(), pair: true });
 
 /** 見本：左右の腕の部品の id（上腕・ひじ・前腕・手と飾り） */

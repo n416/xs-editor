@@ -13,17 +13,18 @@ import chestdeco from './chestdeco.js';
 import powerpipe from './powerpipe.js';
 import mass from './mass.js';   // 厚い殻の胴（はじめから置く幅で書いてあるので slim を通さない）
 import vw from './vw.js';
+import plate from './plate.js';   // 増加装甲（胸当て・肩の殻。もとの部品に足して置く）
 import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
 // 胴（胸・背中・腹・脇腹）と、その面に付く飾り・胴の動力パイプは、横幅を SLIM 倍にする（依頼主が写真と見比べて「これじゃデブでしょ。腰もそうなんだけど、パーツの横幅を直して」。
 // 0.9 は [独自]：写真の上で測った胸の幅は全高の 23%、こちらは 25% だった）。取り込んだ機体の部品（vw・f1）は元の形のまま
 export const SLIM = 0.9;
 const TORSO_CAT = new Set(['胸', '背中', '腹', '脇腹', '胸の飾り', '胴の動力パイプ']);
 const slim = defs => [defs].flat().flatMap(d => (TORSO_CAT.has(d.cat) ? slimX(d, SLIM) : [d]));
-export const UPPER = [slim(chest), slim(back), slim(abdomen), slim(flank), shoulder, shoulderarmor, collar, slim(chestdeco), slim(powerpipe), mass, vw, f1].flat();
+export const UPPER = [slim(chest), slim(back), slim(abdomen), slim(flank), shoulder, shoulderarmor, collar, slim(chestdeco), slim(powerpipe), mass, vw, plate, f1].flat();
 export const upperById = Object.fromEntries(UPPER.map(p => [p.id, p]));
 
 export const CHEST_AT = [0, 2.1, 0], SHOULDER_AT = [0.45, 2.5, 0];
-const PAIR_CAT = new Set(['肩関節', '肩アーマー', '肩の動力パイプ']);
+const PAIR_CAT = new Set(['肩関節', '肩アーマー', '肩の動力パイプ', '肩の増加装甲']);
 /** 部品を置く決まった場所。pair は左右の対（+x 側に置き、反対側は x の拡大 −1 で置く） */
 export function placementOfUpper(def) {
   return PAIR_CAT.has(def.cat) ? { mov: SHOULDER_AT.slice(), pair: true } : { mov: CHEST_AT.slice(), pair: false };

@@ -79,7 +79,7 @@ const HEAD_SAMPLES = { 'バイザーとマスクと耳ブロック': [
 const randomHeadV2 = () => randomHead(Math.random, HEAD_RAW).map(asHead);
 /** いくつでも付けられる部位（カタログを押すと増える）。ほかの部位は 1 つだけ（押すと、置いてある同じ部位のパーツと入れ替わる）。
  *  左右の対は、左右で 1 組。オーブ・挿せるタンクは収納口の数まで増える */
-const MULTI = new Set(['ベルト', '腰の筒', '動力パイプ', '胸の飾り', '胴の動力パイプ', '肩の動力パイプ', 'バックパックの装備', '翼の装備', 'エフェクト（光）', '前腕の飾り', '顔', '飾り', 'トサカ', 'アンテナ（額）', 'アンテナの中央（額）', '首当て']);   // （首当ては首に足して付ける。首と同じ部位にしていたら、首当てを選ぶと首が外れた）
+const MULTI = new Set(['ベルト', '腰の筒', '動力パイプ', '胸の飾り', '胴の動力パイプ', '肩の動力パイプ', 'バックパックの装備', '翼の装備', 'エフェクト（光）', '前腕の飾り', '顔', '飾り', 'トサカ', 'アンテナ（額）', 'アンテナの中央（額）', '首当て', '胸の増加装甲', '肩の増加装甲', '前腕の増加装甲', 'すねの増加装甲']);   // （首当ては首に足して付ける。首と同じ部位にしていたら、首当てを選ぶと首が外れた）
 const isMulti = def => MULTI.has(def.cat);
 const TRACK_CAT = 'キャタピラ';
 // 「1 つだけの部位も足す」（issue #185、テスター 静流りおさん 2026-11-05「いくつも付けたい」）：入れると、1 つだけの部位も入れ替えずに足して置く（同じ所に置いたものは 4 cm ずつ下へずれる）。
@@ -906,7 +906,7 @@ $('#bMirror').onclick = () => {
 // 保存してある機体・読み込む機体は、その機体の値のまま（値が無ければ 0）
 const NEW_ADJ = { ...ADJ0, up: -0.24, sh: -0.02, upperArm: -0.15, foreArm: -0.13, std: 2 };   // 腕は写真の長さ（肩の関節から拳の先まで全高の 31%）
 let adj = { ...NEW_ADJ };
-const SHOULDER_CAT = new Set(['肩関節', '肩アーマー']);
+const SHOULDER_CAT = new Set(['肩関節', '肩アーマー', '肩の増加装甲']);
 /** 肩の左右・高さの調整で一緒に動く部品：肩関節・肩アーマーと腕 */
 const followsShoulder = def => SHOULDER_CAT.has(def.cat) || ARM_CAT.has(def.cat);
 /** 前の頭身の機体（上半身が腰の帯から浮いていて、腰の関節の柱が見える）を、開いたときに 1 回だけ新しい標準へ直す：上半身・背中・腕の部品を腰の帯に載る高さへ下げ、
@@ -2098,7 +2098,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '1586d10';
+const BUILD = '1b79227';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

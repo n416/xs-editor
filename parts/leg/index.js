@@ -9,13 +9,14 @@ import foot from './foot.js';
 import mass from './mass.js';   // 厚い塊の脚
 import hover from './hover.js';   // ホバーの足（ホバー機の、底に噴射口のある足）
 import vw from './vw.js';
+import plate from './plate.js';   // 増加装甲（すねの脚甲）
 import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
 // すねの動力パイプは、すねの形を作り直したので合わせ直すまで外してある
 const HOLD = new Set(['shinpipe', 'shinpipethick']);
-export const LEG = [thigh, knee, shin, shindeco, foot, mass, hover, vw, f1].flat().filter(p => !HOLD.has(p.id));
+export const LEG = [thigh, knee, shin, shindeco, foot, mass, hover, vw, plate, f1].flat().filter(p => !HOLD.has(p.id));
 export const legById = Object.fromEntries(LEG.map(p => [p.id, p]));
 export const LEG_AT = [0.175, 1.14, 0];
-export const LEG_CAT = new Set(['太もも', 'ひざ当て', 'すね', 'すねの飾り', '足']);
+export const LEG_CAT = new Set(['太もも', 'ひざ当て', 'すね', 'すねの飾り', 'すねの増加装甲', '足']);
 export const placementOfLeg = () => ({ mov: LEG_AT.slice(), pair: true });
 
 const sample = ids => [1, -1].flatMap(s => ids.filter(Boolean).map(part => ({ part, mov: [s * LEG_AT[0], LEG_AT[1], LEG_AT[2]], scal: [s, 1, 1] })));

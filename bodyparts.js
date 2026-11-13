@@ -66,11 +66,11 @@ export function fitItem(it, adj) {
   let dy = half === 'arm' ? -(adj.upperArm || 0) : -(adj.thigh || 0), ky = 1;
   if (c === '上腕') seg(kU, STRETCH.上腕[0]);
   else if (c === '前腕') seg(kF, STRETCH.前腕[0]);
-  else if (c === '前腕の飾り') { ky = kF; dy += STRETCH.前腕[0] * (1 - kF) * sy; }   // 飾りは前腕に沿って動く（大きさは置いたまま × 前腕の伸び）
+  else if (c === '前腕の飾り' || c === '前腕の増加装甲') { ky = kF; dy += STRETCH.前腕[0] * (1 - kF) * sy; }   // 飾りは前腕に沿って動く（大きさは置いたまま × 前腕の伸び）
   else if (c === '手') dy -= adj.foreArm || 0;
   else if (c === '太もも') seg(kT, STRETCH.太もも[0]);
   else if (c === 'すね') seg(kS, STRETCH.すね[0]);
-  else if (c === 'ひざ当て' && def.pieces[0].bone === 'shin') { ky = kS; dy += STRETCH.すね[0] * (1 - kS) * sy; }   // すねに付くひざ当ては、すねと一緒に伸び縮みする（付け根が離れない）
+  else if ((c === 'ひざ当て' && def.pieces[0].bone === 'shin') || c === 'すねの増加装甲') { ky = kS; dy += STRETCH.すね[0] * (1 - kS) * sy; }   // すねに付くひざ当ては、すねと一緒に伸び縮みする（付け根が離れない）
   else if (c === '足') dy -= adj.shin || 0;
   if (!dy && ky === 1) return it;
   return { ...it, mov: [it.mov[0], it.mov[1] + dy, it.mov[2]], scal: [it.scal[0], it.scal[1] * ky, it.scal[2]] };
