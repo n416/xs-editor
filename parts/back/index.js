@@ -10,9 +10,8 @@ import wingear, { RACK_DROP } from './wingear.js';
 import fx, { FX_CAT, FX_COLORS } from './fx.js';
 import { rotOfFrame } from './kit.js';
 import mass from './mass.js';   // 厚い塊のバックパック
-import radome from './radome.js';   // レドーム（レーダー機の背中の円盤、ナイティ）
 import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
-export const BACK = [packs, gear, wings, wingear, fx, mass, radome, f1].flat();
+export const BACK = [packs, gear, wings, wingear, fx, mass, f1].flat();
 export const backById = Object.fromEntries(BACK.map(p => [p.id, p]));
 export { FX_CAT, FX_COLORS };
 
