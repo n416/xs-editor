@@ -7,6 +7,7 @@ import { byId, halfOf as halfOf0, bodyParts, ADJ0 } from './bodyparts.js';
 import { LOWER, lowerById } from './parts/lower/index.js';
 import { UPPER, upperById } from './parts/upper/index.js';
 import { BACK, backById } from './parts/back/index.js';
+import { JET_R } from './parts/back/jetshield.js';
 import { ARM, armById } from './parts/arm/index.js';
 import { LEG, legById } from './parts/leg/index.js';
 import { PARTS as HEAD_RAW, byId as headRawById } from './xsasm-parts.js';
@@ -124,7 +125,25 @@ export function unitParts(doc, { shaped = false } = {}) {
   let n = 0;
   for (const it of items.filter(x => !isHead(x.part))) { const def = byId[it.part]; if (def.free) { for (const p of freeParts(def, it, freeShapes)) { if (p.role) Object.assign(body.parts[n], paintOf(p, def)); n++; } continue; }   /* 自由な部品は役を書いたブロックだけ塗る */ for (const pc of def.pieces) if (!isSub(pc)) Object.assign(body.parts[n++], paintOf(pc, def)); }
   const nW = items.filter(held).reduce((a, it) => a + freeParts(byId[it.part], it, freeShapes).length, 0);
-  return { parts: [...body.parts.slice(0, nW), ...head, ...body.parts.slice(nW)], anchors: body.anchors, head: head.length > 0 || items.some(it => byId[it.part]?.free) };
+  const parts = [...body.parts.slice(0, nW), ...head, ...body.parts.slice(nW)];
+  // 噴射口・炎の点（parts/back/jetshield.js）：エディタの中だけのブロック（editorOnly：向きの矢印、炎の点の口）は書き出さない（あたりと同じ扱い）。
+  // 部品の最初のブロック（原点が部品の原点＝口の真ん中、−z が噴き出す向き）に炎の点の印 jet（口の半径、炎の点か）。
+  // 付ける骨が「盾」の物：まとめて盾の形（xsengine.js の shield。体の形・つながり・関節のチェックには入らない）
+  const srcOf = p => (p.src == null ? null : doc.items?.[p.src]);
+  const firstOf = new Set();
+  for (const p of parts) {
+    const it = srcOf(p);
+    if (!it) continue;
+    const jet = byId[it.part]?.jet;
+    if (jet) {
+      if (p.editorOnly || jet === 'point') { p.blockout = true; p.noHeight = true; }
+      if (!firstOf.has(p.src)) { firstOf.add(p.src); p.jet = { r: JET_R, ...(jet === 'point' ? { point: true } : {}) }; }
+    }
+    delete p.editorOnly;
+    if (jet) continue;
+    if (it.bone === 'shield') { p.blockout = true; p.shield = true; p.noHeight = true; p.bone = 'shield'; p.pivot = 'none'; }
+  }
+  return { parts, anchors: body.anchors, head: head.length > 0 || items.some(it => byId[it.part]?.free) };
 }
 /** 機体の JSON を読む前に：入っている自分のパーツを目次に入れる。同じ id の自分のパーツがもう入っていれば、ファイルの方に入れ替える
  *  （ブラウザに前の版が残っていると、開いたファイルの形ではなく前の版が出ていた。最初から入っているパーツ（user でない）はそのまま） */

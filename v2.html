@@ -41,6 +41,8 @@
   #sel .one[hidden], #sel [hidden] { display: none; }
   .items > div b.grp { color: #8fc1ff; font-weight: 400; }
   .items > div i.bone { color: var(--dim); font-style: normal; }
+  .items > div b.x { color: var(--dim); font-weight: 400; padding: 0 4px; }
+  .items > div b.x:hover { color: var(--warn); }
   .cat { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .cat button { padding: 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: normal; }
   .cat canvas { width: 96px; height: 72px; background: #0f1114; border-radius: 4px; }
@@ -254,6 +256,21 @@
       <div class="bar"><button id="bDropPart" class="small" title="★ の付いた自分のパーツを、カタログから消す（置いてあるものも外れる）">この自分のパーツをカタログから消す</button></div>
     </div>
   </details>
+  <details class="asm" id="jetBox">
+    <summary>噴射口<span>炎を出す部品と、噴射の向き</span></summary>
+    <div id="jetInfo" class="hint"></div>
+    <div id="jetList" class="items" style="margin-top:4px"></div>
+    <div id="jetDir" hidden style="margin-top:4px"><b style="font-size:12px">噴射の向き</b><div style="display:flex;align-items:center;gap:4px;margin:2px 0"><span title="0° が真後ろ。+ で機体の左（+x）へ、− で右へ（付ける骨の、立った姿勢の向きで）">左右</span><input type="number" step="1" id="jetYaw" style="width:64px">°<span style="margin-left:10px" title="0° が水平。− で下へ、+ で上へ">上下</span><input type="number" step="1" id="jetPitch" style="width:64px">°</div><div class="hint">1° きざみ。左右は 0° が真後ろ・+ が機体の左、上下は 0° が水平・− が下。矢印を押したままドラッグしても、押している所の方へ向く（矢印も一緒に回る）</div></div>
+    <div class="bar"><button id="bJetAdd" class="acc small" title="炎を出す噴射口の部品を 1 つ、胴の後ろに置く（背中のタブの「噴射口」と同じ）。オレンジの矢印が噴射の向き">＋ 噴射口を足す</button><button id="bJetPoints" class="small" title="ランドセルの口など、名前に「噴射口」の付いた部品から出る炎を、1 つずつ動かせる炎の点にする（点があると、部品からは炎が出なくなる）">部品の噴射口も動かせるようにする</button><button id="bJetReset" class="small" title="炎の点を全部外して、部品の噴射口から炎が出るように戻す" hidden>炎の点を外す</button></div>
+    <div class="hint">選んで、つまみか「位置・回転・拡大」で動かす（回すと矢印も回る。拡大で炎の太さ）。増やすのは「複製」「反対側にも」、消すのは一覧の × か「外す」。腕・脚には「付ける骨」</div>
+  </details>
+  <details class="asm" id="shieldBox">
+    <summary>盾<span>戦闘で左手に持つ盾の見た目</span></summary>
+    <div class="hint">付ける骨を「盾」にした部品が、ゲームで盾を持つ XS の盾の見た目になる（その XS の盾の高さに合わせて縮める・広げる）。見た目だけで、当たり判定・耐久は変わらない。盾を持たない XS には出ない。自分の画面（スキン）だけで、ほかの人の画面ではいつもの盾</div>
+    <div id="shieldInfo" class="hint" style="margin-top:4px"></div>
+    <div class="bar"><button id="bShieldBase" class="acc small" title="左の前腕の外に、盾の板（土台）を置く。形は 3D のつまみ・パーツエディタで変えられる">盾の土台を置く</button><button id="bShieldOn" class="small" title="選んでいる部品を盾にする（付ける骨を「盾」に。左の前腕と一緒に動く）">選んだ部品を盾にする</button><button id="bShieldOff" class="small" title="選んでいる盾の部品を、盾から外す（付ける骨を自動に戻す）">盾から外す</button></div>
+    <label class="chk"><input type="checkbox" id="shieldGuideOn" checked>ゲームの盾の大きさの目安（青い枠）を出す</label>
+  </details>
   <details open class="asm">
     <summary>色<span>機体ぜんたいの塗り</span></summary>
     <div id="paintBox"></div>
@@ -338,6 +355,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=30315ac"></script>
+<script type="module" src="./v2.js?v=62eb402"></script>
 </body>
 </html>

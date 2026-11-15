@@ -49,6 +49,10 @@ export const DEFAULTS = {
                            //     in the part's frame: at a it is all its own bone's, at b all `to`'s, shared on the way; `to` turns at pivot
   mid: null,               // ... and the x of its centre line (left and right spheres mirror about it; none = 0)
   precut: false,           // kind 'tri' from Ver2, already cut by the cutters of its own part (partgeo.js): not cut again here
+  jet: null,               // Ver2's nozzle part or flame point (parts/back/jetshield.js): { r: the mouth's radius, point: a flame point with no
+                           //     shape (a blockout) }; its mouth at the part's origin, blowing along its -z. A flame comes out of each (nozzlesOf);
+                           //     with a flame point among them, from these alone (the parts named 噴射口 no longer)
+  shield: false,           // a part of the shield's look (Ver2: a part on the bone 盾; a blockout): exported as the node `shield` (buildGameModel)
 };
 const FIELDS = Object.keys(DEFAULTS);
 
@@ -612,13 +616,24 @@ function jointPositions(pieces) {
 // named 噴射口 alone is the nozzle itself; の台 is its stand. Nozzles of one name (four in a row) are told apart by
 // their inner ends. Also a lathe named スラスター / ブースター / バーニア, as before.
 function nozzlesOf(pieces) {
+  // Ver2's nozzle parts and flame points: a flame each, on top of the nozzles found by name; with a flame point among them, these alone
+  const own = parts.filter(p => p.jet && p.op === 'add');
+  return [...own.map(p => {
+    p.proxy.updateMatrixWorld();
+    const M = p.proxy.matrixWorld, pos = new THREE.Vector3().applyMatrix4(M), dir = new THREE.Vector3(0, 0, -1).transformDirection(M);
+    const sc = new THREE.Vector3().setFromMatrixScale(M), r = (p.jet.r ?? 0.06) * (Math.abs(sc.x) + Math.abs(sc.y)) / 2;
+    return { pos, dir, r, bone: sided(boneGroupOf(p), pos.x, pos.z), name: p.name, own: true };
+  }), ...(own.some(p => p.jet.point) ? [] : autoNozzles(pieces))].sort((a, b) => b.r - a.r);
+}
+function autoNozzles(pieces) {
   const groups = new Map();
   for (const pc of pieces) {
     if (isHeld(pc.part)) continue;
     const full = pc.part.name ?? '', own = full.split('・').pop();
     let role = null, base = own;
-    const m = own.match(/^(.*噴射口.*?)の(殻|輪|のど|奥|口|付け根|光|台)( ?\d+)?$/);
+    const m = own.match(/^(.*噴射口.*?)の(殻|輪|のど|奥|口|付け根|光|台)( ?\d+)?$/), ring = !m && own.match(/^(.*噴射口.*?)（\d+）$/);
     if (m) { base = m[1]; role = { 殻: 'shell', 輪: 'shell', のど: 'in', 奥: 'in', 口: 'mouth', 付け根: 'root', 光: 'light', 台: null }[m[2]]; }
+    else if (ring) { base = ring[1]; role = 'shell'; }   // the rim plates of a bell, numbered （1）…（10） (parts/arm/foredeco.js nozzle): one nozzle with its の奥, not ten (each was a flame of its own)
     else if (/噴射口/.test(own) || (pc.part.kind === 'lathe' && /スラスター|ブースター|バーニア/.test(own))) role = 'body';
     if (!role) continue;
     const key = pc.bone + '|' + full.slice(0, full.length - own.length) + base;
@@ -1335,7 +1350,8 @@ function buildGameModel() {
   }
   // nozzles: a bone at each one's mouth, its -Y the way it blows, its radius in its extras (client/src/models.ts puts a
   // flame on each)
-  nozzlesOf(lods[0]).filter(z => bones[z.bone]).forEach((z, i) => {
+  const jetList = nozzlesOf(lods[0]).filter(z => bones[z.bone]);
+  jetList.forEach((z, i) => {
     const n = new THREE.Bone(); n.name = 'jet_' + i;
     n.position.copy(toGame(z.pos, floor).sub(toGame(at[z.bone], floor)));
     n.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), new THREE.Vector3(-z.dir.x, z.dir.y, -z.dir.z));
@@ -1484,6 +1500,47 @@ function buildGameModel() {
     report.tris[level] = Math.round(tris);
     report.calls[level] = groups.size + beltCalls;
   });
+  // the shield's look (Ver2: parts on the bone 盾): the node `shield`, plain meshes (no bones) in the game's frame, its middle at the
+  // node's origin. The game takes it off the model and holds it where its own shield would be, as tall as that XS's shield
+  // (client/src/models.ts ownShield; the hits and the shield's strength are the XS's, not these). Cutters within one of its
+  // Ver2 parts are already cut (precut); nothing else cuts them, and they cut nothing
+  const shieldParts = parts.filter(p => p.shield && p.op === 'add' && p.kind !== 'mesh');
+  if (shieldParts.length) {
+    const byCls = new Map(), box = new THREE.Box3();
+    for (const p of shieldParts) for (const g of worldGeometries(p)) {
+      const geo = g.index ? g.toNonIndexed() : g, pos = geo.attributes.position, nor = geo.attributes.normal;
+      const cls = isGlow(p) ? 'glow:' + p.color : p.team ? 'team' : 'body';
+      if (!byCls.has(cls)) byCls.set(cls, { P: [], N: [], C: [], metal: 0, rough: 0, n: 0 });
+      const o = byCls.get(cls), col = new THREE.Color(p.color);
+      for (let i = 0; i < pos.count; i++) {
+        const v = toGame(new THREE.Vector3().fromBufferAttribute(pos, i), floor);
+        o.P.push(v.x, v.y, v.z); box.expandByPoint(v);
+        if (nor) o.N.push(-nor.getX(i), nor.getY(i), -nor.getZ(i));
+        o.C.push(col.r, col.g, col.b);
+      }
+      o.metal += p.metal * pos.count; o.rough += p.rough * pos.count; o.n += pos.count;
+    }
+    const c = box.getCenter(new THREE.Vector3()), node = new THREE.Group();
+    node.name = 'shield'; node.position.copy(c);
+    let tris = 0;
+    for (const [key, o] of byCls) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(o.P, 3));
+      if (o.N.length === o.P.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(o.N, 3)); else g.computeVertexNormals();
+      g.setAttribute('color', new THREE.Float32BufferAttribute(o.C, 3));
+      g.translate(-c.x, -c.y, -c.z);
+      const glow = key.startsWith('glow') ? new THREE.Color(key.slice(5)) : null;
+      const mat = new THREE.MeshStandardMaterial({ name: glow ? 'shield_glow' : key === 'team' ? 'team_shield' : 'body_shield', vertexColors: !glow, color: glow ?? 0xffffff,
+        metalness: o.metal / o.n, roughness: o.rough / o.n, emissive: glow ?? 0x000000, emissiveIntensity: glow ? 1 : 0 });
+      const mesh = new THREE.Mesh(mergeVertices(g, 1e-5), mat);
+      mesh.name = 'shield_' + (glow ? 'glow' : key);
+      node.add(mesh);
+      tris += o.P.length / 9;
+    }
+    root.add(node);
+    report.shield = { tris: Math.round(tris), height: box.max.y - box.min.y };
+  }
+  report.jets = jetList.length; report.ownJets = jetList.some(z => z.own);
   report.attach = Object.keys(attach).filter(k => attach[k]);
   report.height = whole.max.y - whole.min.y;
   return { root, report };
@@ -1759,6 +1816,9 @@ export const XS = {
   },
   /** moves the floating parts of the loaded model onto its body (the shortest way) → how many parts were moved; doc() gives the result */
   attach: () => { const n = attachFloating(); for (const p of parts) p.pos = p.proxy.position.toArray(); return n; },
+  /** the nozzles the loaded model's parts have (named 噴射口…; not the flame points set by hand) in editor space, the largest first:
+   *  [{ pos, dir, r, bone (the game's bone: torso, forearm_l, ...) }]. Ver2's 噴射口 panel turns them into flame points it can move */
+  partNozzles: () => { rebuild(); return autoNozzles(lodPieces(0)).map(z => ({ pos: z.pos.toArray(), dir: z.dir.toArray(), r: z.r, bone: z.bone })); },
   /** the poses and the game's moves a look can show */
   poses: () => [...Object.keys(POSES), ...Object.keys(MOVES)],
   frames: pose => MOVES[pose]?.length ?? 0,

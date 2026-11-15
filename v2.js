@@ -37,6 +37,7 @@ import { hull2, pushAngle, bandedOutlines } from './skirtpush.js';
 import { fitTiltBoth, tilted, TILT_GRID } from './kneetilt.js';
 import { autoFix } from './v2-autofix.js';
 import { P, XH, XL, YH, YL, ZH, ZL, box } from './xsasm-lib.js';
+import { JET_R, JET } from './parts/back/jetshield.js';
 import { byId, register, boneOf as boneOf0, SIDED, sideOf, hasLink as hasLinkIn, bodyParts, fitItem, kneeAxesOf, SEG, ADJ0 } from './bodyparts.js';
 
 const $ = s => document.querySelector(s);
@@ -79,7 +80,7 @@ const HEAD_SAMPLES = { 'バイザーとマスクと耳ブロック': [
 const randomHeadV2 = () => randomHead(Math.random, HEAD_RAW).map(asHead);
 /** いくつでも付けられる部位（カタログを押すと増える）。ほかの部位は 1 つだけ（押すと、置いてある同じ部位のパーツと入れ替わる）。
  *  左右の対は、左右で 1 組。オーブ・挿せるタンクは収納口の数まで増える */
-const MULTI = new Set(['ベルト', '腰の筒', '動力パイプ', '胸の飾り', '胴の動力パイプ', '肩の動力パイプ', 'バックパックの装備', '翼の装備', 'エフェクト（光）', '前腕の飾り', '顔', '飾り', 'トサカ', 'アンテナ（額）', 'アンテナの中央（額）', '首当て', '胸の増加装甲', '肩の増加装甲', '前腕の増加装甲', 'すねの増加装甲']);   // （首当ては首に足して付ける。首と同じ部位にしていたら、首当てを選ぶと首が外れた）
+const MULTI = new Set(['噴射口', 'ベルト', '腰の筒', '動力パイプ', '胸の飾り', '胴の動力パイプ', '肩の動力パイプ', 'バックパックの装備', '翼の装備', 'エフェクト（光）', '前腕の飾り', '顔', '飾り', 'トサカ', 'アンテナ（額）', 'アンテナの中央（額）', '首当て', '胸の増加装甲', '肩の増加装甲', '前腕の増加装甲', 'すねの増加装甲']);   // （首当ては首に足して付ける。首と同じ部位にしていたら、首当てを選ぶと首が外れた）
 const isMulti = def => MULTI.has(def.cat);
 const TRACK_CAT = 'キャタピラ';
 // 「1 つだけの部位も足す」（issue #185、テスター 静流りおさん 2026-11-05「いくつも付けたい」）：入れると、1 つだけの部位も入れ替えずに足して置く（同じ所に置いたものは 4 cm ずつ下へずれる）。
@@ -150,7 +151,8 @@ const shinJ = { l: joint(legJ.l.inner, KNEE(1)), r: joint(legJ.r.inner, KNEE(-1)
 const ANKLE = s => [s * LEG_AT[0], LEG_AT[1] - 0.87, LEG_AT[2]];   // 足首（ひざの中心の 0.87 下）
 const footJ = { l: joint(shinJ.l.inner, ANKLE(1)), r: joint(shinJ.r.inner, ANKLE(-1)) };
 const itemsIn = { head: headHolder, headw: headJ.inner, foot_l: footJ.l.inner, foot_r: footJ.r.inner, hips: root, torso: torsoJ.inner, arm_l: armJ.l.inner, arm_r: armJ.r.inner, elbow_l: elbowJ.l.inner, elbow_r: elbowJ.r.inner, fore_l: foreJ.l.inner, fore_r: foreJ.r.inner,
-  leg_l: legJ.l.inner, leg_r: legJ.r.inner, knee_l: kneeJ.l.inner, knee_r: kneeJ.r.inner, shin_l: shinJ.l.inner, shin_r: shinJ.r.inner };
+  leg_l: legJ.l.inner, leg_r: legJ.r.inner, knee_l: kneeJ.l.inner, knee_r: kneeJ.r.inner, shin_l: shinJ.l.inner, shin_r: shinJ.r.inner,
+  shield: foreJ.l.inner };   // 付ける骨「盾」の部品：左の前腕と一緒に動く（ゲームでは、その XS の盾として左手に持つ。盾の欄）
 /** 関節の入れ物の位置を p に（回る中心も p） */
 const moveJoint = (j, p) => { j.at = p.slice(); j.outer.position.set(...p); j.inner.position.set(-p[0], -p[1], -p[2]); };
 
@@ -248,7 +250,7 @@ function freeGroup(item, index, def) {
   g.userData.index = index; g.userData.hinges = []; g.userData.extra = new Map();
   const tracked = isTrackedSet(def.pieces);
   const put = (key, m) => {
-    if (key === 'hips') { g.add(m); return; }
+    if (key === 'hips' || item.bone === 'shield') { g.add(m); return; }   // （盾にした部品は、ブロックの骨によらず全部が盾の入れ物へ）
     if (!g.userData.extra.has(key)) { const e = new THREE.Group(); e.userData.index = index; g.userData.extra.set(key, e); }
     g.userData.extra.get(key).add(m);
   };
@@ -314,7 +316,7 @@ function groupOf(item, index) {
 }
 /** 部品ごとに選べる付ける骨（item.bone。issue #185、テスター vault さん 2026-11-05）：無ければ部位の決まり（boneOf）。腕・脚は置いた x の向きの側。
  *  頭は、首の付け根で回る体の座標の入れ物（自由な部品の頭と同じ）。ひじ・ひざの節（2 重関節）は、節の部品のある時だけ骨があるので選ばせない */
-const BONE_PICK = [['hips', '腰'], ['torso', '胴'], ['head', '頭'], ['arm', '上腕'], ['fore', '前腕'], ['leg', '太もも'], ['shin', 'すね'], ['foot', '足']];
+const BONE_PICK = [['hips', '腰'], ['torso', '胴'], ['head', '頭'], ['arm', '上腕'], ['fore', '前腕'], ['leg', '太もも'], ['shin', 'すね'], ['foot', '足'], ['shield', '盾（左手に持つ）']];
 const BONE_HOLDER = { head: 'headw' };
 const canPickBone = it => !!it && !isHead(it.part) && !byId[it.part]?.free;
 /** 置いた部品を入れる骨の入れ物（腕・脚の骨は置いた x の向きで左右） */
@@ -817,6 +819,7 @@ function renderList() {
   $('#multiInfo').hidden = !many;
   if (many) $('#multiInfo').textContent = `${picked.length} 個を選んでいます${oneGroup ? `（${items[picked[0]].grp.replace(/^g/, 'グループ ')}）` : ''}。つまみ（移動・回転・拡大）でまとめて動く`;
   $('#bGroup').hidden = !many || oneGroup; $('#bUngroup').hidden = !grouped;
+  renderJetShield();
 }
 const FIELDS = { mx: ['mov', 0], my: ['mov', 1], mz: ['mov', 2], rx: ['rot', 0], ry: ['rot', 1], rz: ['rot', 2], sx: ['scal', 0], sy: ['scal', 1], sz: ['scal', 2] };
 function fillFields() {
@@ -827,6 +830,7 @@ function fillFields() {
   $('#fBone').innerHTML = `<option value="">自動（${auto}）</option>` + BONE_PICK.map(([b, l]) => `<option value="${b}">${l}${['arm', 'fore', 'leg', 'shin', 'foot'].includes(b) ? `（${sideOf(it) === 'l' ? '+x' : '−x'} の側）` : ''}</option>`).join('');
   $('#fBone').value = it.bone ?? ''; $('#fBone').disabled = !canPickBone(it);
   for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).value = it[k][j];
+  fillJetDir();
 }
 for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).oninput = () => {
   if (selected < 0) return;
@@ -1017,6 +1021,7 @@ function placeFree(def) {
 }
 function place(def) {
   if (busy()) return;
+  if (def.jet) { addJet(); return; }   // 噴射口（背中のタブ）：胴の後ろへ 1 つ（「噴射口」の欄の「＋ 噴射口を足す」と同じ）
   if (def.deco) { placeDeco(def); return; }
   if (def.free) { placeFree(def); return; }
   if (isHead(def.id)) { placeHeadPart(def); return; }
@@ -1105,7 +1110,7 @@ const catButtons = new Map();
 const TABS = [['head', '頭', HEAD], ['upper', '上半身', UPPER], ['back', '背中', BACK], ['arm', '腕', ARM], ['lower', '下半身', LOWER], ['leg', '脚', LEG], ['weapon', '武器', []], ['free', '取り込み', []]];
 /** そのタブに並べるパーツ：頭のタブには「頭まるごと」（機体エディタの機体から取り出した頭）、取り込みのタブには自由な機体 */
 // 脚のタブには自由なパーツの「キャタピラの車体」、背中のタブには「大砲」も（目次に入っていたのに、どのタブにも出ていなかった。issue #185）
-const tabList = (half, list) => (half === 'head' ? [...list.filter(d => !d.retired), ...FREE.filter(d => d.tab === 'head')] : half === 'weapon' ? [...FREE.filter(d => d.tab === 'weapon'), ...DECO] : half === 'free' ? FREE.filter(d => !d.tab) : [...list, ...FREE.filter(d => d.tab === half)]);
+const tabList = (half, list) => (half === 'head' ? [...list.filter(d => !d.retired), ...FREE.filter(d => d.tab === 'head')] : half === 'weapon' ? [...FREE.filter(d => d.tab === 'weapon'), ...DECO] : half === 'free' ? FREE.filter(d => !d.tab) : [...list, ...(half === 'back' ? [JET] : []), ...FREE.filter(d => d.tab === half)]);
 let tab = 'head';
 function showTab(t) {
   tab = t;
@@ -1177,6 +1182,7 @@ function save() {
   else { hist.length = histPos + 1; hist.push(snap); histPos = hist.length - 1; if (hist.length > 100) { hist.shift(); histPos--; } }
   histAt = now;
   showUnitName();
+  jetCountSoon();
 }
 function restore(pos) {
   if (pos < 0 || pos >= hist.length) return;
@@ -1231,7 +1237,7 @@ $('#bNew').onclick = () => { if (busy() || !okToLeave('新しく始めます')) 
 $('#bRandom').onclick = () => { if (busy()) return; adj = { ...NEW_ADJ }; showAdj(); items = tidy([...randomHeadV2(), ...randomLower(), ...adjusted(randomUpper()), ...adjusted(randomBack()), ...adjusted(randomArm()), ...randomLeg()]); selected = -1; rebuild(); save(); fitKneeGuards(); };
 $('#bKneeFit').onclick = fitKneeGuards;
 /** その部分だけ入れ替える */
-const replaceHalf = (half, list, fit = true) => { if (busy()) return; items = [...items.filter(it => halfOf(it.part) !== half), ...tidy(list)]; selected = -1; rebuild(); save(); if (fit && (half === 'leg' || half === 'lower')) fitKneeGuards(); };
+const replaceHalf = (half, list, fit = true) => { if (busy()) return; items = [...items.filter(it => halfOf(it.part) !== half || isJet(it) || it.bone === 'shield'), ...tidy(list)]; selected = -1; rebuild(); save(); if (fit && (half === 'leg' || half === 'lower')) fitKneeGuards(); };
 $('#bRandomHead').onclick = () => replaceHalf('head', randomHeadV2());
 $('#bRandomUp').onclick = () => replaceHalf('upper', adjusted(randomUpper()));
 $('#bRandomBack').onclick = () => replaceHalf('back', adjusted(randomBack()));
@@ -1450,7 +1456,179 @@ async function editorWorker() { await XS.ready(); return XS; }
 /** 関節のチェックの進み具合を out に出す（onStep(done, total)。チェックの間もページは動く） */
 const stepNote = (out, what) => (done, total) => { out.textContent = `${what}（姿勢 ${done} / ${total}）`; };
 /** 機体 id（a_raid など）で書き出す → { glb (base64), report, floating（つながっていない部品）, loose（関節で外れる・めり込む）, weapons } */
-async function exportGame(id, onStep) {
+// ---- 噴射口と盾（テスター もちゅなさん 2026-11-15「スラスターの噴射口の位置を変更する方法」「噴射口を増設する方法」「盾を自作することはできる？」、
+// #要望用「スラスター噴射専用のパーツの実装と、噴射する方向を矢印で表示して欲しい」; 依頼主「エディタの要望叶えてあげて」）[作り 独自] ----
+// 噴射口：炎を出す専用の部品（parts/back/jetshield.js の jet）。背中のタブの「噴射口」か、「噴射口」の欄の「＋ 噴射口を足す」で置き、
+// 動かす・回す（向きの矢印も一緒に回る）・拡大（炎の太さ）・複製・反対側にも・外す。腕・脚には「付ける骨」で。部品の名前に「噴射口」の
+// 付いた物（ランドセルの口など）からの炎はそのまま、そこに足される。
+// 炎の点（jetpoint）：「部品の噴射口も動かせるようにする」で、部品の名前による炎を 1 つずつ形の無い点に写す。点があると名前による炎は
+// 出ず、炎は噴射口の部品と点からだけ出る。「炎の点を外す」で元に戻る。
+// 盾：付ける骨「盾」の部品が、戦闘で左手に持つ盾の見た目になる（盾を持つ XS だけ。大きさはその XS の盾に合わせる。見た目だけ）
+// 保存データ（機体の JSON の items）にそのまま残る：噴射口 { part: 'jet', mov, rot, scal, bone? }、炎の点 { part: 'jetpoint', … }、盾の部品
+// { …, bone: 'shield' }。書き出し（xsengine.js）は同じ items から炎の点（jet_<n>）と盾（節 shield）を作る（tools/bodyxs.ts でも同じ）
+// （関数と var：組み立ての初めの描き直し（renderList）からも呼ばれる）
+function isJet(it) { return !!byId[it?.part]?.jet; }
+function isJetPoint(it) { return byId[it?.part]?.jet === 'point'; }
+function canShield(it) { return !!it && !isHead(it.part) && !isJet(it); }   // （頭の部品は頭の座標で持つので、盾にできない）
+// 書き出しの道具（xsengine.js）は 1 つの機体しか持てない：書き出しと、部品の噴射口の数えを 1 つずつ順に
+let engineQ = Promise.resolve();
+const onEngine = fn => { const r = engineQ.then(fn, fn); engineQ = r.catch(() => {}); return r; };
+/** ゲームの骨（書き出しの名前）→ 付ける骨（BONE_PICK） */
+const pickOfBone = b => { const m = /^(arm|elbow|forearm|leg|knee|shin|foot|wing|skirt_front|skirt_back)_([lr])$/.exec(b); return m ? { arm: 'arm', elbow: 'arm', forearm: 'fore', leg: 'leg', knee: 'leg', shin: 'shin', foot: 'foot', wing: 'torso' }[m[1]] ?? 'hips' : b === 'hips' || b === 'head' ? b : 'torso'; };
+/** 部品の名前による噴射口（ランドセルの口など。噴射口の部品・炎の点は入れない）→ [{ pos, dir, r, bone }]（エディタの座標、立った姿勢） */
+const partNozzles = () => onEngine(async () => {
+  const X = await editorWorker();
+  X.load({ parts: [], ai: '', role: 'raid' });
+  await X.applyUnit(structuredClone({ ...unitDoc(), items: kept().filter(it => !isJet(it)) }));
+  return X.partNozzles();
+});
+/** 噴射口 1 つ → 炎の点の置いたパーツ（−z が噴き出す向き。回転は Ry·Rx·Rz） */
+const pointItem = z => {
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(...z.dir).normalize()), e = new THREE.Euler().setFromQuaternion(q, 'YXZ');
+  const k = round(Math.min(4, Math.max(0.25, z.r / JET_R)), 3), b = pickOfBone(z.bone);
+  return { part: 'jetpoint', mov: z.pos.map(v => round(v, 4)), rot: [round(e.x / D, 1), round(e.y / D, 1), round(e.z / D, 1)], scal: [k, k, k], ...(b !== 'torso' ? { bone: b } : {}) };
+};
+var partJets = null, jetTimer = 0, shieldGuide = null;   // 部品の名前による噴射口の数（数え終わるまで null）、数え直しの時計、盾の目安の枠
+function jetCountSoon() {
+  clearTimeout(jetTimer);
+  if (!$('#jetBox')?.open || items.some(isJetPoint)) return;
+  jetTimer = setTimeout(async () => { try { partJets = (await partNozzles()).length; } catch { partJets = null; } renderJetShield(); }, 700);
+}
+/** 噴射口の部品を 1 つ：胴の部品の後ろの面に、真ん中から少し横へ（足すたびに左右を替える）、後ろ下へ噴く向きで */
+function addJet() {
+  if (busy()) return;
+  const box = new THREE.Box3();
+  items.forEach((it, i) => { if (!isJet(it) && groups[i] && holderOf(it) === torsoJ.inner) box.expandByObject(groups[i]); });
+  const n = items.filter(it => byId[it.part]?.jet === 'part').length, side = n % 2 ? -1 : 1;
+  const at = box.isEmpty() ? [0, 2.25, -0.3] : [0, box.getCenter(new THREE.Vector3()).y + 0.05, box.min.z - 0.02];
+  addItems([{ part: 'jet', mov: [round(side * (0.1 + 0.04 * Math.floor(n / 2)), 4), round(at[1], 4), round(at[2], 4)], rot: [-45, 0, 0], scal: [1, 1, 1] }]); pickLast(1);
+  note('噴射口を 1 つ足しました。オレンジの矢印が噴射の向き。つまみか「位置・回転・拡大」で動かす（回すと矢印も回る）');
+}
+async function addJetPoints() {
+  if (busy() || items.some(isJetPoint)) return;
+  note('部品の噴射口を調べています…');
+  const zs = await partNozzles();
+  if (!zs.length) { note('名前に「噴射口」の付いた部品がありません', true); return; }
+  addItems(zs.map(pointItem)); pickLast(1);
+  note(`部品の噴射口の炎 ${zs.length} 個を、動かせる炎の点にしました（点があると、部品の名前による炎は出ません）`);
+}
+function resetJets() {
+  if (busy() || !items.some(isJetPoint)) return;
+  items = items.filter(it => !isJetPoint(it)); selected = -1; picked = []; rebuild(); save();
+  note('炎の点を外しました。部品の噴射口から炎が出ます');
+}
+// 盾の目安：ゲームの標準の盾（高さ 8 m・幅 4.6 m）を、ゲームが持たせる所（左手の外、手より少し上）に枠で出す（書き出さない）
+function shieldAt() { const e = foreJ.l.at ?? ELBOW(1); return [e[0] + 0.15, e[1] - 0.12, e[2]]; }
+function placeShieldBase() {
+  if (busy()) return;
+  addItems([{ part: 'shieldbase', mov: shieldAt().map(v => round(v, 4)), rot: [0, 0, 0], scal: [1, 1, 1], bone: 'shield' }]); pickLast(1);
+  note('盾の土台を左の前腕に置きました。ほかの部品も「盾にする」で盾に足せます');
+}
+function setShield(on) {
+  const list = pickedList().filter(i => canShield(items[i]));
+  if (!list.length) { note(on ? '盾にする部品を選んでください（頭の部品と噴射口は盾にできません）' : '盾の部品を選んでください', true); return; }
+  for (const i of list) { if (on) items[i].bone = 'shield'; else if (items[i].bone === 'shield') delete items[i].bone; }
+  rebuild(); save();
+  note(on ? `${list.length} 個の部品を盾にしました（左の前腕と一緒に動き、ゲームでは盾として持つ）` : `${list.length} 個の部品を盾から外しました`);
+}
+function renderJetShield() {
+  const jl = $('#jetList'); if (!jl) return;
+  const own = items.map((it, i) => [it, i]).filter(([it]) => isJet(it)), points = own.filter(([it]) => isJetPoint(it)).length;
+  jl.innerHTML = '';
+  let nj = 0, np = 0;
+  own.forEach(([it, i]) => {
+    const d = document.createElement('div'); d.className = picked.includes(i) ? 'sel' : '';
+    const b = it.bone ? BONE_PICK.find(([x]) => x === it.bone)?.[1] ?? it.bone : '胴', side = ['arm', 'fore', 'leg', 'shin', 'foot'].includes(it.bone) ? (sideOf(it) === 'l' ? '・左' : '・右') : '';
+    d.innerHTML = `<span>${isJetPoint(it) ? `炎の点 ${++np}` : `噴射口 ${++nj}`}（${b}${side}、大きさ ${round((Math.abs(it.scal[0]) + Math.abs(it.scal[1])) / 2, 2)}）</span><b class="x" title="外す">×</b>`;
+    d.onclick = e => { if (e.target.classList.contains('x')) { items.splice(i, 1); selected = -1; picked = []; rebuild(); save(); return; } selectOne(i); };
+    jl.appendChild(d);
+  });
+  jl.hidden = !own.length;
+  fillJetDir();
+  $('#jetInfo').innerHTML = (nj ? `噴射口の部品 <b>${nj} 個</b>。` : '') + (points
+    ? `部品の名前による炎は、<b>${points} 個</b>の炎の点に写してあります（部品からは出ません）。`
+    : `名前に「噴射口」の付いた部品（ランドセルの口など）からも炎が出ます${partJets == null ? '' : `：<b>${partJets} 個</b>`}。`) + 'オレンジの矢印が噴射の向き';
+  $('#bJetReset').hidden = !points; $('#bJetPoints').hidden = !!points;
+  const sh = items.filter(it => it.bone === 'shield').length, sel = items[selected];
+  $('#shieldInfo').innerHTML = sh ? `盾の部品：<b>${sh} 個</b>` : '盾の部品はまだありません（ゲームではいつもの盾）';
+  $('#bShieldOn').disabled = !canShield(sel) || sel.bone === 'shield'; $('#bShieldOff').disabled = !(sel?.bone === 'shield');
+  const want = !!$('#shieldBox')?.open && $('#shieldGuideOn').checked;
+  if (want && !shieldGuide) { shieldGuide = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.08, 8 / UNIT_M, 4.6 / UNIT_M)), new THREE.LineBasicMaterial({ color: 0x6fb3ff, transparent: true, opacity: 0.55 })); foreJ.l.inner.add(shieldGuide); }
+  if (shieldGuide) shieldGuide.visible = want;
+  if (want) { const a = shieldAt(); shieldGuide.position.set(a[0] + 0.04, a[1], a[2]); }
+}
+// 噴射の向き（テスター もちゅなさん 2026-11-16 #要望用「スラスターの噴射方向を細かく設定できるようにしてほしい」）：選んでいる噴射口・炎の点の
+// 向きを、左右・上下の 2 つの角度（1° きざみ）で入れる・矢印をドラッグして回す。向きは置いたパーツの回転（rot）そのもので、保存データに残り、
+// 書き出し・ゲームの炎も同じ向き。角度は付ける骨の、立った姿勢の向きで：左右 0° が真後ろ、+ が機体の左（+x）へ、上下 0° が水平、− が下へ。
+// 回転は [上下, −左右, 0]（Ry·Rx の順に −z を回すと、噴く向き (−cos 上下·sin(−左右)…) になる）。ひねり（z の回転）は向きを変えないので 0 にする [独自]
+/** 置いたパーツの回転 → 噴く向きの [左右, 上下]（度） */
+function jetAngles(it) {
+  const d = new THREE.Vector3(0, 0, -1).applyMatrix4(rotMatrix(it.rot ?? [0, 0, 0]));
+  return [Math.round(Math.atan2(d.x, -d.z) / D), Math.round(Math.asin(Math.max(-1, Math.min(1, d.y))) / D)];
+}
+function setJetAngles(i, yaw, pitch) {
+  const it = items[i];
+  yaw = ((Math.round(yaw) + 540) % 360) - 180; pitch = Math.max(-90, Math.min(90, Math.round(pitch)));
+  it.rot = [pitch, yaw ? -yaw : 0, 0];
+  if (groups[i]) applyToGroup(it, groups[i]);
+  applyPose();
+}
+function fillJetDir() {
+  const box = $('#jetDir'); if (!box) return;
+  const it = items[selected], on = selected >= 0 && isJet(it) && picked.length <= 1;
+  box.hidden = !on;
+  if (!on) return;
+  const [y, p] = jetAngles(it);
+  if (document.activeElement !== $('#jetYaw')) $('#jetYaw').value = y;
+  if (document.activeElement !== $('#jetPitch')) $('#jetPitch').value = p;
+}
+for (const id of ['jetYaw', 'jetPitch']) $('#' + id).oninput = () => {
+  if (selected < 0 || !isJet(items[selected])) return;
+  const y = parseFloat($('#jetYaw').value), p = parseFloat($('#jetPitch').value);
+  if (!Number.isFinite(y) || !Number.isFinite(p)) return;
+  setJetAngles(selected, y, p); fillFields(); save();
+};
+// 矢印をドラッグ：選んでいる噴射口（か炎の点）を押してドラッグすると、口を中心に、押している所の方へ向く（口のまわりの球に画面の線が
+// 当たる所。当たらなければ線のいちばん近い所）。掴むのは矢印（口はつまみと重なる）。押すだけ（動かさない）なら今までどおり選ぶ
+let jetDrag = null;
+canvas.addEventListener('pointerdown', e => {
+  if (PE.active() || gizmo.dragging || e.button !== 0 || selected < 0 || !isJet(items[selected]) || !groups[selected]) return;
+  const r = canvas.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  // (掴むのは矢印：口はつまみの真ん中と重なるので、つまみに譲る)
+  if (!ray.intersectObject(groups[selected], true).some(h => /^向きの矢印/.test(h.object.userData.pc?.name ?? ''))) return;
+  jetDrag = { i: selected, id: e.pointerId };
+  e.stopImmediatePropagation();   // （視点は回さない）
+  canvas.setPointerCapture(e.pointerId);
+}, true);
+canvas.addEventListener('pointermove', e => {
+  if (!jetDrag || e.pointerId !== jetDrag.id) return;
+  const g = groups[jetDrag.i], r = canvas.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  g.updateWorldMatrix(true, false);
+  const o = new THREE.Vector3().setFromMatrixPosition(g.matrixWorld), R = 0.29 * Math.max(0.3, Math.abs(g.getWorldScale(new THREE.Vector3()).y));
+  const hit = ray.ray.intersectSphere(new THREE.Sphere(o, R), new THREE.Vector3()) ?? ray.ray.closestPointToPoint(o, new THREE.Vector3());
+  const d = hit.sub(o);
+  if (d.lengthSq() < 1e-8) return;
+  d.normalize().applyQuaternion(g.parent.getWorldQuaternion(new THREE.Quaternion()).invert());   // （付ける骨の向きで）
+  setJetAngles(jetDrag.i, Math.atan2(d.x, -d.z) / D, Math.asin(Math.max(-1, Math.min(1, d.y))) / D);
+  fillFields();
+}, true);
+const endJetDrag = e => { if (!jetDrag || e.pointerId !== jetDrag.id) return; jetDrag = null; save(); renderJetShield(); };
+canvas.addEventListener('pointerup', endJetDrag, true);
+canvas.addEventListener('pointercancel', endJetDrag, true);
+$('#bJetAdd').onclick = addJet;
+$('#bJetReset').onclick = resetJets;
+$('#bJetPoints').onclick = addJetPoints;
+$('#jetBox').ontoggle = () => { jetCountSoon(); renderJetShield(); };
+$('#bShieldBase').onclick = placeShieldBase;
+$('#bShieldOn').onclick = () => setShield(true);
+$('#bShieldOff').onclick = () => setShield(false);
+$('#shieldBox').ontoggle = renderJetShield;
+$('#shieldGuideOn').onchange = renderJetShield;
+
+async function exportGame(id, onStep) { return onEngine(() => exportGame0(id, onStep)); }
+async function exportGame0(id, onStep) {
   const X = await editorWorker();
   const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
   const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));   // 自由な機体が自分の武器を持っている
@@ -1489,6 +1667,7 @@ $('#bGame').onclick = async () => {
     box.innerHTML = `<b>${id}.glb を書き出しました</b>（${(u8.length / 1048576).toFixed(1)} MB）<br>`
       + `つながり ${r.floating.length ? `✗ 離れている部品 ${r.floating.length} 組` : '✓'} ／ 関節 ${r.loose.length ? `✗ ${r.loose.length} 個の動きで外れる・めり込む` : '✓'}<br>`
       + `三角形 ${r.report.tris.map((t, i) => `${t.toLocaleString()} ${ok(t, GAME_LIMIT[i])}`).join(' / ')}（近く・中・遠く）、描画 ${r.report.calls[0]} 回 ${ok(r.report.calls[0], 5)}、骨 ${r.report.bones.length} 本<br>`
+      + `炎の出る噴射口 ${r.report.jets} 個（${r.report.ownJets ? '置いた噴射口' : '部品の噴射口'}）、盾 ${r.report.shield ? `あり（三角形 ${r.report.shield.tris.toLocaleString()}）` : 'なし（ゲームのいつもの盾）'}<br>`
       + [...r.floating.slice(0, 4).map(f => '離れている：' + esc(f)), ...r.loose.slice(0, 4).map(esc)].map(t => `<span style="color:var(--warn)">${t}</span><br>`).join('')
       + `<span class="hint">ゲームに入れるには public/models/${id}.glb に置き、出す前のテスト 3 つ（docs/models.md）を通す。手持ちの武器は${id[0] === 'b' ? ' GIO' : '連合'}の強襲のもの</span>`;
   } catch (e) { box.textContent = '書き出せませんでした：' + (e?.message ?? e); }
@@ -2098,7 +2277,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '30315ac';
+const BUILD = '62eb402';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
