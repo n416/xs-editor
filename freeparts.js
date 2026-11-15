@@ -54,8 +54,17 @@ export const isGunPart = p => p.gun ?? GUN_RE.test(p.name ?? '');
 /** 手持ちの武器（銃・バズーカ）か */
 export const isHeldPart = p => isGunPart(p) || BAZOOKA_RE.test(p.name ?? '');
 export const isGlowPart = p => p.glow ?? GLOW_RE.test(p.name ?? '');
-/** Ver2 の画面で入れる骨の入れ物：組 g と、その形の真ん中の x（機体の左が +x） */
-export const holderKey = (g, cx) => (['arm', 'elbow', 'fore', 'leg', 'knee', 'shin', 'foot'].includes(g) ? `${g}_${cx >= 0 ? 'l' : 'r'}` : g === 'head' ? 'headw' : g === 'hips' || g === 'skirt' ? 'hips' : 'torso');
+/** 書き出しの骨の名前（左右つき：forearm_r・arm_l・skirt_front_l など）。部品の bone にこの形で入っている物がある（見本の武器 samples/w_*.json は forearm_r） */
+const SIDED_BONE = /^(arm|elbow|forearm|leg|knee|shin|foot)_([lr])$/;
+/** Ver2 の画面で入れる骨の入れ物：組 g と、その形の真ん中の x（機体の左が +x）。
+ *  g が左右つきの骨の名前なら、その骨の入れ物（左右も名前のとおり）。
+ *  （2026-11-15 までは知らない名前として胴に入れていて、見本の銃が肘・前腕を動かしても手に付いて行かなかった。issue #693） */
+export const holderKey = (g, cx) => {
+  const m = SIDED_BONE.exec(g);
+  if (m) return `${m[1] === 'forearm' ? 'fore' : m[1]}_${m[2]}`;
+  if (/^skirt_/.test(g)) return 'hips';
+  return ['arm', 'elbow', 'fore', 'leg', 'knee', 'shin', 'foot'].includes(g) ? `${g}_${cx >= 0 ? 'l' : 'r'}` : g === 'head' ? 'headw' : g === 'hips' || g === 'skirt' ? 'hips' : 'torso';
+};
 
 // ---- 機体エディタの部品 ⇔ ブロック ----
 const r5 = v => Math.round(v * 1e5) / 1e5;
