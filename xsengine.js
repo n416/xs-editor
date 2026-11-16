@@ -31,6 +31,8 @@ export const DEFAULTS = {
   gun: null,               // a hand weapon the game hides for melee: true / false, null = by its name
   mouth: null,             // where a weapon's shot leaves, chosen on the block (機体エディタ Ver2 「武器の口」, issue #144): one of MOUTH_NODE's keys; null = by its name
   opacity: null,           // a see-through part (lights from the body generator): 0..1, null = solid
+  alpha: null,             // Ver2's paint made this part see-through (its colour role's 透明度, issue #746): 0..1, null = solid. The unit's
+                           //     model draws it so (materials of its own, transparent); `opacity` is not used there
   pos: [0, 0, 0], rot: [0, 0, 0], scl: [1, 1, 1],
   side: null, top: null,   // extrude only: outlines seen from the side [[z, y], ...] and from above [[x, z], ...]; null = none
   planes: null,            // kind 'hull' only: the planes of a convex solid [[nx, ny, nz, d, bevel?], ...] (hull.js); n·p ≤ d is kept
@@ -450,6 +452,8 @@ const OPTIONAL_BONES = new Set(['foot_l', 'foot_r', 'elbow_l', 'elbow_r', 'knee_
 // by the rest and carries the lower bone with it. [lower bone group]: [link, first (rad), the side it folds to]
 const LINKS = { forearm: ['elbow', ELBOW_AXES[2], BEND.elbow], shin: ['knee', KNEE_AXES[2], BEND.knee] };
 
+/** Ver2's paint opacity of a part as a whole percent (1..99), or 0 when it is solid (alpha null or 1) */
+const alphaKey = p => (p.alpha != null && p.alpha < 1 ? Math.max(0, Math.min(99, Math.round(p.alpha * 100))) || '0' : 0);
 function materialClass(p) {
   if (p.kind === 'mesh') return 'skin:' + (MESHES.get(p.mesh)?.texId ?? '');
   if (p.team) return 'team';
@@ -1428,14 +1432,14 @@ function buildGameModel() {
     for (const pc of pieces) {
       let cls = isBazooka(pc.part) ? 'bazooka' : isGun(pc.part) ? 'gun' : materialClass(pc.part);
       if (cls.startsWith('skin') && !pc.geo.attributes.uv) cls = 'body';
-      const key = cls === 'glow' && level === 0 ? 'glow:' + pc.part.color : cls;
+      const a = alphaKey(pc.part), key = (cls === 'glow' && level === 0 ? 'glow:' + pc.part.color : cls) + (a ? '|a' + a : '');   // (see-through parts: a material of their own per opacity)
       (groups.get(key) || groups.set(key, []).get(key)).push(pc);
     }
     // stay within the draw-call budget (the belts come on top: a tracked XS may use 5 + 2, gltfrig.ts drawLimit):
     // fold extra glow colours into one, then metal into body
     const budget = GAME_LIMITS.drawCalls;
     if (level === 0 && groups.size > budget) {
-      const glowKeys = [...groups.keys()].filter(k => k.startsWith('glow:'));
+      const glowKeys = [...groups.keys()].filter(k => k.startsWith('glow:') && !k.includes('|a'));
       const keep = glowKeys.shift();
       for (const k of glowKeys) { groups.get(keep).push(...groups.get(k)); groups.delete(k); }
     }
@@ -1444,7 +1448,7 @@ function buildGameModel() {
       groups.delete('metal');
     }
     for (const [key, list] of groups) {
-      const cls = key.split(':')[0];
+      const cls = key.split(/[:|]/)[0], alpha = key.includes('|a') ? +key.split('|a')[1] / 100 : null;
       const P = [], N = [], C = [], SI = [], SW = [], UV = [], Q = [];
       const skinTex = cls === 'skin' ? MESHES.get(list[0].part.mesh)?.tex : null;
       let metal = 0, rough = 0, n = 0;
@@ -1481,9 +1485,10 @@ function buildGameModel() {
       const merged = mergeVertices(g, 1e-5);   // share identical corners: same look, far smaller file
       const glowColor = cls === 'glow' ? new THREE.Color(list[0].part.color) : null;
       const mat = new THREE.MeshStandardMaterial({
-        name: cls === 'team' ? 'team_color' : cls === 'glow' ? `glow_${[...groups.keys()].indexOf(key)}` : cls,
+        name: (cls === 'team' ? 'team_color' : cls === 'glow' ? `glow_${[...groups.keys()].indexOf(key)}` : cls) + (alpha != null ? `_a${Math.round(alpha * 100)}` : ''),
         vertexColors: !skinTex, map: skinTex ?? null, metalness: n ? metal / n : 0.3, roughness: n ? rough / n : 0.5,
         emissive: glowColor || 0x000000, emissiveIntensity: glowColor ? 1 : 0,
+        ...(alpha != null ? { transparent: true, opacity: alpha, depthWrite: false } : {}),   // (glTF: alphaMode BLEND; the game's loader makes it see-through)
       });
       const mesh = new THREE.SkinnedMesh(merged, mat);
       mesh.name = `xs_${mat.name}${level ? '_lod' + level : ''}`;
@@ -1509,7 +1514,7 @@ function buildGameModel() {
     const byCls = new Map(), box = new THREE.Box3();
     for (const p of shieldParts) for (const g of worldGeometries(p)) {
       const geo = g.index ? g.toNonIndexed() : g, pos = geo.attributes.position, nor = geo.attributes.normal;
-      const cls = isGlow(p) ? 'glow:' + p.color : p.team ? 'team' : 'body';
+      const a = alphaKey(p), cls = (isGlow(p) ? 'glow:' + p.color : p.team ? 'team' : 'body') + (a ? '|a' + a : '');
       if (!byCls.has(cls)) byCls.set(cls, { P: [], N: [], C: [], metal: 0, rough: 0, n: 0 });
       const o = byCls.get(cls), col = new THREE.Color(p.color);
       for (let i = 0; i < pos.count; i++) {
@@ -1529,11 +1534,13 @@ function buildGameModel() {
       if (o.N.length === o.P.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(o.N, 3)); else g.computeVertexNormals();
       g.setAttribute('color', new THREE.Float32BufferAttribute(o.C, 3));
       g.translate(-c.x, -c.y, -c.z);
-      const glow = key.startsWith('glow') ? new THREE.Color(key.slice(5)) : null;
-      const mat = new THREE.MeshStandardMaterial({ name: glow ? 'shield_glow' : key === 'team' ? 'team_shield' : 'body_shield', vertexColors: !glow, color: glow ?? 0xffffff,
-        metalness: o.metal / o.n, roughness: o.rough / o.n, emissive: glow ?? 0x000000, emissiveIntensity: glow ? 1 : 0 });
+      const [k0, a] = key.split('|a'), alpha = a ? +a / 100 : null, sfx = alpha != null ? `_a${a}` : '';
+      const glow = k0.startsWith('glow') ? new THREE.Color(k0.slice(5)) : null;
+      const mat = new THREE.MeshStandardMaterial({ name: (glow ? 'shield_glow' : k0 === 'team' ? 'team_shield' : 'body_shield') + sfx, vertexColors: !glow, color: glow ?? 0xffffff,
+        metalness: o.metal / o.n, roughness: o.rough / o.n, emissive: glow ?? 0x000000, emissiveIntensity: glow ? 1 : 0,
+        ...(alpha != null ? { transparent: true, opacity: alpha, depthWrite: false } : {}) });
       const mesh = new THREE.Mesh(mergeVertices(g, 1e-5), mat);
-      mesh.name = 'shield_' + (glow ? 'glow' : key);
+      mesh.name = 'shield_' + (glow ? 'glow' : k0) + sfx;
       node.add(mesh);
       tris += o.P.length / 9;
     }

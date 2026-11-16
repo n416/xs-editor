@@ -2,6 +2,7 @@
 //   役：main 主装甲・sub 副装甲・frame フレームと関節・accent 差し色・ex1〜ex3 追加の色 1〜3・glow 発光・glow2〜glow3 発光 2〜3
 //   （追加の色・発光 2〜3 は issue #240 で足した枠。ブロックの色の役で選んだ時だけ使い、元からのパーツは使わない）
 //   塗り paint = { pal: { main, sub, frame, accent, ex1, ex2, ex3, glow, glow2, glow3 }, type, vivid: { colors: [色…], on: { パーツの部位名: 何番目の色 } } }
+//   alpha：役ごとの不透明度 { 役: 0〜1 }（無い役は 1＝不透明。issue #746：バイザー・盾・光る所を半透明に）。エディタの欄は「透明度 0〜100%」（＝ 1 − 不透明度）
 //   ビビッド：数色の鮮やかな色。on に入っている部位のパーツは主装甲をその色で塗り、差し色のブロックはビビッドの色を使う。
 // 役は、いまのカタログのブロックの色から決める（部品を作る道具の 5 色：明るい装甲・暗い装甲・黒・差し色・発光。ほかの色は明るさと鮮やかさで振り分ける）。
 // 光（エフェクト：光っていて当たり判定のないブロック）と透けるブロックは、塗りの対象にしない（自分の色のまま）。
@@ -47,9 +48,18 @@ export function roleOf(pc) {
 }
 
 /** 塗る前の色（部品を作る道具の色そのまま） */
-export const DEFAULT_PAINT = () => ({ type: '', pal: { ...ROLE_COLOR }, lock: {}, vivid: { colors: [], on: {} } });
+export const DEFAULT_PAINT = () => ({ type: '', pal: { ...ROLE_COLOR }, lock: {}, alpha: {}, vivid: { colors: [], on: {} } });
 /** 保存してあった塗り：足した枠の色が無い物（issue #240 より前に保存した機体）は、その枠を塗る前の色で埋める */
 export const loadPaint = p => (p?.pal ? { ...DEFAULT_PAINT(), ...p, pal: { ...ROLE_COLOR, ...p.pal } } : DEFAULT_PAINT());
+
+/** ブロック pc に塗りの役の透明度が決めてあれば、その不透明度（0〜1、0.01 刻み）。無ければ null
+ *  （自分の opacity を持つブロック＝光・透けるブロックは役を持たないので、塗りの透明度は効かない） */
+export function roleAlpha(pc, paint) {
+  const role = roleOf(pc), a = role ? paint?.alpha?.[role] : null;
+  return a != null && a < 1 ? clamp(Math.round(a * 100) / 100, 0, 1) : null;
+}
+/** エディタで描く不透明度：塗りの役の透明度、無ければブロックの自分の opacity（無ければ null＝不透明） */
+export const opacityOf = (pc, paint) => roleAlpha(pc, paint) ?? pc.opacity ?? null;
 
 const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 /** ブロック pc（部位 cat のパーツの中）の色 */
@@ -95,7 +105,7 @@ export function randomPalette(rnd = Math.random, prev = null) {
     const gl = [...glows].sort(() => rnd() - 0.5), glow = gl[0] ?? GLOWS[0], rest = GLOWS.filter(g => g !== glow).sort(() => rnd() - 0.5);
     const pal = { main: hslToHex(...main), sub: hslToHex(...sub), frame: hslToHex(...frame), accent: hslToHex(...accent), ex1: hslToHex(...ex1), ex2: hslToHex(...ex2), ex3: hslToHex(...ex3), glow, glow2: rest[0], glow3: rest[1] };
     for (const role of Object.keys(pal)) if (lock[role] && prev?.pal?.[role]) pal[role] = prev.pal[role];
-    return { type: type[0], pal, lock: { ...lock }, vivid: prev?.vivid ?? { colors: [], on: {} } };
+    return { type: type[0], pal, lock: { ...lock }, alpha: { ...(prev?.alpha ?? {}) }, vivid: prev?.vivid ?? { colors: [], on: {} } };
   }
   return prev ?? DEFAULT_PAINT();
 }

@@ -30,7 +30,7 @@ import { FORM_MAX, FORM_MS, formsUsed, keepBase, showForms } from './v2-forms.js
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
-import { DEFAULT_PAINT, ROLE_LABEL, GLOW_ROLES, colorOf, loadPaint, randomPalette, randomVivid, hexToHsl } from './paint.js';
+import { DEFAULT_PAINT, ROLE_LABEL, GLOW_ROLES, colorOf, opacityOf, loadPaint, randomPalette, randomVivid, hexToHsl } from './paint.js';
 import { buildHull, hullReach } from './hull.js';
 import { makeSheet } from './xsbody.js';
 import { hull2, pushAngle, bandedOutlines } from './skirtpush.js';
@@ -165,13 +165,13 @@ const hullGeo = planes => {
 };
 // ブロックの形は partgeo.js（面で囲った形・押し出し・回転体。「引く」ブロックに削られた後の形）
 const MATS = new Map();
-// 光る部品（glow）は自分の色で光り、透ける部品（opacity）は奥が見える（光の翼・オーラ・リボン・虫の羽）
+// 光る部品（glow）は自分の色で光り、透ける部品（opacity）は奥が見える（光の翼・オーラ・リボン・虫の羽）。塗りの役の透明度（paint.alpha、issue #746）も同じ
 const material = (pc, def) => {
   // 自由な部品（機体エディタの形式）は、塗りではなく自分の色・質感。光るかどうかは名前からも決まる
   const free = !!(def?.free || def?.deco), glow = free ? !!isGlowPart(pc) : !!pc.glow;   // （武器の飾りも、武器の色・質感のまま）
-  const c = free && !pc.role ? pc.color ?? '#c3c9d2' : colorOf(pc, def?.cat ?? '', paint), k = `${c}|${glow ? 1 : 0}|${pc.opacity ?? 1}|${free ? `${pc.metal}/${pc.rough}` : ''}`;
+  const c = free && !pc.role ? pc.color ?? '#c3c9d2' : colorOf(pc, def?.cat ?? '', paint), op = free && !pc.role ? pc.opacity ?? null : opacityOf(pc, paint), k = `${c}|${glow ? 1 : 0}|${op ?? 1}|${free ? `${pc.metal}/${pc.rough}` : ''}`;
   if (!MATS.has(k)) MATS.set(k, new THREE.MeshStandardMaterial({ color: c, metalness: free ? pc.metal ?? 0.55 : glow ? 0 : 0.45, roughness: free ? pc.rough ?? 0.38 : 0.5, side: THREE.DoubleSide,
-    ...(glow ? { emissive: c, emissiveIntensity: 0.85 } : {}), ...(pc.opacity != null ? { transparent: true, opacity: pc.opacity, depthWrite: false } : {}) }));
+    ...(glow ? { emissive: c, emissiveIntensity: 0.85 } : {}), ...(op != null ? { transparent: true, opacity: op, depthWrite: false } : {}) }));
   return MATS.get(k);
 };
 
@@ -1394,9 +1394,13 @@ function applyPaint() {
   showFormNow();
 }
 const ROLE_KEYS = Object.keys(ROLE_LABEL);
+/** 役 r の透明度（%。塗りの alpha は不透明度） */
+const tpOf = r => Math.round((1 - (paint.alpha?.[r] ?? 1)) * 100);
 function showPaint() {
   $('#paintTeam').checked = !!paint.team;
-  const el = $('#paintBox'), row = r => `<div class="pal"><input type="color" data-role="${r}" value="${paint.pal[r]}"><span>${ROLE_LABEL[r]}</span><label title="「いい感じに塗る」でこの色を変えない"><input type="checkbox" data-lock="${r}" ${paint.lock?.[r] ? 'checked' : ''}>固定</label></div>`;
+  const el = $('#paintBox'), row = r => `<div class="pal"><input type="color" data-role="${r}" value="${paint.pal[r]}"><span>${ROLE_LABEL[r]}</span><label title="「いい感じに塗る」でこの色を変えない"><input type="checkbox" data-lock="${r}" ${paint.lock?.[r] ? 'checked' : ''}>固定</label>`
+    // 透明度（issue #746）：0% は不透明、100% は見えない。その役のブロックがみな同じだけ透ける（盾・武器も、ブロックの色の役で選んだ枠の透明度になる）
+    + `<div class="palA"><span>透明度</span><input type="range" min="0" max="100" step="5" data-alpha="${r}" value="${tpOf(r)}"><b>${tpOf(r)}%</b></div></div>`;
   // 光らない色・光る色に分けて並べる。追加の色・発光 2〜3 は、パーツエディタでブロックの「色の役」に選んだ所だけに付く
   el.innerHTML = '<div class="hint">光らない色</div>' + ROLE_KEYS.filter(r => !GLOW_ROLES.has(r)).map(row).join('')
     + '<div class="hint">光る色</div>' + ROLE_KEYS.filter(r => GLOW_ROLES.has(r)).map(row).join('')
@@ -1407,6 +1411,7 @@ function showPaint() {
         + '<div class="hint">部位名のパーツは、主装甲をその色で塗る。差し色のブロックもビビッドの色になる</div>'
       : '<div class="hint">なし（「ビビッドを差す」で、鮮やかな色を 1〜3 色、目を引く部位に入れる）</div>');
   for (const i of el.querySelectorAll('[data-role]')) i.oninput = () => { paint.pal[i.dataset.role] = i.value; paint.type = ''; applyPaint(); save(); };
+  for (const i of el.querySelectorAll('[data-alpha]')) i.oninput = () => { const r = i.dataset.alpha, t = +i.value, alpha = { ...(paint.alpha ?? {}) }; if (t > 0) alpha[r] = (100 - t) / 100; else delete alpha[r]; paint.alpha = alpha; i.nextElementSibling.textContent = `${t}%`; applyPaint(); save(); };
   for (const i of el.querySelectorAll('[data-lock]')) i.onchange = () => { paint.lock = { ...paint.lock, [i.dataset.lock]: i.checked }; save(); };
   for (const i of el.querySelectorAll('[data-vivid]')) i.oninput = () => { paint.vivid.colors[+i.dataset.vivid] = i.value; applyPaint(); save(); };
 }
@@ -2277,7 +2282,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '62eb402';
+const BUILD = '32a2dd6';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

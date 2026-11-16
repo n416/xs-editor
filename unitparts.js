@@ -18,7 +18,7 @@ import { FREE_SETS } from './parts/free/artillery.js';
 import { FREE_SETS as EYE_SETS } from './parts/free/eyes.js';
 import * as THREE from 'three';
 import { headDims, faceOf } from './xsasm-random.js';
-import { colorOf, roleOf } from './paint.js';
+import { colorOf, roleAlpha, roleOf } from './paint.js';
 import { makeSheet } from './xsbody.js';
 
 const S = makeSheet();
@@ -107,7 +107,10 @@ export function unitParts(doc, { shaped = false } = {}) {
   const all = (doc.items ?? []).map((it, i) => ({ ...it, _i: i })).filter(it => byId[it.part] && (shaped || !byId[it.part].shape)), held = it => byId[it.part].tab === 'weapon';
   const items = [...all.filter(held), ...all.filter(it => !held(it))], adj = { ...ADJ0, ...(doc.adj ?? {}) }, paint = doc.paint ?? null;
   const team = !!paint?.team && !(paint.vivid?.colors?.length);
-  const paintOf = (pc, def) => (team && roleOf(pc) === 'accent' ? { color: '#f2f2f2', team: true } : { color: colorOf(pc, def.cat, paint) });
+  // 塗りの役の透明度（paint.alpha、issue #746）：その役のブロックは alpha（不透明度）を持って書き出される（xsengine.js が透ける材質にする）。
+  // ブロックの自分の opacity（体ジェネレーターの光）は今までどおり書き出しでは使わない（今の機体の見た目を変えない）
+  const alphaOf = pc => { const a = roleAlpha(pc, paint); return a != null ? { alpha: a } : {}; };
+  const paintOf = (pc, def) => (team && roleOf(pc) === 'accent' ? { color: '#f2f2f2', team: true, ...alphaOf(pc) } : { color: colorOf(pc, def.cat, paint), ...alphaOf(pc) });
   const { k, at } = headPlace(items, adj);
   const head = items.filter(it => isHead(it.part)).flatMap(it => {
     // 頭の組み立て（xsasm.js の placeItem）と同じ置き方。形は partgeo.js の shapesOf（パーツエディタで作った形は三角形で）
