@@ -684,6 +684,8 @@ function autoNozzles(pieces) {
 export const MOUTH_NODE = { muzzle: 'muzzle', arm: 'arm_muzzle', head: 'mouth_head', chest: 'mouth_chest', belly: 'mouth_belly', shoulder: 'mouth_shoulder', back: 'mouth_back', shield: 'mouth_shield' };
 const MOUTH_SIDED = new Set(['arm', 'head', 'shoulder', 'back']);
 // attachment points (editor space) found from part names; each rides on the bone of the part it comes from
+/** the right hand's middle as a unit's parts gave it (applyBody's anchors.hand_r; none for a model loaded as parts) */
+let unitHand = null;
 function attachPoints(pieces) {
   const find = (re, bone, pick) => {
     const cand = pieces.filter(pc => re.test(pc.part.name) && (!bone || pc.bone === bone));
@@ -703,6 +705,9 @@ function attachPoints(pieces) {
   // a skinned import: its right hand is in its rig
   const rigged = pieces.find(pc => pc.part.rig?.hand_r)?.part;
   if (!out.hand_r && rigged) { rigged.proxy.updateMatrixWorld(); out.hand_r = { pos: new THREE.Vector3(...rigged.rig.hand_r).applyMatrix4(rigged.proxy.matrixWorld), bone: 'forearm_r' }; }
+  // a unit of 機体エディタ Ver2 whose hand part was renamed by its maker so that no name has 手 in it (「クローアームその2」 of the ゴッジョ
+  // and アルトゴッジョ in みんなの機体, 2026-11-16): the right hand the unit's own parts found by their category 手 (bodyparts.js anchors.hand_r)
+  if (!out.hand_r && unitHand) out.hand_r = { pos: new THREE.Vector3(...unitHand), bone: 'forearm_r' };
   out.muzzle = find(/マズル|銃口/, null);
   // a beam built into an arm (a weapon with mount "arm", the claw hand's): where it comes out, a part named …ビームの口 on
   // that side's forearm (nodes arm_muzzle_l / arm_muzzle_r; client/src/models.ts muzzleOf)
@@ -1692,6 +1697,7 @@ function buildWeapon(hand) {
 // weapons follow the right hand. The new parts are hulls with their bone and the point it turns at (joint).
 function applyBody(list, anchors, opt = {}) {
   rebuild();
+  unitHand = anchors?.hand_r ?? null;
   const boxOf = (ps, pick = () => true) => { const b = new THREE.Box3(); for (const p of ps) for (const g of worldGeometries(p)) if (pick(g)) b.union(g.boundingBox); return b; };
   const solid = parts.filter(p => p.op === 'add' && !p.blockout);
   const stays = p => p.blockout || (!opt.replaceHead && boneGroupOf(p) === 'head') || isHeld(p);   // (replaceHead: the new parts bring their own head)
@@ -1730,6 +1736,7 @@ export const XS = {
   ready: async () => { await posesReady; if (!Object.keys(MOVES).length) throw new Error('ゲームの動きのデータ（poses.json）を読めませんでした'); return true; },
   /** load a document { parts, ai, role } (tools/xs-models/*.json; parts: [] = nothing yet) */
   load: doc => {
+    unitHand = null;
     for (const p of parts) p._geo?.dispose();
     parts = structuredClone(doc.parts ?? []).map(makePart);
     sceneAi = String(doc.ai ?? '').slice(0, 40);
