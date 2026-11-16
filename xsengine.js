@@ -1335,13 +1335,16 @@ function beltGeometry(list, floor, H) {
   return g;
 }
 
-function buildGameModel() {
+// opt.frame：関節の位置と全体の箱（前の書き出しの frame）をそのまま使う。パージで外れた姿を、付けた姿と同じ骨・床・高さで作るため
+// （外れる部品が足先・頭の上の物でも、残る部品の頂点が付けた姿と同じ所に来る。ゲームの client/src/plateshed.ts は 2 つの模型の三角形の位置の差で装甲を数える）。
+// opt.height：模型の高さ（xs 節の height）を必ず書く（付けた姿と外れた姿で、ゲームが同じ倍率で描くように。client/src/models.ts）
+function buildGameModel(opt = {}) {
   const lods = [0, 1, 2].map(lodPieces);
-  const { at, whole } = jointPositions(lods[0]);
+  const frame = opt.frame ?? jointPositions(lods[0]), { at, whole } = frame;
   const floor = whole.min.y, H = whole.max.y - whole.min.y;
   const tracked = isTracked();
   const root = new THREE.Group(); root.name = 'xs';
-  if (whole.userData.top > whole.max.y + 1e-6) root.userData.height = Math.round(H * 1e4) / 1e4;   // wings above the head: the body's height
+  if (opt.height || opt.frame || whole.userData.top > whole.max.y + 1e-6) root.userData.height = Math.round(H * 1e4) / 1e4;   // wings above the head: the body's height
   // skeleton: a tracked XS has no leg bones; the cannon mount only when barrels ride on it
   const gameBones = GAME_BONES.filter(([n]) => !(tracked && /^(leg|shin|foot)_/.test(n)) && (!OPTIONAL_BONES.has(n) || lods[0].some(pc => pc.bone === n || pc.part.rig?.[n] || (pc.part.blend && blendOfPiece(pc)?.to === n))));
   const bones = {};
@@ -1555,7 +1558,7 @@ function buildGameModel() {
   report.jets = jetList.length; report.ownJets = jetList.some(z => z.own);
   report.attach = Object.keys(attach).filter(k => attach[k]);
   report.height = whole.max.y - whole.min.y;
-  return { root, report };
+  return { root, report, frame };
 }
 
 // ---------- 乗り物（艦）: built from the same parts, without bones or joints ----------
@@ -1850,13 +1853,14 @@ export const XS = {
       matrix: M?.[pc.bone]?.clone() ?? null }));
   },
   /** the loaded model for the game → { glb (base64), report, loose } */
-  exportNow: (id, skipCheck = false) => new Promise((resolve, reject) => {
-    const { root, report } = buildGameModel();
+  // opt：buildGameModel の { frame, height }。返す frame は、パージで外れた姿を同じ骨・床で書き出す時に opt.frame へ渡す
+  exportNow: (id, skipCheck = false, opt = {}) => new Promise((resolve, reject) => {
+    const { root, report, frame } = buildGameModel(opt);
     const loose = skipCheck ? [] : findings(jointCheck(XS_INFO[id] ? id : ''), 3);
     new GLTFExporter().parse(root, data => {
       const b = new Uint8Array(data); let bin = '';
       for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
-      resolve({ glb: btoa(bin), report, loose });
+      resolve({ glb: btoa(bin), report, loose, frame });
     }, reject, { binary: true });
   }),
   /** the loaded model as a ship (kind: battleship / assault) → { glb (base64), report: { len, width, height (m), wantLen, wantWidth, tris, calls, materials, bridge } } */

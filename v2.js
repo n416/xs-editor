@@ -604,7 +604,18 @@ function rebuild() {
   endFlash();
   rebuildMain();
   drawEdges();
+  applyPurgeView();
 }
+
+// ---- パージ後を見る（issue #745）：「パージで外れる」の印（item.purge）を付けた部品を隠す。見た目だけ（保存・書き出す形は変わらない）。パーツエディタの間は隠さない ----
+let showPurged = false;
+function applyPurgeView() {
+  groups.forEach((g, i) => { const v = !(showPurged && !PE.active() && items[i]?.purge); g.visible = v; for (const e of g.userData.extra.values()) e.visible = v; });
+}
+$('#bPurged').onclick = () => {
+  showPurged = !showPurged; $('#bPurged').classList.toggle('on', showPurged); applyPurgeView();
+  if (showPurged) { const n = kept().filter(it => it.purge).length; note(n ? `パージで外れた後の姿（外れる部品 ${n} 個を隠しています）。もう一度押すと戻る` : '「パージで外れる」の印を付けた部品がありません（部品を選んで、右の欄のチェックで付ける）', !n); }
+};
 function rebuildMain() {
   applyKind();
   seatWeapons();
@@ -679,7 +690,8 @@ canvas.addEventListener('pointerup', e => {
 /** 画面の点（-1〜1）にある置いたパーツの番号（無ければ -1） */
 function hitAt(ndc) {
   ray.setFromCamera(ndc, camera);
-  const hits = ray.intersectObjects(groups, true);
+  const shown = o => { for (let q = o; q; q = q.parent) if (!q.visible) return false; return true; };   // （「パージ後を見る」で隠した部品は押せない）
+  const hits = ray.intersectObjects(groups, true).filter(h => shown(h.object));
   return hits.length ? hits[0].object.userData.index : -1;
 }
 canvas.addEventListener('dblclick', e => {   // ダブルクリック：グループの中の 1 つだけを選ぶ
@@ -809,7 +821,7 @@ function renderList() {
     d.className = picked.includes(i) ? 'sel' : '';
     // 1 か所に 1 つの部位（スカート・太もも・すね・足）が同じ側に 2 つ以上あれば、重なっていると知らせる（別々に動くので、板が 2 枚に見える）
     const cat = byId[it.part]?.cat, dup = ONE_EACH.has(cat) ? items.findIndex((o, j) => j !== i && byId[o.part]?.cat === cat && sideOf(o) === sideOf(it)) : -1;
-    d.innerHTML = `<span>${i + 1}. ${labelOf(it)}${it.grp ? ` <b class="grp" title="グループ（押すと全部が選ばれる。1 つだけはダブルクリック）">［${it.grp.replace(/^g/, 'グループ ')}］</b>` : ''}${it.bone ? ` <i class="bone">骨：${BONE_PICK.find(([b]) => b === it.bone)?.[1] ?? it.bone}</i>` : ''}${dup >= 0 ? ` <b style="color:#e8a33d">⚠ ${dup + 1} 番と同じ部位（重なっている）</b>` : ''}</span>`;
+    d.innerHTML = `<span>${i + 1}. ${labelOf(it)}${it.grp ? ` <b class="grp" title="グループ（押すと全部が選ばれる。1 つだけはダブルクリック）">［${it.grp.replace(/^g/, 'グループ ')}］</b>` : ''}${it.bone ? ` <i class="bone">骨：${BONE_PICK.find(([b]) => b === it.bone)?.[1] ?? it.bone}</i>` : ''}${it.purge ? ' <i class="bone" title="パージで外れる">パージ</i>' : ''}${dup >= 0 ? ` <b style="color:#e8a33d">⚠ ${dup + 1} 番と同じ部位（重なっている）</b>` : ''}</span>`;
     d.onclick = e => (e.detail >= 2 && !(e.ctrlKey || e.shiftKey || e.metaKey) ? selectOne(i) : select(i, e.ctrlKey || e.shiftKey || e.metaKey));   // 2 度目の押し（ダブルクリック）はグループの中の 1 つだけ（行は押すたびに作り直すので dblclick は届かない）
     el.appendChild(d);
   });
@@ -829,6 +841,7 @@ function fillFields() {
   const b0 = canPickBone(it) ? boneOf(byId[it.part]) : '', auto = BONE_PICK.find(([b]) => b === b0)?.[1] ?? '部位の決まり';
   $('#fBone').innerHTML = `<option value="">自動（${auto}）</option>` + BONE_PICK.map(([b, l]) => `<option value="${b}">${l}${['arm', 'fore', 'leg', 'shin', 'foot'].includes(b) ? `（${sideOf(it) === 'l' ? '+x' : '−x'} の側）` : ''}</option>`).join('');
   $('#fBone').value = it.bone ?? ''; $('#fBone').disabled = !canPickBone(it);
+  $('#fPurge').checked = pickedList().every(i => items[i].purge);
   for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).value = it[k][j];
   fillJetDir();
 }
@@ -841,6 +854,15 @@ for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).oninput = () => {
 $('#fName').oninput = () => { if (selected >= 0) { items[selected].name = $('#fName').value; renderList(); save(); } };
 // 付ける骨：立った姿勢の位置はそのまま（骨の入れ物は、どれも立った姿勢の世界の座標）、動かす時にその骨と一緒に動く
 $('#fBone').onchange = () => { const it = items[selected]; if (!canPickBone(it)) return; const b = $('#fBone').value; if (b) it.bone = b; else delete it.bone; rebuild(); save(); };
+// パージで外れる（issue #745）：選んでいる部品（いくつか選んでいれば全部）に印 item.purge を付ける・外す。左右の対の部品は、反対側（同じパーツで x だけが逆）にも同じ印
+const twinOf = i => { const it = items[i]; if (!it || Math.abs(it.mov[0]) < 1e-4) return -1; return items.findIndex((o, j) => j !== i && o.part === it.part && Math.abs(o.mov[0] + it.mov[0]) < 1e-3 && Math.abs(o.mov[1] - it.mov[1]) < 1e-3 && Math.abs(o.mov[2] - it.mov[2]) < 1e-3); };
+$('#fPurge').onchange = () => {
+  if (selected < 0) return;
+  const on = $('#fPurge').checked, set = new Set(pickedList()), mine = set.size;
+  for (const i of [...set]) { const t = twinOf(i); if (t >= 0) set.add(t); }
+  for (const i of set) { if (on) items[i].purge = true; else delete items[i].purge; }
+  rebuild(); save(); note(`${set.size} 個を${on ? 'パージで外れる部品にしました' : 'パージで外れない部品に戻しました'}${set.size > mine ? '（左右の対の反対側も）' : ''}`);
+};
 $('#bGroup').onclick = groupPicked;
 $('#bUngroup').onclick = ungroupPicked;
 
@@ -1200,7 +1222,7 @@ const adjusted = list => list.map(it => {
   m[1] += adj.up + (sh ? adj.shY : 0); if (sh) m[0] += Math.sign(m[0] || 1) * adj.sh;
   return { ...it, mov: m };
 });
-const tidy = list => register(list).filter(it => byId[it.part]).map(it => ({ part: it.part, name: it.name, ...(it.gen ? { gen: it.gen } : {}), ...(it.tilt != null ? { tilt: it.tilt } : {}), ...(it.bone ? { bone: it.bone } : {}), ...(it.grp ? { grp: it.grp } : {}), mov: it.mov ?? [0, 0, 0], rot: it.rot ?? [0, 0, 0], scal: it.scal ?? [1, 1, 1] }));
+const tidy = list => register(list).filter(it => byId[it.part]).map(it => ({ part: it.part, name: it.name, ...(it.gen ? { gen: it.gen } : {}), ...(it.tilt != null ? { tilt: it.tilt } : {}), ...(it.bone ? { bone: it.bone } : {}), ...(it.grp ? { grp: it.grp } : {}), ...(it.purge ? { purge: true } : {}), mov: it.mov ?? [0, 0, 0], rot: it.rot ?? [0, 0, 0], scal: it.scal ?? [1, 1, 1] }));
 $('#bApply').onclick = () => {
   try {
     const d = JSON.parse($('#paste').value.trim());
@@ -1637,10 +1659,19 @@ async function exportGame0(id, onStep) {
   const X = await editorWorker();
   const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
   const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));   // 自由な機体が自分の武器を持っている
-  X.load({ parts: own || clawHands() ? [] : w.parts, ai: '', role: id.replace(/^[ab]_/, '') });
+  const held = own || clawHands() ? [] : w.parts, purges = kept().some(it => it.purge);
+  X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
   const applied = await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
-  const chk = await X.checkAsync(id, onStep), out = await X.exportNow(id, true);
-  return { ...out, floating: chk.floating, loose: chk.loose, depths: chk.depths, weapons: applied.weapons, own };
+  const chk = await X.checkAsync(id, onStep), { frame, ...out } = await X.exportNow(id, true, { height: purges });
+  // パージで外れる部品（item.purge、issue #745）があれば、それを除いた姿（外れた後）も、付けた姿と同じ骨・床・高さで書き出す。
+  // ゲームでは増加装甲の 2 機（shared/data.ts PLATE）だけが、付けた姿（PLATE_MODEL）と外れた姿（modelOf）の 2 つの模型を使う
+  let purged = null;
+  if (purges) {
+    X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
+    await X.applyUnit(structuredClone({ ...unitDoc(), items: kept().filter(it => !it.purge) }), { weaponHand: w.hand_r });
+    purged = (await X.exportNow(id, true, { frame })).glb;
+  }
+  return { ...out, purged, floating: chk.floating, loose: chk.loose, depths: chk.depths, weapons: applied.weapons, own };
 }
 const GAME_LIMIT = [30000, 5000, 800];
 $('#bGame').onclick = async () => {
@@ -1668,11 +1699,17 @@ $('#bGame').onclick = async () => {
     const r = await exportGame(id, stepNote(box, '書き出しています…つながりと関節を調べています'));
     const bin = atob(r.glb), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type: 'model/gltf-binary' })); a.download = `${id}.glb`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    if (r.purged) {   // パージで外れた姿（印の付いた部品を除いた姿）：もう 1 つのファイル
+      const pb = atob(r.purged), p8 = new Uint8Array(pb.length); for (let i = 0; i < pb.length; i++) p8[i] = pb.charCodeAt(i);
+      await new Promise(ok => setTimeout(ok, 400));   // （続けて 2 つ落とすと、ブラウザが 2 つ目を止めることがある）
+      const b = document.createElement('a'); b.href = URL.createObjectURL(new Blob([p8], { type: 'model/gltf-binary' })); b.download = `${id}_purged.glb`; b.click(); setTimeout(() => URL.revokeObjectURL(b.href), 2000);
+    }
     const ok = (v, lim) => (v <= lim ? '✓' : '✗');
     box.innerHTML = `<b>${id}.glb を書き出しました</b>（${(u8.length / 1048576).toFixed(1)} MB）<br>`
       + `つながり ${r.floating.length ? `✗ 離れている部品 ${r.floating.length} 組` : '✓'} ／ 関節 ${r.loose.length ? `✗ ${r.loose.length} 個の動きで外れる・めり込む` : '✓'}<br>`
       + `三角形 ${r.report.tris.map((t, i) => `${t.toLocaleString()} ${ok(t, GAME_LIMIT[i])}`).join(' / ')}（近く・中・遠く）、描画 ${r.report.calls[0]} 回 ${ok(r.report.calls[0], 5)}、骨 ${r.report.bones.length} 本<br>`
       + `炎の出る噴射口 ${r.report.jets} 個（${r.report.ownJets ? '置いた噴射口' : '部品の噴射口'}）、盾 ${r.report.shield ? `あり（三角形 ${r.report.shield.tris.toLocaleString()}）` : 'なし（ゲームのいつもの盾）'}<br>`
+      + (r.purged ? `パージで外れた姿 ${id}_purged.glb も書き出しました（「パージで外れる」の部品 ${kept().filter(it => it.purge).length} 個を除いた姿。ゲームでパージできる機体で、外れた後の姿に使う）<br>` : '')
       + [...r.floating.slice(0, 4).map(f => '離れている：' + esc(f)), ...r.loose.slice(0, 4).map(esc)].map(t => `<span style="color:var(--warn)">${t}</span><br>`).join('')
       + `<span class="hint">ゲームに入れるには public/models/${id}.glb に置き、出す前のテスト 3 つ（docs/models.md）を通す。手持ちの武器は${id[0] === 'b' ? ' GIO' : '連合'}の強襲のもの</span>`;
   } catch (e) { box.textContent = '書き出せませんでした：' + (e?.message ?? e); }
@@ -2282,7 +2319,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '8c9ec17';
+const BUILD = '0a0a794';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
