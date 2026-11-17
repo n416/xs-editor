@@ -1340,13 +1340,22 @@ function beltGeometry(list, floor, H) {
 // opt.frame：関節の位置と全体の箱（前の書き出しの frame）をそのまま使う。パージで外れた姿を、付けた姿と同じ骨・床・高さで作るため
 // （外れる部品が足先・頭の上の物でも、残る部品の頂点が付けた姿と同じ所に来る。ゲームの client/src/plateshed.ts は 2 つの模型の三角形の位置の差で装甲を数える）。
 // opt.height：模型の高さ（xs 節の height）を必ず書く（付けた姿と外れた姿で、ゲームが同じ倍率で描くように。client/src/models.ts）
+// opt.body：パージで外れる部品を除いた体の frame。外れる部品が足より下まで垂れても（アルトゴッジョの前腕のハンドミサイルユニット）床と関節は体の物にする
+// （付けた姿の箱の底を床にすると、高さ（xs 節の height）が伸び、ゲームでは機体が小さく描かれた：2026-11-17、0.512 下の床で 0.81 倍）。上は付けた姿のまま
 function buildGameModel(opt = {}) {
   const lods = [0, 1, 2].map(lodPieces);
-  const frame = opt.frame ?? jointPositions(lods[0]), { at, whole } = frame;
+  let frame = opt.frame ?? jointPositions(lods[0]);
+  if (!opt.frame && opt.body) {
+    const whole = frame.whole.clone(); whole.userData = { ...frame.whole.userData };
+    whole.min.y = opt.body.whole.min.y;
+    frame = { ...frame, at: opt.body.at, whole, sole: true };
+  }
+  const { at, whole } = frame;
   const floor = whole.min.y, H = whole.max.y - whole.min.y;
   const tracked = isTracked();
   const root = new THREE.Group(); root.name = 'xs';
   if (opt.height || opt.frame || whole.userData.top > whole.max.y + 1e-6) root.userData.height = Math.round(H * 1e4) / 1e4;   // wings above the head: the body's height
+  if (frame.sole) root.userData.sole = 0;   // (opt.body: the soles are y = 0 though parts hang lower; the game stands the model there, client/src/models.ts fromGltf)
   // skeleton: a tracked XS has no leg bones; the cannon mount only when barrels ride on it
   const gameBones = GAME_BONES.filter(([n]) => !(tracked && /^(leg|shin|foot)_/.test(n)) && (!OPTIONAL_BONES.has(n) || lods[0].some(pc => pc.bone === n || pc.part.rig?.[n] || (pc.part.blend && blendOfPiece(pc)?.to === n))));
   const bones = {};

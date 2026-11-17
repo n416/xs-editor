@@ -1771,9 +1771,17 @@ async function exportGame0(id, onStep, opt = {}) {
   const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
   const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));   // 自由な機体が自分の武器を持っている
   const held = own || clawHands() ? [] : w.parts, purges = kept().some(it => it.purge);
+  // パージで外れる部品・ロマン砲変形の部品（撃ち切ると外れる・出る）があれば、先にそれを除いた体の骨・床を測る
+  // （外れる・出る部品は床・関節を決めない：xsengine.js buildGameModel の opt.body。アルトゴッジョの前腕のハンドミサイルユニットは足より下まで垂れる）
+  let body = null;
+  if (purges || kept().some(it => it.roman)) {
+    X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
+    await X.applyUnit(structuredClone({ ...unitDoc(), items: kept().filter(it => !it.purge && !it.roman) }), { weaponHand: w.hand_r });
+    body = (await X.exportNow(id, true, { height: true })).frame;
+  }
   X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
   const applied = await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
-  const chk = await X.checkAsync(id, onStep), { frame, ...out } = await X.exportNow(id, true, { height: purges || opt.form > 1 });
+  const chk = await X.checkAsync(id, onStep), { frame, ...out } = await X.exportNow(id, true, { height: !!body || opt.form > 1, body });
   // パージで外れる部品（item.purge、issue #745）があれば、それを除いた姿（外れた後）も、付けた姿と同じ骨・床・高さで書き出す。
   // ゲームでは増加装甲の 2 機（shared/data.ts PLATE）だけが、付けた姿（PLATE_MODEL）と外れた姿（modelOf）の 2 つの模型を使う
   let purged = null;
@@ -2459,7 +2467,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '618f7be';
+const BUILD = 'a4d9e8f';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
