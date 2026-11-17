@@ -589,6 +589,56 @@ export function initPartEdit(ctx) {
     if (pl) pc.planes = pl;
     return !!pl;
   }
+  /** 右の欄の「形態」の節。pc：値を見せるブロック、n：掛けるブロックの数（2 以上ならまとめて掛ける） */
+  function formsHtml(pc, n) {
+    const fN = ctx.form(), fAll = ctx.forms(), fv = formOf(pc, fN) ?? {}, many = n > 1;
+    const html = ['<h2>形態（変形の見た目）</h2>', `<div class="seg">${Array.from({ length: fAll }, (_, i) => `<button data-form="${i + 1}" class="${i + 1 === fN ? 'on' : ''}">形態 ${i + 1}</button>`).join('')}${fAll < FORM_MAX ? '<button id="peFormAdd" title="形態を 1 つ足す">＋</button>' : ''}</div>`];
+    if (fN === 1) html.push(`<div class="hint">形態 1 はいつもの形（ゲーム用に書き出す形）。形態 2 からを選ぶと、その形態での${many ? `選んだ ${n} 個のブロック` : 'このブロック'}の見た目（出す・消す、色、位置と向き）を決められる。エディタとみんなの機体の中だけで、戦場では変形しない</div>`);
+    else {
+      const p = fv.p ?? [0, 0, 0], r = fv.r ?? [0, 0, 0];
+      if (many) html.push(`<div class="hint">選んだ ${n} 個のブロック（引くブロックは除く）に、まとめて掛ける。数字は「${esc(pc.name)}」の値。ずらす・回すは、変えた分だけどのブロックにも足す（ブロックどうしの違いはそのまま）</div>`);
+      html.push(`<label class="chk"><input type="checkbox" id="peFHide" ${fv.hide ? 'checked' : ''}>形態 ${fN} では出さない</label>`,
+        `<div class="row"><label class="chk" style="flex:1"><input type="checkbox" id="peFColorOn" ${fv.color ? 'checked' : ''}>色を変える</label><input type="color" id="peFColor" value="${esc(fv.color ?? ctx.colorOf(pc, st.def))}" style="width:48px"></div>`,
+        `<div class="row"><label>ずらす</label>${[0, 1, 2].map(a => `<input type="number" step="0.01" data-fp="${a}" value="${p[a]}">`).join('')}</div>`,
+        `<div class="row"><label>回す（度）</label>${[0, 1, 2].map(a => `<input type="number" step="5" data-fr="${a}" value="${r[a]}">`).join('')}</div>`,
+        '<div class="hint">ずらす：左右・上下・前後（パーツの向きで。左右ミラーの写しは逆へ）。回す：ブロックの真ん中で、x・y・z の軸の回り。枠線と角のつまみは形態 1 の所に出る</div>',
+        `<div class="pebar"><button id="peFReset">${many ? `${n} 個とも` : ''}形態 1 と同じに戻す</button></div>`);
+    }
+    return html.join('');
+  }
+  /** 「形態」の節をつなぐ。pcs：掛けるブロック、pc：値を見せるブロック（pcs の中） */
+  function wireForms(pcs, pc) {
+    // カタログ型のパーツは、形態を持ったブロックだけ写しを 1 つずつのメッシュにするので、持つ・持たないが変わったら作り直す
+    const apply = fn => {
+      const n = ctx.form(); let flip = false;
+      for (const p of pcs) {
+        const had = !!p.forms, change = fn(p);
+        if (change) setForm(p, n, change); else { const all = { ...(p.forms ?? {}) }; delete all[n]; if (Object.keys(all).length) p.forms = all; else delete p.forms; }
+        if (had !== !!p.forms) flip = true;
+      }
+      if (flip && !st.def.free) ctx.rebuild(); else ctx.showForms();
+    };
+    for (const el of E.right.querySelectorAll('[data-form]')) el.onclick = () => { ctx.setForm(+el.dataset.form); renderRight(); };
+    if ($('#peFormAdd')) $('#peFormAdd').onclick = () => { ctx.addForm(); renderRight(); };
+    if (!$('#peFHide')) return;
+    $('#peFHide').onchange = e => { apply(() => ({ hide: e.target.checked || null })); commit(); };
+    $('#peFColorOn').onchange = e => { apply(() => ({ color: e.target.checked ? $('#peFColor').value : null })); commit(); };
+    $('#peFColor').oninput = e => { if ($('#peFColorOn').checked) apply(() => ({ color: e.target.value })); };
+    $('#peFColor').onchange = () => commit();
+    // ずらす・回す：欄の値の変わった分を、どのブロックの値にも足す（1 個だけなら、欄の値そのものになる）
+    const vec = k => [0, 1, 2].map(a => +E.right.querySelector(`[data-${k}="${a}"]`).value || 0);
+    let was = { p: vec('fp'), r: vec('fr') };
+    for (const el of E.right.querySelectorAll('[data-fp],[data-fr]')) {
+      el.oninput = () => {
+        const now = { p: vec('fp'), r: vec('fr') }, dp = now.p.map((v, a) => v - was.p[a]), dr = now.r.map((v, a) => v - was.r[a]);
+        const add = (v, dv) => v.map((x, a) => Math.round((x + dv[a]) * 1e6) / 1e6);
+        apply(p => { const f = formOf(p, ctx.form()) ?? {}; return p === pc ? { p: now.p, r: now.r } : { p: add(f.p ?? [0, 0, 0], dp), r: add(f.r ?? [0, 0, 0], dr) }; });
+        was = now;
+      };
+      el.onchange = () => commit();
+    }
+    $('#peFReset').onclick = () => { apply(() => null); commit(); renderRight(); };
+  }
   function renderRight() {
     prof?.dispose(); prof = null; binds = {};
     const d = st.def, pc = block();
@@ -599,6 +649,13 @@ export function initPartEdit(ctx) {
         <div class="hint">選んだブロック（青い枠）を、まとめてつまみで動かす（W）・回す（E）・大きさを変える（R）。つまみは選んだブロックぜんぶの真ん中、向きは左右・上下・前後。Ctrl か Shift を押しながら押す（3D でも左の一覧でも）と、選び足す・外す。1 つだけ押すと、そのブロックだけを選ぶ</div>
         <div class="pebar"><button id="peBlocksDel" title="選んだブロックをぜんぶ消す（Delete）">選んだ ${nBlocks} 個を消す</button></div>`;
       $('#peBlocksDel').onclick = removeBlock;
+      // 形態：選んだブロック（足す物だけ）に、まとめて同じように掛ける（issue #811）
+      const pcs = blocksOf().map(i => st.def.pieces[i]).filter(p => !isSub(p));
+      if (pcs.length) {
+        const show = pcs.includes(pc) ? pc : pcs[pcs.length - 1];
+        E.right.insertAdjacentHTML('beforeend', formsHtml(show, pcs.length));
+        wireForms(pcs, show);
+      }
       return;
     }
     if (kindOf(pc) === 'mesh') {   // 取り込んだ形（GLB のスキン）
@@ -742,20 +799,7 @@ export function initPartEdit(ctx) {
       html.push('<h2>ゲーム用</h2>', check('当たり判定なし（関節チェックでめり込みを見ない。動力パイプ・光）', 'noHit'), mouthRow(pc), `<div class="hint">付く骨：${pc.bone ?? '（部位の既定）'}${pc.hinge ? '・蝶番あり' : ''}。光らせるには、色の役を「発光」に</div>`);
     }
     // 形態（変形の見た目、v2-forms.js）：形態 2 からの、このブロックの見た目
-    const fN = ctx.form(), fAll = ctx.forms(), fv = formOf(pc, fN) ?? {};
-    if (!sub) {
-      html.push('<h2>形態（変形の見た目）</h2>', `<div class="seg">${Array.from({ length: fAll }, (_, i) => `<button data-form="${i + 1}" class="${i + 1 === fN ? 'on' : ''}">形態 ${i + 1}</button>`).join('')}${fAll < FORM_MAX ? '<button id="peFormAdd" title="形態を 1 つ足す">＋</button>' : ''}</div>`);
-      if (fN === 1) html.push('<div class="hint">形態 1 はいつもの形（ゲーム用に書き出す形）。形態 2 からを選ぶと、その形態でのこのブロックの見た目（出す・消す、色、位置と向き）を決められる。エディタとみんなの機体の中だけで、戦場では変形しない</div>');
-      else {
-        const p = fv.p ?? [0, 0, 0], r = fv.r ?? [0, 0, 0];
-        html.push(`<label class="chk"><input type="checkbox" id="peFHide" ${fv.hide ? 'checked' : ''}>形態 ${fN} では出さない</label>`,
-          `<div class="row"><label class="chk" style="flex:1"><input type="checkbox" id="peFColorOn" ${fv.color ? 'checked' : ''}>色を変える</label><input type="color" id="peFColor" value="${esc(fv.color ?? ctx.colorOf(pc, d))}" style="width:48px"></div>`,
-          `<div class="row"><label>ずらす</label>${[0, 1, 2].map(a => `<input type="number" step="0.01" data-fp="${a}" value="${p[a]}">`).join('')}</div>`,
-          `<div class="row"><label>回す（度）</label>${[0, 1, 2].map(a => `<input type="number" step="5" data-fr="${a}" value="${r[a]}">`).join('')}</div>`,
-          '<div class="hint">ずらす：左右・上下・前後（パーツの向きで。左右ミラーの写しは逆へ）。回す：ブロックの真ん中で、x・y・z の軸の回り。枠線と角のつまみは形態 1 の所に出る</div>',
-          '<div class="pebar"><button id="peFReset">形態 1 と同じに戻す</button></div>');
-      }
-    }
+    if (!sub) html.push(formsHtml(pc, 1));
     E.right.innerHTML = html.join('');
 
     // ---- つなぐ ----
@@ -766,19 +810,7 @@ export function initPartEdit(ctx) {
     if ($('#peBone')) { $('#peBone').onchange = e => { pc.bone = e.target.value; changed(true); }; $('#pePivot').onchange = e => { pc.pivot = e.target.value; changed(true); }; }
     if ($('#peMouth')) { $('#peMouth').onchange = e => { if (e.target.value) pc.mouth = e.target.value; else delete pc.mouth; commit(); }; $('#peFire').onclick = () => ctx.testFire(pc); }
     if ($('#peBake')) $('#peBake').onclick = bakeTf;
-    // 形態：カタログ型のパーツは、形態を持ったブロックだけ写しを 1 つずつのメッシュにするので、持つ・持たないが変わったら作り直す
-    const formSet = change => { const had = !!pc.forms; if (change) setForm(pc, ctx.form(), change); else { const all = { ...(pc.forms ?? {}) }; delete all[ctx.form()]; if (Object.keys(all).length) pc.forms = all; else delete pc.forms; } if (had !== !!pc.forms && !d.free) ctx.rebuild(); else ctx.showForms(); };
-    for (const el of E.right.querySelectorAll('[data-form]')) el.onclick = () => { ctx.setForm(+el.dataset.form); renderRight(); };
-    if ($('#peFormAdd')) $('#peFormAdd').onclick = () => { ctx.addForm(); renderRight(); };
-    if ($('#peFHide')) {
-      $('#peFHide').onchange = e => { formSet({ hide: e.target.checked || null }); commit(); };
-      $('#peFColorOn').onchange = e => { formSet({ color: e.target.checked ? $('#peFColor').value : null }); commit(); };
-      $('#peFColor').oninput = e => { if ($('#peFColorOn').checked) formSet({ color: e.target.value }); };
-      $('#peFColor').onchange = () => commit();
-      const vec = k => [0, 1, 2].map(a => +E.right.querySelector(`[data-${k}="${a}"]`).value || 0);
-      for (const el of E.right.querySelectorAll('[data-fp],[data-fr]')) { el.oninput = () => formSet({ p: vec('fp'), r: vec('fr') }); el.onchange = () => commit(); }
-      $('#peFReset').onclick = () => { formSet(null); commit(); renderRight(); };
-    }
+    if (!sub) wireForms([pc], pc);
     if ($('#peBlend')) $('#peBlend').onchange = e => { if (e.target.value) pc.blendTo = e.target.value; else delete pc.blendTo; commit(); };
     // （役を書いたブロックは役も：武器の飾りの写しは役 keep のままで、選んだ役が塗りの色にならなかった。テスター 静流りおさん 2026-11-08）
     if ($('#peRole')) $('#peRole').onchange = e => { const r = e.target.value; pc.color = ROLE_COLOR[r]; if (GLOW_ROLES.has(r)) pc.glow = true; else delete pc.glow; if ('role' in pc) pc.role = r; ctx.repaint(); dimOthers(); commit(); renderLeft(); };
