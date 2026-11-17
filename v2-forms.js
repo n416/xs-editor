@@ -8,6 +8,14 @@ import * as THREE from 'three';
 
 export const FORM_MAX = 4;
 export const FORM_MS = 700;
+// 置いたパーツごとの「移る時の遅れ」（issue #813、テスター ポッチャさん「形態を移行する際、部品ごとにディレイをかけられるようにしてほしい」）：
+//   item.formDelay（ミリ秒、0〜FORM_DELAY_MAX）。形態を切り替えると、そのパーツ（中のブロックの形態も）はこの分だけ待ってから FORM_MS かけて移る。
+//   行きも帰りも同じ遅れ。書いていないパーツは 0（今までどおり、すぐ移る）
+export const FORM_DELAY_MAX = 3000;
+/** 置いたパーツ it の移る時の遅れ（ミリ秒） */
+export const formDelayOf = it => Math.max(0, Math.min(FORM_DELAY_MAX, Math.round(+it?.formDelay || 0)));
+/** 置いたパーツの並びの、切り替えにかかる時間（いちばん遅いパーツが移り終えるまで。ミリ秒） */
+export const formSpanOf = items => FORM_MS + Math.max(0, ...items.map(formDelayOf));
 const D = Math.PI / 180;
 
 /** ブロック pc の形態 n の見た目（形態 1 と同じなら null） */

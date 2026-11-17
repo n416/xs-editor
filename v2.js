@@ -26,7 +26,7 @@ import { initAi } from './v2-ai.js';
 import { initShare } from './v2-share.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
-import { FORM_MAX, FORM_MS, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
+import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, formDelayOf, formSpanOf, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
@@ -323,10 +323,12 @@ const canPickBone = it => !!it && !isHead(it.part) && !byId[it.part]?.free;
 const holderFor = (b, item) => itemsIn[b] ?? (SIDED.includes(b) ? itemsIn[`${b}_${sideOf(item)}`] : root);
 const holderOf = item => holderFor(item.bone ? BONE_HOLDER[item.bone] ?? item.bone : boneOf(byId[item.part]), item);
 /** 置いたパーツを Group に写す。腕・脚のパーツは、寸法の調整（関節の間の長さ）を掛けた置き方で（fitItem） */
-// 置いたパーツの形態（issue #810、v2-forms.js itemFormDelta）：今見せている形態 { from, to, t }（showFormNow が入れる。null は形態 1）
+// 置いたパーツの形態（issue #810、v2-forms.js itemFormDelta）：今見せている形態 { from, to, el }（showFormNow が入れる。null は形態 1）。
+// el は切り替えてからのミリ秒（切り替え中でなければ Infinity）。パーツごとの途中 t は、その遅れ（issue #813 formDelayOf）を引いて出す
 let itemView = null;
+const viewOf = item => itemView && { from: itemView.from, to: itemView.to, t: (itemView.el - formDelayOf(item)) / FORM_MS };
 function applyToGroup(item, g) {
-  const f = fitItem(item, adj), d = itemFormDelta(item, itemView);
+  const f = fitItem(item, adj), d = itemFormDelta(item, viewOf(item));
   g.userData.fdelta = d;   // （読み戻す時に外す分）
   for (const t of [g, ...(g.userData.extra?.values() ?? [])]) {
     t.position.set(...f.mov);
@@ -684,7 +686,7 @@ function tick(now) {
   if (meshDirty) { meshDirty = false; rebuild(); }
   if (playing) moveFrame(now);
   flashTick(now);
-  if (formAnim) { showFormNow(); if (now - formAnim.t0 >= FORM_MS) { formAnim = null; showFormNow(); } }
+  if (formAnim) { showFormNow(); if (now - formAnim.t0 >= formSpanOf(items)) { formAnim = null; showFormNow(); } }
   shotTick(now);
   flameTick(now);
   resize(); orbit.update(); if (PE.active()) PE.tick(); renderer.render(scene, camera); requestAnimationFrame(tick);
@@ -1249,7 +1251,7 @@ const adjusted = list => list.map(it => {
   m[1] += adj.up + (sh ? adj.shY : 0); if (sh) m[0] += Math.sign(m[0] || 1) * adj.sh;
   return { ...it, mov: m };
 });
-const tidy = list => register(list).filter(it => byId[it.part]).map(it => ({ part: it.part, name: it.name, ...(it.gen ? { gen: it.gen } : {}), ...(it.tilt != null ? { tilt: it.tilt } : {}), ...(it.bone ? { bone: it.bone } : {}), ...(it.grp ? { grp: it.grp } : {}), ...(it.purge ? { purge: true } : {}), ...(it.roman ? { roman: { s: it.roman.s, m: it.roman.m } } : {}), ...(it.forms ? { forms: it.forms } : {}), mov: it.mov ?? [0, 0, 0], rot: it.rot ?? [0, 0, 0], scal: it.scal ?? [1, 1, 1] }));
+const tidy = list => register(list).filter(it => byId[it.part]).map(it => ({ part: it.part, name: it.name, ...(it.gen ? { gen: it.gen } : {}), ...(it.tilt != null ? { tilt: it.tilt } : {}), ...(it.bone ? { bone: it.bone } : {}), ...(it.grp ? { grp: it.grp } : {}), ...(it.purge ? { purge: true } : {}), ...(it.roman ? { roman: { s: it.roman.s, m: it.roman.m } } : {}), ...(it.forms ? { forms: it.forms } : {}), ...(formDelayOf(it) ? { formDelay: formDelayOf(it) } : {}), mov: it.mov ?? [0, 0, 0], rot: it.rot ?? [0, 0, 0], scal: it.scal ?? [1, 1, 1] }));
 $('#bApply').onclick = () => {
   try {
     const d = JSON.parse($('#paste').value.trim());
@@ -1328,8 +1330,9 @@ const formRoots = () => groups.flatMap(g => [g, ...g.userData.extra.values()]);
 /** メッシュ o の、塗りのとおりの材質（形態で色を変える時は、この写しに色を入れる） */
 function formMat(o) { return o.userData.meshPart ? o.userData.fb?.m ?? o.material : o.userData.pc.blockout && o.userData.def?.free ? draftMat : material(o.userData.pc, o.userData.def); }
 function showFormNow() {
-  const v = formAnim ? { from: formAnim.from, to: formAnim.to, t: (performance.now() - formAnim.t0) / FORM_MS } : { from: formNow, to: formNow, t: 1 };
-  showForms(formRoots(), v.from, v.to, v.t, formMat);
+  const v = formAnim ? { from: formAnim.from, to: formAnim.to, el: performance.now() - formAnim.t0 } : { from: formNow, to: formNow, el: Infinity };
+  // （置いたパーツごとに、その遅れを引いた途中の見た目：issue #813）
+  groups.forEach((g, i) => showForms([g, ...g.userData.extra.values()], v.from, v.to, (v.el - formDelayOf(items[i])) / FORM_MS, formMat));
   placeItemForms(v);
 }
 /** 置いたパーツの形態（item.forms）を、形態の途中 v（null は形態 1）の置き方にする */
@@ -1366,7 +1369,12 @@ function fillItemForm() {
   const n = formCount(), fN = formNow, fv = formOf(it, fN) ?? {}, p = fv.p ?? [0, 0, 0], r = fv.r ?? [0, 0, 0];
   const seg = Array.from({ length: n }, (_, i) => `<button class="small ${i + 1 === fN ? 'acc' : ''}" data-iform="${i + 1}">形態 ${i + 1}</button>`).join('')
     + (n < FORM_MAX ? '<button class="small" id="bIFormAdd" title="形態を 1 つ足す">＋</button>' : '');
-  box.innerHTML = `<div class="bar"><b style="font-size:12px;align-self:center">形態</b>${seg}</div>` + (fN === 1
+  // 移る時の遅れ（issue #813）：形態が 2 つからの時に出す。秒で見せ、ミリ秒で持つ（item.formDelay）
+  const delay = n > 1
+    ? `<div class="row one"><label>遅れ</label><input type="number" id="iFDelay" min="0" max="${FORM_DELAY_MAX / 1000}" step="0.05" value="${formDelayOf(it) / 1000}" title="形態を切り替えた時、このパーツが動き出すまでの秒（0〜${FORM_DELAY_MAX / 1000}）"><span class="hint" style="align-self:center">秒</span></div>`
+      + '<div class="hint one">遅れ：形態を切り替えた時、このパーツ（中のブロックの形態も）がこの秒数だけ待ってから動く。パーツごとに変えると、順に変形して見える。行きも帰りも同じ遅れ</div>'
+    : '';
+  box.innerHTML = `<div class="bar"><b style="font-size:12px;align-self:center">形態</b>${seg}</div>` + delay + (fN === 1
     ? '<div class="hint">形態 1 はいつもの置き方（ゲーム用に書き出す形）。形態 2 からを選ぶと、その形態でのこのパーツ全体の見た目（出す・消す、ずらす、回す）を決められる。ブロックごとに変えるのは、パーツエディタの「形態」</div>'
     : `<label class="chk"><input type="checkbox" id="iFHide" ${fv.hide ? 'checked' : ''}>形態 ${fN} では、このパーツを出さない</label>`
       + (isJet(it) ? `<label class="chk" title="この噴射口（炎の点）から、形態 ${fN} では炎を出さない。「噴射口」の欄の「炎の見本を出す」で見える。形態 1（ゲームに書き出す形）はいつも出す"><input type="checkbox" id="iFNoFlame" ${fv.noFlame ? 'checked' : ''}>形態 ${fN} では、炎を出さない</label>` : '')
@@ -1376,6 +1384,11 @@ function fillItemForm() {
       + `<div class="bar"><button class="small" id="bIFReset">形態 ${fN} を形態 1 と同じに戻す</button></div>`);
   for (const b of box.querySelectorAll('[data-iform]')) b.onclick = () => switchForm(+b.dataset.iform);
   if ($('#bIFormAdd')) $('#bIFormAdd').onclick = addForm;
+  if ($('#iFDelay')) $('#iFDelay').onchange = e => {
+    const ms = formDelayOf({ formDelay: (+e.target.value || 0) * 1000 });
+    if (ms) it.formDelay = ms; else delete it.formDelay;
+    e.target.value = ms / 1000; save();
+  };
   if (fN === 1) return;
   const set = change => { if (change) setForm(it, fN, change); else if (it.forms) { delete it.forms[fN]; if (!Object.keys(it.forms).length) delete it.forms; } showFormNow(); };
   const vec = k => [0, 1, 2].map(a => +box.querySelector(`[data-${k}="${a}"]`).value || 0);
@@ -1439,7 +1452,7 @@ function flameTick(now) {
   const on = !flamesHidden && !!$('#jetFlameOn')?.checked;
   groups.forEach((g, i) => {
     if (!g) return;
-    const it = items[i], k = on && isJet(it) ? itemFlame(it, itemView) : 0;
+    const it = items[i], k = on && isJet(it) ? itemFlame(it, viewOf(it)) : 0;   // （遅れのある噴射口は、その遅れの後で炎も移る：issue #813）
     if (!k && !g.userData.flame) return;
     const f = flameOf(g);
     f.visible = k > 0.01;
@@ -2438,7 +2451,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'e18923d';
+const BUILD = 'c8672b1';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
