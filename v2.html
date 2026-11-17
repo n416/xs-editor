@@ -259,6 +259,7 @@
       <div class="row one"><label>付ける骨</label><select id="fBone" title="このパーツが、動く時にどの骨と一緒に動くか。自動は部位の決まり。置いた位置はそのまま"></select></div>
       <label class="chk" title="ゲームでパージした時に外れて落ちる部品にする（増加装甲を付けて出る XS のスキンで使う。ほかの XS では何も起きない）。左右の対の部品は、反対側にも同じ印が付く。外れた後の姿は 3D の上の「パージ後を見る」で見られる"><input type="checkbox" id="fPurge">パージで外れる</label>
       <div class="row one"><label>ロマン砲変形</label><select id="fRoman" title="ゲームでその武器を撃ち切った時（弾倉も予備も 0）に見た目が変わる部品にする。「外れる」部品は腕などから外れて落ち、「出る」部品はそれまで隠れていて撃ち切ると現れる。弾が戻れば元の姿に戻る。スロットは武器スロットの番号（1・2・3）。当たり判定・性能は変わらない。撃ち切った後の姿は 3D の上の「撃ち切り後を見る」で見られる"><option value="">なし</option><option value="1d">スロット 1 を撃ち切ると外れる</option><option value="2d">スロット 2 を撃ち切ると外れる</option><option value="3d">スロット 3 を撃ち切ると外れる</option><option value="1s">スロット 1 を撃ち切ると出る</option><option value="2s">スロット 2 を撃ち切ると出る</option><option value="3s">スロット 3 を撃ち切ると出る</option></select></div>
+      <div id="itemForm"></div>
       <div class="hint one">3 つの欄は 左右・上下・前後。回転は度。3D のつまみ（右上の 移動・回転・拡大）でも動かせる</div>
       <div class="hint">Ctrl か Shift を押しながら押すと、いくつも選べる（もう一度押すと外れる）。選んだものは「グループにする」で 1 つにまとまる。グループの中の 1 つだけは、Alt を押して押すか、ダブルクリック</div>
       <div class="bar"><button id="bDropPart" class="small" title="★ の付いた自分のパーツを、カタログから消す（置いてあるものも外れる）">この自分のパーツをカタログから消す</button></div>
@@ -287,7 +288,7 @@
   <details open class="asm">
     <summary>形態<span>変形の見た目（エディタとみんなの機体の中だけ）</span></summary>
     <div class="bar" id="formBar"></div>
-    <div class="hint">押すと、その形態へ動いて切り替わる。形態ごとに、ブロックを出す・消す、色、位置と向きを変えられる（パーツエディタでブロックを選び、右の「形態」で）。ゲーム用に書き出す形・チェック・小さな絵は形態 1 で、戦場では変形しない</div>
+    <div class="hint">押すと、その形態へ動いて切り替わる。形態ごとに、ブロックを出す・消す、色、位置と向きを変えられる（パーツエディタでブロックを選び、右の「形態」で）。置いたパーツ 1 つを丸ごと出す・消す・ずらす・回すのは、上の「置いたパーツ」で選んで、その下の「形態」で。ゲーム用に書き出す形・チェック・小さな絵は形態 1 で、戦場では変形しない</div>
   </details>
   <details open class="asm">
     <summary>見本<span>部位ごとに用意した組み合わせ</span></summary>
@@ -363,6 +364,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=a529f63"></script>
+<script type="module" src="./v2.js?v=0857475"></script>
 </body>
 </html>

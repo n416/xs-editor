@@ -18,7 +18,9 @@ export function formsUsed(defs) {
   for (const def of defs) for (const pc of def?.pieces ?? []) for (const k of Object.keys(pc.forms ?? {})) if (+k > n && +k <= FORM_MAX) n = +k;
   return n;
 }
-/** 形態 n の見た目を書き換える（空になったら消す：データに形態 1 と同じ物を残さない） */
+/** 置いたパーツ（items）が使っている形態の数（1〜FORM_MAX）。置いたパーツの形態は item.forms（下の itemFormDelta） */
+export const itemFormsUsed = items => formsUsed([{ pieces: items }]);
+/** 形態 n の見た目を書き換える（空になったら消す：データに形態 1 と同じ物を残さない）。置いたパーツ（item.forms）にも使う */
 export function setForm(pc, n, change) {
   const f = { ...(pc.forms?.[n] ?? {}), ...change };
   for (const k of Object.keys(f)) if (f[k] == null || f[k] === false || (Array.isArray(f[k]) && f[k].every(v => !v))) delete f[k];
@@ -38,6 +40,26 @@ function look(pc, n, mirrored, q) {
 }
 /** ミラーの写しか（ミラーのブロックは、写しが 1 つおきに入る：partgeo.js instances） */
 const mirroredMesh = o => !!o.userData.pc?.mirror && (o.userData.inst ?? 0) % 2 === 1;
+
+// ---- 置いたパーツ 1 つごとの形態（issue #810：右の「置いたパーツ」で選んだパーツ単体の形態）----
+//   item.forms[n] = { hide?: true（この形態では出さない）, p?: [x, y, z]（ずらす。右の「位置」と同じ 左右・上下・前後）, r?: [x, y, z]（回す。度、パーツの原点で・パーツの向きの軸で） }
+// ブロックの形態（pc.forms）の上に重なる（ブロックが動いた形のまま、パーツごと動く）。色はブロックの形態で変える
+/**
+ * 置いたパーツ it の、形態 view.from → view.to の途中 view.t（0〜1）のずれ（形態 1 のまま・形態の無いパーツは null）
+ * { p: Vector3（位置に足す）, q: Quaternion（向きの後ろに掛ける）, s: 拡大に掛ける数（出さない形態へ 0 まで縮む） }
+ */
+export function itemFormDelta(it, view) {
+  if (!it?.forms || !view || (view.from === 1 && view.to === 1)) return null;
+  const k = ease(Math.min(1, Math.max(0, view.t))), qb = new THREE.Quaternion(), q = new THREE.Quaternion();
+  const a = look(it, view.from, false, q), b = look(it, view.to, false, qb);
+  return { p: a.p.lerp(b.p, k), q: q.slerp(qb, k), s: Math.max(a.s + (b.s - a.s) * k, 1e-4) };
+}
+/** 左右反転の写し（xsasm-random.js mirrorOf）の形態：ずらすの左右と、回すの y・z を逆に（位置・回転の写し方と同じ） */
+export function mirrorForms(forms) {
+  const out = {};
+  for (const [n, f] of Object.entries(forms ?? {})) out[n] = { ...f, ...(f.p ? { p: [-f.p[0], f.p[1], f.p[2]] } : {}), ...(f.r ? { r: [f.r[0], -f.r[1], -f.r[2]] } : {}) };
+  return out;
+}
 
 /** メッシュ o の形態 1 の置き方を覚える（作った時・置き直した時に呼ぶ） */
 export function keepBase(o) { o.userData.fb = { p: o.position.clone(), q: o.quaternion.clone(), s: o.scale.clone(), m: o.material }; }

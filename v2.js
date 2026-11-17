@@ -26,7 +26,7 @@ import { initAi } from './v2-ai.js';
 import { initShare } from './v2-share.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
-import { FORM_MAX, FORM_MS, formsUsed, keepBase, showForms } from './v2-forms.js';
+import { FORM_MAX, FORM_MS, formOf, formsUsed, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
@@ -323,20 +323,27 @@ const canPickBone = it => !!it && !isHead(it.part) && !byId[it.part]?.free;
 const holderFor = (b, item) => itemsIn[b] ?? (SIDED.includes(b) ? itemsIn[`${b}_${sideOf(item)}`] : root);
 const holderOf = item => holderFor(item.bone ? BONE_HOLDER[item.bone] ?? item.bone : boneOf(byId[item.part]), item);
 /** 置いたパーツを Group に写す。腕・脚のパーツは、寸法の調整（関節の間の長さ）を掛けた置き方で（fitItem） */
+// 置いたパーツの形態（issue #810、v2-forms.js itemFormDelta）：今見せている形態 { from, to, t }（showFormNow が入れる。null は形態 1）
+let itemView = null;
 function applyToGroup(item, g) {
-  const f = fitItem(item, adj);
+  const f = fitItem(item, adj), d = itemFormDelta(item, itemView);
+  g.userData.fdelta = d;   // （読み戻す時に外す分）
   for (const t of [g, ...(g.userData.extra?.values() ?? [])]) {
     t.position.set(...f.mov);
     t.quaternion.setFromRotationMatrix(rotMatrix(item.rot));
     t.scale.set(...f.scal);
+    if (d) { t.position.add(d.p); t.quaternion.multiply(d.q); t.scale.multiplyScalar(d.s); }
   }
 }
 const round = (v, n) => Math.round(v * 10 ** n) / 10 ** n;
 function readBackFromGroup(item, g) {
-  item.mov = g.position.toArray().map(v => round(v, 4));
-  const e = new THREE.Euler().setFromQuaternion(g.quaternion, 'YXZ');   // Ry·Rx·Rz：この組み立ての回転の順
+  // 形態 2 からを見ている間のつまみ：形態のずれ（applyToGroup が足した分）を外して、形態 1 の置き方として読む
+  const d = g.userData.fdelta, pos = g.position.clone(), q = g.quaternion.clone(), sc = g.scale.clone();
+  if (d) { pos.sub(d.p); q.multiply(d.q.clone().invert()); sc.divideScalar(d.s); }
+  item.mov = pos.toArray().map(v => round(v, 4));
+  const e = new THREE.Euler().setFromQuaternion(q, 'YXZ');   // Ry·Rx·Rz：この組み立ての回転の順
   item.rot = [round(e.x / D, 1), round(e.y / D, 1), round(e.z / D, 1)];
-  item.scal = g.scale.toArray().map(v => round(v, 3));
+  item.scal = sc.toArray().map(v => round(v, 3));
   // 寸法の調整で掛かっている分（位置の y・拡大の y）は、置いたパーツの数値からは外す
   const f0 = fitItem({ ...item, mov: [0, 0, 0], scal: [1, 1, 1] }, adj);
   item.mov[1] = round(item.mov[1] - f0.mov[1], 4); item.scal[1] = round(item.scal[1] / f0.scal[1], 3);
@@ -854,6 +861,7 @@ function fillFields() {
   { const r = pickedList().map(i => items[i].roman ? `${items[i].roman.s}${items[i].roman.m}` : ''); $('#fRoman').value = r.every(v => v === r[0]) ? r[0] : ''; }
   for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).value = it[k][j];
   fillJetDir();
+  fillItemForm();
 }
 for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).oninput = () => {
   if (selected < 0) return;
@@ -922,7 +930,7 @@ function pasteParts() {
   });
   // 貼り先が左右の対の片方（同じパーツが x を返した所にある）：反対側にも
   const twin = tgt && Math.abs(tgt.mov[0]) > 1e-4 && items.some(o => o !== tgt && o.part === tgt.part && Math.abs(o.mov[0] + tgt.mov[0]) < 1e-3 && Math.abs(o.mov[1] - tgt.mov[1]) < 1e-3);
-  const list = regroup(twin ? [...out, ...out.map(it => mirrorOf(structuredClone(it)))] : out);
+  const list = regroup(twin ? [...out, ...out.map(it => mirrorItem(structuredClone(it)))] : out);
   addItems(list); pickLast(list.length);
   note(`${clip.length} 個のパーツを貼り付けました${twin ? '（反対側にも）' : ''}${bone ? `。付ける骨：${BONE_PICK.find(([b]) => b === bone)?.[1] ?? bone}` : ''}`);
 }
@@ -940,7 +948,7 @@ $('#bCopyP').onclick = copyParts;
 $('#bPasteP').onclick = pasteParts;
 $('#bMirror').onclick = () => {
   if (selected < 0) return;
-  const list = regroup(pickedList().map(i => { const src = items[i], m = mirrorOf(structuredClone(src)); if (src.name) m.name = src.name.replace(/（鏡像）$/, '') + '（鏡像）'; else delete m.name; return m; }));   // 名前を付けていないパーツは、カタログの名前のまま（左右は一覧の（±x）で分かる）
+  const list = regroup(pickedList().map(i => { const src = items[i], m = mirrorItem(structuredClone(src)); if (src.name) m.name = src.name.replace(/（鏡像）$/, '') + '（鏡像）'; else delete m.name; return m; }));   // 名前を付けていないパーツは、カタログの名前のまま（左右は一覧の（±x）で分かる）
   addItems(list); pickLast(list.length);
 };
 
@@ -1240,7 +1248,7 @@ const adjusted = list => list.map(it => {
   m[1] += adj.up + (sh ? adj.shY : 0); if (sh) m[0] += Math.sign(m[0] || 1) * adj.sh;
   return { ...it, mov: m };
 });
-const tidy = list => register(list).filter(it => byId[it.part]).map(it => ({ part: it.part, name: it.name, ...(it.gen ? { gen: it.gen } : {}), ...(it.tilt != null ? { tilt: it.tilt } : {}), ...(it.bone ? { bone: it.bone } : {}), ...(it.grp ? { grp: it.grp } : {}), ...(it.purge ? { purge: true } : {}), ...(it.roman ? { roman: { s: it.roman.s, m: it.roman.m } } : {}), mov: it.mov ?? [0, 0, 0], rot: it.rot ?? [0, 0, 0], scal: it.scal ?? [1, 1, 1] }));
+const tidy = list => register(list).filter(it => byId[it.part]).map(it => ({ part: it.part, name: it.name, ...(it.gen ? { gen: it.gen } : {}), ...(it.tilt != null ? { tilt: it.tilt } : {}), ...(it.bone ? { bone: it.bone } : {}), ...(it.grp ? { grp: it.grp } : {}), ...(it.purge ? { purge: true } : {}), ...(it.roman ? { roman: { s: it.roman.s, m: it.roman.m } } : {}), ...(it.forms ? { forms: it.forms } : {}), mov: it.mov ?? [0, 0, 0], rot: it.rot ?? [0, 0, 0], scal: it.scal ?? [1, 1, 1] }));
 $('#bApply').onclick = () => {
   try {
     const d = JSON.parse($('#paste').value.trim());
@@ -1314,11 +1322,20 @@ function makeUserCopy(src, fresh = false) {
 }
 // ---- 形態（変形の見た目、issue #145。v2-forms.js）：右の「形態」と、パーツエディタの「形態」で切り替える。書き出す形・チェック・小さな絵は形態 1 ----
 let formNow = 1, formAdded = 1, formAnim = null;   // formAdded：「＋」で足した数（ブロックに書くまでは数に入らないので）
-const formCount = () => Math.min(FORM_MAX, Math.max(formAdded, formsUsed(kept().map(it => byId[it.part]))));
+const formCount = () => Math.min(FORM_MAX, Math.max(formAdded, formsUsed(kept().map(it => byId[it.part])), itemFormsUsed(kept())));
 const formRoots = () => groups.flatMap(g => [g, ...g.userData.extra.values()]);
 /** メッシュ o の、塗りのとおりの材質（形態で色を変える時は、この写しに色を入れる） */
 function formMat(o) { return o.userData.meshPart ? o.userData.fb?.m ?? o.material : o.userData.pc.blockout && o.userData.def?.free ? draftMat : material(o.userData.pc, o.userData.def); }
-function showFormNow() { if (formAnim) showForms(formRoots(), formAnim.from, formAnim.to, (performance.now() - formAnim.t0) / FORM_MS, formMat); else showForms(formRoots(), formNow, formNow, 1, formMat); }
+function showFormNow() {
+  const v = formAnim ? { from: formAnim.from, to: formAnim.to, t: (performance.now() - formAnim.t0) / FORM_MS } : { from: formNow, to: formNow, t: 1 };
+  showForms(formRoots(), v.from, v.to, v.t, formMat);
+  placeItemForms(v);
+}
+/** 置いたパーツの形態（item.forms）を、形態の途中 v（null は形態 1）の置き方にする */
+function placeItemForms(v) {
+  itemView = v;
+  groups.forEach((g, i) => { if (items[i] && (items[i].forms || g.userData.fdelta)) applyToGroup(items[i], g); });
+}
 function switchForm(n) {
   n = Math.max(1, Math.min(formCount(), n));
   if (n === formNow && !formAnim) return;
@@ -1335,6 +1352,34 @@ function renderForms() {
     + (n < FORM_MAX ? '<button class="small" id="bFormAdd" title="形態を 1 つ足す（パーツエディタでブロックを選び、右の「形態」で、この形態での見た目を決める）">＋ 形態を足す</button>' : '');
   for (const b of bar.querySelectorAll('[data-form]')) b.onclick = () => switchForm(+b.dataset.form);
   if ($('#bFormAdd')) $('#bFormAdd').onclick = addForm;
+  fillItemForm();
+}
+// ---- 置いたパーツ単体の形態（issue #810、テスター ポッチャさん「右枠のパーツ単体でも形態のエディットさせてほしい」）：
+// 右の「置いたパーツ」で選んだパーツ（最後に選んだ 1 つ）の、今の形態でのパーツ全体の見た目（出す・消す、ずらす、回す）。item.forms（v2-forms.js itemFormDelta）
+/** 左右反転の写し：形態も左右を返す */
+function mirrorItem(it) { const m = mirrorOf(it); if (it.forms) m.forms = mirrorForms(it.forms); return m; }
+function fillItemForm() {
+  const box = $('#itemForm'); if (!box) return;
+  const it = selected >= 0 ? items[selected] : null;
+  if (!it) { box.innerHTML = ''; return; }
+  const n = formCount(), fN = formNow, fv = formOf(it, fN) ?? {}, p = fv.p ?? [0, 0, 0], r = fv.r ?? [0, 0, 0];
+  const seg = Array.from({ length: n }, (_, i) => `<button class="small ${i + 1 === fN ? 'acc' : ''}" data-iform="${i + 1}">形態 ${i + 1}</button>`).join('')
+    + (n < FORM_MAX ? '<button class="small" id="bIFormAdd" title="形態を 1 つ足す">＋</button>' : '');
+  box.innerHTML = `<div class="bar"><b style="font-size:12px;align-self:center">形態</b>${seg}</div>` + (fN === 1
+    ? '<div class="hint">形態 1 はいつもの置き方（ゲーム用に書き出す形）。形態 2 からを選ぶと、その形態でのこのパーツ全体の見た目（出す・消す、ずらす、回す）を決められる。ブロックごとに変えるのは、パーツエディタの「形態」</div>'
+    : `<label class="chk"><input type="checkbox" id="iFHide" ${fv.hide ? 'checked' : ''}>形態 ${fN} では、このパーツを出さない</label>`
+      + `<div class="row one"><label>ずらす</label>${[0, 1, 2].map(a => `<input type="number" step="0.01" data-ifp="${a}" value="${p[a]}">`).join('')}</div>`
+      + `<div class="row one"><label>回す</label>${[0, 1, 2].map(a => `<input type="number" step="5" data-ifr="${a}" value="${r[a]}">`).join('')}</div>`
+      + '<div class="hint one">ずらす：左右・上下・前後（位置の欄と同じ向き）。回す：度、パーツの原点（つまみの出る所）で、パーツの向きの x・y・z の軸の回り。「反対側にも」で写すと左右を返す。つまみと位置・回転・拡大の欄は、形態 1 の置き方を動かす</div>'
+      + `<div class="bar"><button class="small" id="bIFReset">形態 ${fN} を形態 1 と同じに戻す</button></div>`);
+  for (const b of box.querySelectorAll('[data-iform]')) b.onclick = () => switchForm(+b.dataset.iform);
+  if ($('#bIFormAdd')) $('#bIFormAdd').onclick = addForm;
+  if (fN === 1) return;
+  const set = change => { if (change) setForm(it, fN, change); else if (it.forms) { delete it.forms[fN]; if (!Object.keys(it.forms).length) delete it.forms; } showFormNow(); };
+  const vec = k => [0, 1, 2].map(a => +box.querySelector(`[data-${k}="${a}"]`).value || 0);
+  $('#iFHide').onchange = e => { set({ hide: e.target.checked || null }); save(); renderForms(); };
+  for (const el of box.querySelectorAll('[data-ifp],[data-ifr]')) { el.oninput = () => set({ p: vec('ifp'), r: vec('ifr') }); el.onchange = () => save(); }
+  $('#bIFReset').onclick = () => { set(null); save(); renderForms(); };
 }
 // ---- 武器の口の試し撃ち（issue #144）：「武器の口」を選んだブロックの真ん中から、機体の前（+Z）へ短いビームを見せる。見た目だけ ----
 const shotGeo = new THREE.CylinderGeometry(0.022, 0.022, 1, 10).rotateX(Math.PI / 2).translate(0, 0, 0.5);
@@ -1880,7 +1925,7 @@ function unitThumb() {
   const cam = camera.position.clone(), tgt = orbit.target.clone(), gv = gizmo.visible, ghosts = ghostAll.map(m => m.visible);
   endFlash(); gizmo.visible = false; for (const m of ghostAll) m.visible = false;
   resize(); setView('threeq'); camera.position.lerp(orbit.target, 0.1); camera.updateMatrixWorld();
-  showForms(formRoots(), 1, 1, 1, formMat);   // （小さな絵は形態 1）
+  showForms(formRoots(), 1, 1, 1, formMat); placeItemForms(null);   // （小さな絵は形態 1）
   renderer.render(scene, camera);
   showFormNow();
   const cv = document.createElement('canvas'), src = renderer.domElement, side = Math.min(src.width, src.height);
@@ -2358,7 +2403,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'a529f63';
+const BUILD = '0857475';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
