@@ -100,14 +100,19 @@ export function freeParts(def, it, shapes) {
   const smoothHull = pc => (pc.kind ?? 'hull') === 'hull' && pc.smooth > 0;
   const native = pc => ['hull', 'extrude', 'lathe', 'mesh', 'tri'].includes(pc.kind ?? 'hull') && !smoothHull(pc);
   if (atRest(it) && def.pieces.every(native)) return def.pieces.map(partOf);
-  if (atRest(it)) {
+  // 機体エディタに無い形を三角形にして渡す（mov：置いた位置。写しごとに 1 個）
+  const asTris = (mov) => {
     const tri = new Map(); for (const s of shapes(def)) if (!native(s.pc)) (tri.get(s.pc) ?? tri.set(s.pc, []).get(s.pc)).push(s.shape);
-    return def.pieces.flatMap(pc => (native(pc) ? [partOf(pc)] : (tri.get(pc) ?? []).map(shape => { const { tf, pos, pts, planes, side, top, secs, ...rest } = pc; return { ...structuredClone(rest), ...shape, pos: [0, 0, 0], rot: [0, 0, 0], scl: [1, 1, 1] }; })));
-  }
+    return def.pieces.flatMap(pc => (native(pc) ? [(p => { p.pos = p.pos.map((v, k) => v + mov[k]); return p; })(partOf(pc))]
+      : (tri.get(pc) ?? []).map(shape => { const { tf, pos, pts, planes, side, top, secs, ...rest } = pc; return { ...structuredClone(rest), ...shape, pos: mov.slice(), rot: [0, 0, 0], scl: [1, 1, 1] }; })));
+  };
+  if (atRest(it)) return asTris([0, 0, 0]);
   // 動かしただけ（回していない・拡大していない）：元の部品の並びのまま、位置だけ足す（手に持たせた武器。形の作り方・遠くの形の簡略化が元のまま残る）。
-  // ミラーの部品は x = 0 で折り返すので、左右に動かしたときは三角形で渡す
+  // ミラーの部品は x = 0 で折り返すので、左右に動かしたときは三角形で渡す。
+  // 書き出しに無い形（蛇腹・断面をつなぐ形）は、ここでも三角形で渡す：2026-11-17 までは元のまま渡し、書き出しがその形を知らずに大きな塊にした
+  // （ザッコタンクの車体の前の「まっすぐな蛇腹」、径 0.18 の管が 0.8 の円筒に。依頼主 2026-11-17「履帯が壊れて ロードローラーになってる」）
   if (it.rot.every(v => Math.abs(v) < 1e-9) && it.scal.every(v => Math.abs(v - 1) < 1e-9) && !(Math.abs(it.mov[0]) > 1e-9 && def.pieces.some(pc => pc.mirror)) && !def.pieces.some(smoothHull))
-    return def.pieces.map(pc => { const p = partOf(pc); p.pos = p.pos.map((v, k) => v + it.mov[k]); return p; });
+    return asTris(it.mov);
   const R = rotMatrix(it.rot), e = new THREE.Euler().setFromRotationMatrix(R, 'XYZ');
   return shapes(def).map(({ pc, shape }) => {
     const { tf, pos, pts, planes, side, top, ...rest } = pc;
