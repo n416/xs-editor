@@ -702,6 +702,7 @@ canvas.addEventListener('dblclick', e => {   // ダブルクリック：グル�
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (PE.active()) { PE.key(e); return; }   // パーツエディタを開いている間は、キーはパーツエディタのもの（元に戻す・やり直すも）
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); $('#bSaveAs').onclick(); return; }   // Ctrl+Shift+S：名前を付けて保存
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); $('#bSave').onclick(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
@@ -1919,19 +1920,24 @@ async function openFile(file) {
     note(`「${unitName || '名前なし'}」をファイルから開きました（このブラウザにはまだ保存していません。「保存」で残せます）`);
   } catch (e) { note('開けません：' + e.message, true); }
 }
+// 「名前を付けて保存」で開いた時は、上書きのボタンを出さず、いつも新しい機体として残す（issue 744）
+let saveAsMode = false, svFind = '';
+/** 同じ名前の保存の id（前後の空白を除いて全く同じ名前。大文字・小文字・全角半角は区別する。いくつもあれば新しい方）。無ければ '' */
+const sameNameId = (s, name) => Object.keys(s).filter(id => String(s[id].name ?? '').trim() === name).sort((a, b) => (s[b].at ?? '').localeCompare(s[a].at ?? ''))[0] ?? '';
 function renderSaves() {
   const s = readSaves(), ids = Object.keys(s).sort((a, b) => (s[b].at ?? '').localeCompare(s[a].at ?? '')), box = $('#saveBox .box');
+  const asNew = saveAsMode || !(saveId && s[saveId]);
   const day = t => { const d = new Date(t); return Number.isNaN(+d) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
   box.innerHTML = `<div class="top"><b>機体の保存と読み込み</b><button id="svClose">閉じる（Esc）</button></div>
     <h2>今の機体${unitName ? `：${esc(unitName)}` : ''}${dirty() ? '<span class="hint">　● 保存していない変更がある</span>' : ''}</h2>
     <div class="now"><input type="text" id="svName" placeholder="機体の名前" value="${esc(unitName)}">
-      ${saveId && s[saveId] ? `<button id="svOver" class="acc" title="保存してある「${esc(s[saveId].name)}」を、今の機体で置き換える">上書き保存</button><button id="svNew" title="今の機体を、別の機体として新しく保存する（元の保存は残る）">別の機体として保存</button>` : '<button id="svNew" class="acc">名前を付けて保存</button>'}
+      ${!asNew ? `<button id="svOver" class="acc" title="保存してある「${esc(s[saveId].name)}」を、今の機体で置き換える">上書き保存</button><button id="svNew" title="今の機体を、別の機体として新しく保存する（元の保存は残る）">別の機体として保存</button>` : '<button id="svNew" class="acc" title="今の機体を、この名前で新しい機体として保存する（元の保存は残る。同じ名前があれば、置き換えるか別に残すかを聞く）">名前を付けて保存</button>'}
       <button id="svFile" title="今の機体を .json のファイルにする（別のパソコン・ブラウザへ持っていく、手元に残す）">ファイルに保存</button>
       <button id="svOpenFile" title="ファイル（.json）から機体を開く。画面にファイルを落としても開く">ファイルから開く</button>
       <button id="svGlb" title="Blender や 3D 生成 AI で作った .glb を読み込んで、機体にする（骨に合わせて曲がるスキン。部位ごとに切り分ける）">GLB を読み込む</button>
       <button id="svRig" title="パソコンの AI（Claude Code など）に Blender で骨を付けてもらう頼み方を出す">AI に骨を付けてもらう</button></div>
     <div class="hint" style="margin-top:4px" id="svRoom">保存はこのブラウザの中に残ります（ブラウザのデータを消すと無くなる）。大事な機体は「ファイルに保存」でも残してください</div>
-    <h2>保存した機体 <span class="hint">${ids.length} 体</span></h2>
+    <h2>保存した機体 <span class="hint" id="svCount">${ids.length} 体</span>${ids.length ? `<input type="text" class="svfind" id="svFind" placeholder="名前で絞り込む" title="名前にこの文字が入っている機体だけを並べる" value="${esc(svFind)}">` : ''}</h2>
     ${ids.length ? `<div class="svcells">${ids.map(id => `<div class="svcell ${id === saveId ? 'cur' : ''}" data-id="${id}"><img src="${s[id].thumb ?? ''}" alt="" title="開く"><div class="nm" title="${esc(s[id].name)}">${esc(s[id].name)}</div><div class="hint">${day(s[id].at)}${id === saveId ? '・今の機体' : ''}</div>
       <div class="bar"><button class="small acc" data-act="open">開く</button><button class="small" data-act="file" title="この機体を .json のファイルにする">ファイルへ</button><button class="small" data-act="del">消す</button></div></div>`).join('')}</div>` : '<div class="hint">まだありません。上の「名前を付けて保存」で、今の機体がここに並びます</div>'}`;
   renderE1(box);
@@ -1939,13 +1945,26 @@ function renderSaves() {
   const nameNow = () => $('#svName').value.trim();
   const needName = () => { if (nameNow()) return true; note('機体の名前を入れてください', true); $('#svName').focus(); return false; };
   $('#svClose').onclick = () => { $('#saveBox').hidden = true; };
-  $('#svNew').onclick = async () => { if (needName() && await saveUnit(nameNow())) renderSaves(); };
+  $('#svNew').onclick = async () => {
+    if (!needName()) return;
+    const dup = sameNameId(s, nameNow());   // 同じ名前があれば、置き換えるか別に残すかを聞く
+    const id = dup && confirm(`同じ名前の「${nameNow()}」があります。\n「OK」で置き換え、「キャンセル」で別の機体として残します`) ? dup : '';
+    if (await saveUnit(nameNow(), id)) { saveAsMode = false; renderSaves(); }
+  };
   if ($('#svOver')) $('#svOver').onclick = async () => { if (needName() && await saveUnit(nameNow(), saveId)) renderSaves(); };
   $('#svFile').onclick = () => { if (nameNow()) { unitName = nameNow(); persist(); showUnitName(); } saveFile(); };
   $('#svOpenFile').onclick = () => $('#unitFile').click();
   $('#svGlb').onclick = () => $('#unitFile').click();
   $('#svRig').onclick = showRigRequest;
   $('#svName').onkeydown = e => { if (e.key === 'Enter') ($('#svOver') ?? $('#svNew')).click(); };
+  // 名前で絞り込む（並びは日時の新しい順のまま。大文字・小文字は区別しない）
+  const find = () => {
+    const q = svFind.trim().toLowerCase(); let n = 0;
+    for (const cell of box.querySelectorAll('.svcell[data-id]')) { const on = !q || String(s[cell.dataset.id]?.name ?? '').toLowerCase().includes(q); cell.style.display = on ? '' : 'none'; if (on) n++; }
+    $('#svCount').textContent = q ? `${ids.length} 体のうち ${n} 体` : `${ids.length} 体`;
+  };
+  if ($('#svFind')) $('#svFind').oninput = e => { svFind = e.target.value; find(); };
+  find();
   for (const cell of box.querySelectorAll('.svcell[data-id]')) {
     const id = cell.dataset.id, open = () => {
       if (busy()) return;
@@ -1965,8 +1984,9 @@ function renderSaves() {
   }
 }
 // （開くたびに置き場を読み直す：ほかのタブで保存した機体も並ぶ）
-const openSaves = async () => { if (busy()) return; await Store.reload(); renderSaves(); $('#saveBox').hidden = false; };
-$('#bOpen').onclick = openSaves;
+const openSaves = async (asNew = false) => { if (busy()) return false; saveAsMode = asNew; await Store.reload(); renderSaves(); $('#saveBox').hidden = false; return true; };
+$('#bOpen').onclick = () => openSaves();
+$('#bSaveAs').onclick = async () => { if (!await openSaves(true)) return; const el = $('#svName'); el.focus(); el.select(); note('名前を入れて「名前を付けて保存」を押してください（元の保存はそのまま残ります）'); };
 $('#bSave').onclick = async () => { if (busy()) return; const cur = saveId && Store.get(SAVE_PRE + saveId); if (cur) await saveUnit(unitName || JSON.parse(cur).name, saveId); else { await openSaves(); $('#svName').focus(); note('名前を付けて保存してください'); } };
 $('#saveBox').addEventListener('pointerdown', e => { if (e.target === $('#saveBox')) $('#saveBox').hidden = true; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#saveBox').hidden) $('#saveBox').hidden = true; });
@@ -2319,7 +2339,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '0a0a794';
+const BUILD = '3f86f2e';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

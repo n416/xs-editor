@@ -105,6 +105,7 @@
   #saveBox .top b { flex: 1; font-size: 14px; }
   #saveBox .now { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   #saveBox .now input { width: 260px; }
+  #saveBox h2 .svfind { width: 220px; margin-left: 8px; font-weight: normal; }
   .svcells { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
   .svcell { border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 4px; background: #181b20; }
   .svcell.cur { border-color: var(--acc); }
@@ -169,6 +170,7 @@
       <optgroup label="GIO"><option value="b_raid">GIO・強襲</option><option value="b_heavy">GIO・重撃</option><option value="b_support">GIO・支援</option><option value="b_sniper">GIO・狙撃</option><option value="b_artillery_leg">GIO・砲撃（脚）</option></optgroup>
     </select>
     <button id="bSave" class="acc" title="今の機体を保存する（Ctrl+S）。保存してある機体なら上書き、まだなら名前を付けて保存">保存</button>
+    <button id="bSaveAs" title="今の機体を、新しい名前で別の機体として保存する（Ctrl+Shift+S）。元の保存はそのまま残る">名前を付けて保存</button>
     <button id="bOpen" title="保存した機体の一覧（開く・消す）、ファイルに保存、ファイルから開く">開く</button>
     <button id="bHow" title="機体を作る手順（置く → 整える → 確かめる → 出す）">作り方</button>
     <button id="bShare" title="ほかの人が投稿した機体を見る・開く・イイネする。今の機体を投稿する（ゲームのアカウントでログイン）">みんなの機体</button>
@@ -359,6 +361,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=0a0a794"></script>
+<script type="module" src="./v2.js?v=3f86f2e"></script>
 </body>
 </html>
