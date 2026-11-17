@@ -116,3 +116,47 @@ export function showForms(roots, from, to, t, baseMat) {
     o.userData.formed = true;
   });
 }
+
+/**
+ * 形態 n の見た目を形に焼き込んだ機体の文書（ゲームへ形態 n の模型を書き出す：v2.js exportGame0 の opt.form）。doc は unitDoc() の写し。
+ * 自分のパーツのブロックごとに、showForms と同じ置き方（ブロックの真ん中＝削る前の形の箱の中心で r 回し、p ずらす。ミラーの写しは
+ * partgeo.js が焼き込んだ形を写すので逆へ動く）を、面で囲った形は面に、ほかは置き方 tf に入れる。色は color に、hide のブロックは除く。
+ * boxOf：partgeo.js のブロックの範囲（パーツの座標、pos 込み）。opt.shape：形だけ（色は形態 1 のまま）。光の部品は色ごとに材質が分かれるので、
+ * 色を替えると模型の三角形の並びが形態 1 と変わる：ゲームは同じ並びの 2 つの模型の間を頂点ごとに動かす（client/src/models.ts axisMorph）
+ */
+export function bakeForm(doc, n, boxOf, opt = {}) {
+  const out = structuredClone(doc), M = new THREE.Matrix4(), T = new THREE.Matrix4(), c = new THREE.Vector3(), q = new THREE.Quaternion();
+  for (const def of Object.values(out.userParts ?? {})) {
+    if (!Array.isArray(def?.pieces)) continue;
+    def.pieces = def.pieces.filter(pc => !formOf(pc, n)?.hide);
+    for (const pc of def.pieces) {
+      const f = formOf(pc, n);
+      delete pc.forms;
+      if (!f) continue;
+      if (f.color && !opt.shape) pc.color = f.color;
+      const p = f.p ?? [0, 0, 0], r = f.r ?? [0, 0, 0];
+      if (!p.some(v => v) && !r.some(v => v)) continue;
+      // ブロックの座標（パーツの座標から pos を引いた物）で：x' = c + p + R (x − c)
+      const pos = pc.pos ?? [0, 0, 0];
+      boxOf(pc).getCenter(c).sub(new THREE.Vector3(...pos));
+      q.setFromEuler(_e.set(r[0] * D, r[1] * D, r[2] * D, 'XYZ'));
+      M.makeTranslation(c.x + p[0], c.y + p[1], c.z + p[2]).multiply(T.makeRotationFromQuaternion(q)).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
+      if (Array.isArray(pc.planes) && !pc.tf) {
+        // 面 n·x ≤ d → (R n)·x' ≤ d − n·c + (R n)·(c + p)
+        const cp = new THREE.Vector3(c.x + p[0], c.y + p[1], c.z + p[2]);
+        pc.planes = pc.planes.map(pl => {
+          const nn = new THREE.Vector3(pl[0], pl[1], pl[2]), nr = nn.clone().applyQuaternion(q);
+          return [nr.x, nr.y, nr.z, pl[3] - nn.dot(c) + nr.dot(cp), ...pl.slice(4)];
+        });
+      } else {
+        const tf = pc.tf ?? {}, tr = tf.r ?? [0, 0, 0];
+        const m0 = new THREE.Matrix4().compose(new THREE.Vector3(...(tf.p ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(tr[0] * D, tr[1] * D, tr[2] * D, 'XYZ')), new THREE.Vector3(...(tf.s ?? [1, 1, 1])));
+        const tp = new THREE.Vector3(), tq = new THREE.Quaternion(), ts = new THREE.Vector3();
+        M.clone().multiply(m0).decompose(tp, tq, ts);
+        const e = new THREE.Euler().setFromQuaternion(tq, 'XYZ');
+        pc.tf = { p: tp.toArray(), r: [e.x / D, e.y / D, e.z / D], s: ts.toArray() };
+      }
+    }
+  }
+  return out;
+}

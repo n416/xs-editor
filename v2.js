@@ -26,7 +26,7 @@ import { initAi } from './v2-ai.js';
 import { initShare } from './v2-share.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
-import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, formDelayOf, formSpanOf, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
+import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, formDelayOf, formSpanOf, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
@@ -1763,15 +1763,17 @@ $('#bShieldOff').onclick = () => setShield(false);
 $('#shieldBox').ontoggle = renderJetShield;
 $('#shieldGuideOn').onchange = renderJetShield;
 
-async function exportGame(id, onStep) { return onEngine(() => exportGame0(id, onStep)); }
-async function exportGame0(id, onStep) {
+// opt.form（2〜）：その形態の形（v2-forms.js bakeForm。色は形態 1 のまま：三角形の並びを変えない）も、形態 1 と同じ骨・床・高さで書き出す（out.form）。
+// ゲームで能力の間だけ姿を替える機体（client/src/models.ts axisMorph、AXIS の間のブルーフェイト1号機）の、替えた後の模型
+async function exportGame(id, onStep, opt = {}) { return onEngine(() => exportGame0(id, onStep, opt)); }
+async function exportGame0(id, onStep, opt = {}) {
   const X = await editorWorker();
   const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
   const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));   // 自由な機体が自分の武器を持っている
   const held = own || clawHands() ? [] : w.parts, purges = kept().some(it => it.purge);
   X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
   const applied = await X.applyUnit(structuredClone(unitDoc()), { weaponHand: w.hand_r });
-  const chk = await X.checkAsync(id, onStep), { frame, ...out } = await X.exportNow(id, true, { height: purges });
+  const chk = await X.checkAsync(id, onStep), { frame, ...out } = await X.exportNow(id, true, { height: purges || opt.form > 1 });
   // パージで外れる部品（item.purge、issue #745）があれば、それを除いた姿（外れた後）も、付けた姿と同じ骨・床・高さで書き出す。
   // ゲームでは増加装甲の 2 機（shared/data.ts PLATE）だけが、付けた姿（PLATE_MODEL）と外れた姿（modelOf）の 2 つの模型を使う
   let purged = null;
@@ -1780,7 +1782,13 @@ async function exportGame0(id, onStep) {
     await X.applyUnit(structuredClone({ ...unitDoc(), items: kept().filter(it => !it.purge) }), { weaponHand: w.hand_r });
     purged = (await X.exportNow(id, true, { frame })).glb;
   }
-  return { ...out, purged, floating: chk.floating, loose: chk.loose, depths: chk.depths, weapons: applied.weapons, own };
+  let form = null;
+  if (opt.form > 1) {
+    X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
+    await X.applyUnit(bakeForm(unitDoc(), opt.form, blockBox, { shape: true }), { weaponHand: w.hand_r });
+    form = (await X.exportNow(id, true, { frame })).glb;
+  }
+  return { ...out, purged, form, floating: chk.floating, loose: chk.loose, depths: chk.depths, weapons: applied.weapons, own };
 }
 const GAME_LIMIT = [30000, 5000, 800];
 $('#bGame').onclick = async () => {
@@ -2451,7 +2459,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'c8f561c';
+const BUILD = '618f7be';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
