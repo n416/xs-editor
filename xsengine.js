@@ -55,6 +55,8 @@ export const DEFAULTS = {
                            //     shape (a blockout) }; its mouth at the part's origin, blowing along its -z. A flame comes out of each (nozzlesOf);
                            //     with a flame point among them, from these alone (the parts named 噴射口 no longer)
   shield: false,           // a part of the shield's look (Ver2: a part on the bone 盾; a blockout): exported as the node `shield` (buildGameModel)
+  roman: 0,                // ロマン砲変形 (Ver2's item.roman, issue #795): weapon slot × 2, + 1 when it shows only once that slot is spent (else it comes
+                           //     off then); 0 none. The game model's vertices carry it (_ROMAN; client/src/roman.ts)
 };
 const FIELDS = Object.keys(DEFAULTS);
 
@@ -1457,7 +1459,7 @@ function buildGameModel(opt = {}) {
     }
     for (const [key, list] of groups) {
       const cls = key.split(/[:|]/)[0], alpha = key.includes('|a') ? +key.split('|a')[1] / 100 : null;
-      const P = [], N = [], C = [], SI = [], SW = [], UV = [], Q = [];
+      const P = [], N = [], C = [], SI = [], SW = [], UV = [], Q = [], R = [];   // R：ロマン砲変形の印（unitparts.js p.roman：スロット × 2 + 出るなら 1、0 は印なし）
       const skinTex = cls === 'skin' ? MESHES.get(list[0].part.mesh)?.tex : null;
       let metal = 0, rough = 0, n = 0;
       const partRanges = [];   // LOD0: which triangles belong to which part, for checks outside the editor (tools/jointcheck.ts)
@@ -1470,8 +1472,9 @@ function buildGameModel(opt = {}) {
         const bl = !si && pc.orb == null ? blendOfPiece(pc) : null, bt = bl ? boneIndex[bl.to] : undefined, bw = bt !== undefined ? blendWeights(pc, bl) : null;   // a part bending over a joint
         const map = si ? IMPORT_BONES.map(n => boneIndex[n] ?? (n.startsWith('foot_') ? boneIndex['shin_' + n.slice(-1)] : undefined) ?? boneIndex.torso) : null;   // (an ankle not exported: the shin)
         const tq = (cls === 'body' || cls === 'team' || cls === 'metal') && !si ? texFrame(pc.geo) ?? [0, 0, 0, 1] : [0, 0, 0, 1];
+        const rc = pc.part.roman | 0;
         for (let i = 0; i < pos.count; i++) {
-          Q.push(tq[0], tq[1], tq[2], tq[3]);
+          Q.push(tq[0], tq[1], tq[2], tq[3]); R.push(rc);
           if (uv) UV.push(uv.getX(i), uv.getY(i));
           P.push(-pos.getX(i), pos.getY(i) - floor, -pos.getZ(i));
           if (nor) N.push(-nor.getX(i), nor.getY(i), -nor.getZ(i));
@@ -1490,6 +1493,8 @@ function buildGameModel(opt = {}) {
       g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
       g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
       if (Q.some((v, i) => v !== (i % 4 === 3 ? 1 : 0))) g.setAttribute('skinq', new THREE.Float32BufferAttribute(Q, 4));   // (glTF: _SKINQ, read back as _skinq; only when a piece has a frame of its own)
+      // (ロマン砲変形、issue #795：glTF の _ROMAN、ゲームは _roman で読む。印のある部品がある物だけ。client/src/roman.ts が撃ち切った武器のスロットで三角形を隠す・出す)
+      if (lods[0].some(pc => pc.part.roman)) g.setAttribute('roman', new THREE.Float32BufferAttribute(R, 1));
       const merged = mergeVertices(g, 1e-5);   // share identical corners: same look, far smaller file
       const glowColor = cls === 'glow' ? new THREE.Color(list[0].part.color) : null;
       const mat = new THREE.MeshStandardMaterial({

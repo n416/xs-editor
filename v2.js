@@ -609,9 +609,17 @@ function rebuild() {
 
 // ---- パージ後を見る（issue #745）：「パージで外れる」の印（item.purge）を付けた部品を隠す。見た目だけ（保存・書き出す形は変わらない）。パーツエディタの間は隠さない ----
 let showPurged = false;
+// 撃ち切り後を見る（issue #795）：「ロマン砲変形」の印（item.roman）の、撃ち切ると外れる部品を隠し、撃ち切ると出る部品だけを出す。印の無い時は全部を出す
+// （出る部品も、ふだんは見えて置き直せる）。見た目だけ
+let showRoman = false;
 function applyPurgeView() {
-  groups.forEach((g, i) => { const v = !(showPurged && !PE.active() && items[i]?.purge); g.visible = v; for (const e of g.userData.extra.values()) e.visible = v; });
+  const hide = it => !PE.active() && ((showPurged && it?.purge) || (showRoman && it?.roman?.m === 'd'));
+  groups.forEach((g, i) => { const v = !hide(items[i]); g.visible = v; for (const e of g.userData.extra.values()) e.visible = v; });
 }
+$('#bRoman').onclick = () => {
+  showRoman = !showRoman; $('#bRoman').classList.toggle('on', showRoman); applyPurgeView();
+  if (showRoman) { const ms = kept().filter(it => it.roman), d = ms.filter(it => it.roman.m === 'd').length; note(ms.length ? `武器を撃ち切った後の姿（外れる部品 ${d} 個を隠し、出る部品 ${ms.length - d} 個を出しています。どのスロットも撃ち切った姿）。もう一度押すと戻る` : '「ロマン砲変形」の印を付けた部品がありません（部品を選んで、右の欄の「ロマン砲変形」で付ける）', !ms.length); }
+};
 $('#bPurged').onclick = () => {
   showPurged = !showPurged; $('#bPurged').classList.toggle('on', showPurged); applyPurgeView();
   if (showPurged) { const n = kept().filter(it => it.purge).length; note(n ? `パージで外れた後の姿（外れる部品 ${n} 個を隠しています）。もう一度押すと戻る` : '「パージで外れる」の印を付けた部品がありません（部品を選んで、右の欄のチェックで付ける）', !n); }
@@ -822,7 +830,7 @@ function renderList() {
     d.className = picked.includes(i) ? 'sel' : '';
     // 1 か所に 1 つの部位（スカート・太もも・すね・足）が同じ側に 2 つ以上あれば、重なっていると知らせる（別々に動くので、板が 2 枚に見える）
     const cat = byId[it.part]?.cat, dup = ONE_EACH.has(cat) ? items.findIndex((o, j) => j !== i && byId[o.part]?.cat === cat && sideOf(o) === sideOf(it)) : -1;
-    d.innerHTML = `<span>${i + 1}. ${labelOf(it)}${it.grp ? ` <b class="grp" title="グループ（押すと全部が選ばれる。1 つだけはダブルクリック）">［${it.grp.replace(/^g/, 'グループ ')}］</b>` : ''}${it.bone ? ` <i class="bone">骨：${BONE_PICK.find(([b]) => b === it.bone)?.[1] ?? it.bone}</i>` : ''}${it.purge ? ' <i class="bone" title="パージで外れる">パージ</i>' : ''}${dup >= 0 ? ` <b style="color:#e8a33d">⚠ ${dup + 1} 番と同じ部位（重なっている）</b>` : ''}</span>`;
+    d.innerHTML = `<span>${i + 1}. ${labelOf(it)}${it.grp ? ` <b class="grp" title="グループ（押すと全部が選ばれる。1 つだけはダブルクリック）">［${it.grp.replace(/^g/, 'グループ ')}］</b>` : ''}${it.bone ? ` <i class="bone">骨：${BONE_PICK.find(([b]) => b === it.bone)?.[1] ?? it.bone}</i>` : ''}${it.purge ? ' <i class="bone" title="パージで外れる">パージ</i>' : ''}${it.roman ? ` <i class="bone" title="ロマン砲変形：スロット ${it.roman.s} を撃ち切ると${it.roman.m === 'd' ? '外れる' : '出る'}">撃切${it.roman.s}${it.roman.m === 'd' ? '外' : '出'}</i>` : ''}${dup >= 0 ? ` <b style="color:#e8a33d">⚠ ${dup + 1} 番と同じ部位（重なっている）</b>` : ''}</span>`;
     d.onclick = e => (e.detail >= 2 && !(e.ctrlKey || e.shiftKey || e.metaKey) ? selectOne(i) : select(i, e.ctrlKey || e.shiftKey || e.metaKey));   // 2 度目の押し（ダブルクリック）はグループの中の 1 つだけ（行は押すたびに作り直すので dblclick は届かない）
     el.appendChild(d);
   });
@@ -843,6 +851,7 @@ function fillFields() {
   $('#fBone').innerHTML = `<option value="">自動（${auto}）</option>` + BONE_PICK.map(([b, l]) => `<option value="${b}">${l}${['arm', 'fore', 'leg', 'shin', 'foot'].includes(b) ? `（${sideOf(it) === 'l' ? '+x' : '−x'} の側）` : ''}</option>`).join('');
   $('#fBone').value = it.bone ?? ''; $('#fBone').disabled = !canPickBone(it);
   $('#fPurge').checked = pickedList().every(i => items[i].purge);
+  { const r = pickedList().map(i => items[i].roman ? `${items[i].roman.s}${items[i].roman.m}` : ''); $('#fRoman').value = r.every(v => v === r[0]) ? r[0] : ''; }
   for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).value = it[k][j];
   fillJetDir();
 }
@@ -863,6 +872,14 @@ $('#fPurge').onchange = () => {
   for (const i of [...set]) { const t = twinOf(i); if (t >= 0) set.add(t); }
   for (const i of set) { if (on) items[i].purge = true; else delete items[i].purge; }
   rebuild(); save(); note(`${set.size} 個を${on ? 'パージで外れる部品にしました' : 'パージで外れない部品に戻しました'}${set.size > mine ? '（左右の対の反対側も）' : ''}`);
+};
+// ロマン砲変形（issue #795）：選んでいる部品（いくつか選んでいれば全部）に印 item.roman = { s: 武器スロット 1〜3, m: 'd' 撃ち切ると外れる | 's' 撃ち切ると出る }。
+// 左右の対には写さない（片腕だけに付ける武装が多い：原作の撃ち切りのミサイルも左手だけ）
+$('#fRoman').onchange = () => {
+  if (selected < 0) return;
+  const v = $('#fRoman').value, set = pickedList();
+  for (const i of set) { if (v) items[i].roman = { s: +v[0], m: v[1] }; else delete items[i].roman; }
+  rebuild(); save(); note(v ? `${set.length} 個を、スロット ${v[0]} の武器を撃ち切ると${v[1] === 'd' ? '外れて落ちる' : '現れる'}部品にしました` : `${set.length} 個のロマン砲変形の印を外しました`);
 };
 $('#bGroup').onclick = groupPicked;
 $('#bUngroup').onclick = ungroupPicked;
@@ -1223,7 +1240,7 @@ const adjusted = list => list.map(it => {
   m[1] += adj.up + (sh ? adj.shY : 0); if (sh) m[0] += Math.sign(m[0] || 1) * adj.sh;
   return { ...it, mov: m };
 });
-const tidy = list => register(list).filter(it => byId[it.part]).map(it => ({ part: it.part, name: it.name, ...(it.gen ? { gen: it.gen } : {}), ...(it.tilt != null ? { tilt: it.tilt } : {}), ...(it.bone ? { bone: it.bone } : {}), ...(it.grp ? { grp: it.grp } : {}), ...(it.purge ? { purge: true } : {}), mov: it.mov ?? [0, 0, 0], rot: it.rot ?? [0, 0, 0], scal: it.scal ?? [1, 1, 1] }));
+const tidy = list => register(list).filter(it => byId[it.part]).map(it => ({ part: it.part, name: it.name, ...(it.gen ? { gen: it.gen } : {}), ...(it.tilt != null ? { tilt: it.tilt } : {}), ...(it.bone ? { bone: it.bone } : {}), ...(it.grp ? { grp: it.grp } : {}), ...(it.purge ? { purge: true } : {}), ...(it.roman ? { roman: { s: it.roman.s, m: it.roman.m } } : {}), mov: it.mov ?? [0, 0, 0], rot: it.rot ?? [0, 0, 0], scal: it.scal ?? [1, 1, 1] }));
 $('#bApply').onclick = () => {
   try {
     const d = JSON.parse($('#paste').value.trim());
@@ -2341,7 +2358,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '7dd7fb6';
+const BUILD = 'a529f63';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

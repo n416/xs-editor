@@ -143,6 +143,8 @@ export function unitParts(doc, { shaped = false } = {}) {
       if (!firstOf.has(p.src)) { firstOf.add(p.src); p.jet = { r: JET_R, ...(jet === 'point' ? { point: true } : {}) }; }
     }
     delete p.editorOnly;
+    // ロマン砲変形（issue #795）：その武器スロットを撃ち切ると外れる・出る部品。書き出す形の頂点の印 roman（xsengine.js romanCode）になる
+    if (it.roman && it.roman.s >= 1 && it.roman.s <= 3) p.roman = it.roman.s * 2 + (it.roman.m === 's' ? 1 : 0);
     if (jet) continue;
     if (it.bone === 'shield') { p.blockout = true; p.shield = true; p.noHeight = true; p.bone = 'shield'; p.pivot = 'none'; }
   }
