@@ -532,7 +532,13 @@ export function initPartEdit(ctx) {
       <div class="hint">「−」は引くブロック：自分より上に並ぶブロックを削る。Ctrl か Shift を押しながら押すと、いくつも選べる</div>
       <h2>ブロックを足す</h2>
       ${GROUPS.map(([title, names, how]) => `<div class="hint">${title}</div><div class="pegrid">${(how === 'shape' && names[0] === '面取り箱' && st.def.free ? ['あたり箱', ...names] : names).map(k => `<button data-${how === 'prim' ? 'prim' : how === 'loft' ? 'loft' : how === 'bellows' ? 'bellows' : 'shape'}="${k}" class="${SHAPES[k]?.op === 'sub' || k === '箱で削る' ? 'subp' : ''}">${k}</button>`).join('')}</div>`).join('')}
-      <div class="hint">足した形は、選んでいるブロックに合わせた大きさで出る。削る形は、選んでいるブロックの前の面に埋めて出る</div>`;
+      <div class="hint">足した形は、選んでいるブロックに合わせた大きさで出る。削る形は、選んでいるブロックの前の面に埋めて出る</div>
+      ${catBox(d)}`;
+    if ($('#peCat')) {
+      $('#peCat').onchange = e => { st.catPick = e.target.value; };
+      $('#peRecat').onclick = () => recat(false);
+      $('#peSplit').onclick = () => recat(true);
+    }
     for (const el of E.left.querySelectorAll('[data-i]')) el.onclick = e => chooseBlock(+el.dataset.i, e.ctrlKey || e.shiftKey || e.metaKey);
     for (const el of E.left.querySelectorAll('[data-prim]')) el.onclick = () => addPrim(el.dataset.prim);
     for (const el of E.left.querySelectorAll('[data-loft]')) el.onclick = () => addLoft(el.dataset.loft);
@@ -541,6 +547,32 @@ export function initPartEdit(ctx) {
     $('#peUp').onclick = () => moveBlock(-1); $('#peDown').onclick = () => moveBlock(1);
     $('#peDup').onclick = () => copyBlock(false); $('#peMir').onclick = () => copyBlock(true); $('#peDel').onclick = removeBlock;
     E.left.querySelector('.pelist .sel')?.scrollIntoView({ block: 'nearest' });
+  }
+  // ---- パーツの部位を変える・ブロックを分けて別のパーツにする（issue #870、テスター アズキトギさん 2026-11-18「パーツの種類を変更できる仕様に」）----
+  // 部位を変える：このパーツを、選んだ部位の新しい自分のパーツ（★）にして、機体に置いてある所はそのまま（同じ位置・向き・大きさ）で付け替える。
+  // 選んだブロックを分ける：選んだブロックを、選んだ部位の新しい自分のパーツへ移す（同じ所に置いて、元のパーツからは外す）。
+  // どちらも元のパーツは消さない（部位を変えた時はカタログに残る）。保存した機体は自分の中にパーツの写しを持つので、開いても形は変わらない（unitparts.js registerUnit）
+  function catBox(d) {
+    if (d.free || d.deco || d.gen) return '';
+    return `<h2>パーツの部位 <i style="font-style:normal;font-weight:400">今：${esc(d.cat)}</i></h2>
+      <div class="row one"><select id="peCat" title="変える先・分ける先の部位">${ctx.catOptions(st.catPick ?? '')}</select></div>
+      <div class="pebar"><button id="peRecat" title="このパーツを、選んだ部位のパーツにする。機体に置いてある所はそのまま">部位を変える</button><button id="peSplit" title="選んだブロック（Ctrl・Shift でいくつも）を、選んだ部位の新しいパーツへ分ける。置いてある所はそのまま">選んだブロックを分ける</button></div>
+      <div class="hint">部位を変えると、付く骨・置き場所の決まりがその部位のものになる（頭の部品を胸や肩に付ける、など）。分けると、選んだブロックだけが別のパーツ（たとえば「飾り」）になり、元のパーツから外れる。どちらも機体の見た目は変わらず、新しいパーツはカタログのその部位に ★ 付きで入る</div>`;
+  }
+  function recat(split) {
+    const def = st.def, tid = $('#peCat')?.value, tpl = ctx.byId[tid];
+    if (!tpl) { ctx.note('先に、変える先の部位を選んでください', true); return; }
+    const pick = split ? blocksOf() : null;
+    if (split && !pick.length) { ctx.note('分けるブロックを選んでください（Ctrl・Shift でいくつも）', true); return; }
+    if (!split && tpl.cat === def.cat) { ctx.note(`今も「${def.cat}」です`, true); return; }
+    const whole = !split || pick.length >= def.pieces.length;   // （全部のブロックを分けるのは、部位を変えるのと同じ）
+    finish(true);   // 今の形を保存してから
+    const nd = ctx.recat(def, tid, whole ? null : pick);
+    if (!nd) return;
+    startDef(nd);
+    ctx.note(!whole
+      ? `ブロック ${pick.length} 個を、部位「${nd.cat}」の新しいパーツ「${nd.name}」に分けました（カタログの「${nd.cat}」に ★ 付き）。今はそのパーツを開いています`
+      : `「${nd.name}」を部位「${nd.cat}」のパーツにしました（カタログの「${nd.cat}」に ★ 付き。前のパーツもカタログに残っています）。今はそのパーツを開いています`);
   }
   function renderTools() {
     const pc = block(), hull = hullEdit(pc);

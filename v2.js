@@ -1491,6 +1491,8 @@ const PE = initPartEdit({
   meshInfo: pc => { const e = MESHES.get(pc.mesh); return e ? { tris: e.geo.index.count / 3, cut: !!pc.joints, tex: !!e.tex } : null; },
   undoButtons: (u, r) => { $('#bUndo').disabled = !u; $('#bRedo').disabled = !r; },
   makeUserCopy,
+  /** パーツの部位を変える・ブロックを分ける（issue #870）：部位の選択肢と、変える処理（recatPart） */
+  catOptions: sel => '<option value="">部位を選ぶ…</option>' + catOptions(sel), recat: (def, tplId, pick) => recatPart(def, tplId, pick),
   swapPart: (from, to) => { for (const it of items) if (it.part === from) it.part = to; },
   placeDef: def => placeNew(def),
   saveUserPart: def => { userParts[def.id] = def; persistUser(); },
@@ -1515,8 +1517,54 @@ $('#bDropPart').onclick = () => {
 /** 新しいパーツを作る：選んだ部位の最初のパーツをひな形（付く骨・置き場所）にする */
 function fillNewPartSel() {
   // 最初は何も選ばれていない（選ぶまで「新しいパーツを作る」は押せない）。こちらで勝手に部位を決めない：前は最初から「頭蓋」が選ばれていた
-  $('#newPartSel').innerHTML = '<option value="">作る部位を選ぶ…</option>' + [['頭', HEAD], ['上半身', UPPER], ['背中', BACK], ['腕', ARM], ['下半身', LOWER], ['脚', LEG]].map(([title, list]) =>
-    `<optgroup label="${title}">${[...new Set(list.map(d => d.cat))].map(cat => `<option value="${tplOf(list, cat, true).id}">${cat}</option>`).join('')}</optgroup>`).join('');
+  $('#newPartSel').innerHTML = '<option value="">作る部位を選ぶ…</option>' + catOptions();
+}
+/** 部位の選択肢（部分ごとの組）。値はその部位のひな形のパーツの id。sel：選んでおく id */
+function catOptions(sel = '') {
+  return [['頭', HEAD], ['上半身', UPPER], ['背中', BACK], ['腕', ARM], ['下半身', LOWER], ['脚', LEG]].map(([title, list]) =>
+    `<optgroup label="${title}">${[...new Set(list.map(d => d.cat))].map(cat => { const id = tplOf(list, cat, true).id; return `<option value="${id}" ${id === sel ? 'selected' : ''}>${cat}</option>`; }).join('')}</optgroup>`).join('');
+}
+/**
+ * パーツ def の部位を変える・ブロックを分ける（issue #870。パーツエディタの「パーツの部位」）。tplId：変える先の部位のひな形（catOptions の値）。
+ * pick：分けるブロックの番号（null は全部＝部位を変える）。変える先の部位の新しい自分のパーツを作って返す。
+ * ・ブロックの付く骨・回転の中心・蝶番は、ひな形の最初のブロックのもの（新しく作るパーツと同じ：v2-partedit.js carry）。部位の骨に付くように
+ * ・機体に置いてある所（def を使う置いたパーツごと）は、立った姿勢・形態 1 の世界の位置・向き・大きさのまま、新しい部位の骨の入れ物へ入れ直す
+ *   （部位を変える：置いたパーツをそのまま付け替える。分ける：同じ所に新しいパーツを足し、元のパーツからはそのブロックを外す）
+ * ・元のパーツはカタログから消さない。ほかに保存した機体は、自分の中にパーツの写しを持つので変わらない（registerUnit）
+ */
+function recatPart(def, tplId, pick = null) {
+  const tpl = byId[tplId];
+  if (!tpl || !def || def.free || def.deco) return null;
+  const whole = !pick || pick.length >= def.pieces.length, take = whole ? def.pieces.map((_, i) => i) : [...new Set(pick)].sort((a, b) => a - b);
+  // 立った姿勢・形態 1 で、今の置き方（世界の行列）を覚える
+  setPose([]); formNow = 1; formAnim = null; renderForms(); rebuild();
+  const at = [];
+  items.forEach((it, i) => { if (it.part === def.id && !it.tmp && groups[i]) { groups[i].updateWorldMatrix(true, false); at.push({ i, W: groups[i].matrixWorld.clone() }); } });
+  const nd = makeUserCopy(tpl, true), ref = tpl.pieces[0];
+  nd.name = whole ? def.name : `${def.name}（分けた）`;
+  nd.base = def.base ?? String(def.id).replace(/^h·/, '');   // （パーツエディタの「元：」は、ひな形ではなく元のパーツ）
+  // （ブロックの並びは入れ替えずに中身を替える：頭のパーツは、頭の組み立ての目次の写しも同じ並びを指している：registerUser）
+  nd.pieces.length = 0;
+  nd.pieces.push(...take.map(k => { const pc = structuredClone(def.pieces[k]); for (const key of ['bone', 'pivot', 'hinge']) { if (ref?.[key] !== undefined) pc[key] = structuredClone(ref[key]); else delete pc[key]; } return pc; }));
+  if (!whole) for (const k of [...take].reverse()) def.pieces.splice(k, 1);
+  // 置いてあった所へ：まず仮の位置（腕・脚の左右は位置の x の向きで決まる）で入れ、骨の入れ物が決まってから世界の行列を入れ物の座標に直す
+  const made = [];
+  for (const { i, W } of at) {
+    const old = items[i], { part, mov, rot, scal, bone, tmp, tilt, name, ...rest } = old, p = new THREE.Vector3().setFromMatrixPosition(W);
+    const it = { ...rest, ...(whole && name ? { name } : {}), part: nd.id, mov: [p.x, p.y, p.z], rot: [0, 0, 0], scal: [1, 1, 1] };
+    if (whole) { items[i] = it; made.push({ j: i, W }); } else { items.push(it); made.push({ j: items.length - 1, W }); }
+  }
+  rebuild();
+  for (const { j, W } of made) {
+    const g = groups[j]; if (!g?.parent) continue;
+    g.parent.updateWorldMatrix(true, false);
+    g.parent.matrixWorld.clone().invert().multiply(W).decompose(g.position, g.quaternion, g.scale);
+    readBackFromGroup(items[j], g);
+  }
+  selected = -1;
+  userParts[nd.id] = nd; userParts[def.id] = def; persistUser();
+  rebuild(); save(); renderCatalog();
+  return nd;
 }
 /** その部位のひな形：カタログの最初のパーツ。自分のパーツ（★）しか無い部位は、own なら自分のパーツの最初、でなければ無し。
  *  前は自分のパーツしか無い部位で undefined.id になり、起動の途中で落ちて 3D が真っ暗になった（テスター 静流りおさん 2026-11-08） */
@@ -2479,7 +2527,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '49078fc';
+const BUILD = 'f3bf962';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
