@@ -30,7 +30,7 @@ import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, formDelayOf, formSpanOf, f
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
-import { DEFAULT_PAINT, ROLE_LABEL, GLOW_ROLES, colorOf, opacityOf, loadPaint, randomPalette, randomVivid, hexToHsl } from './paint.js';
+import { DEFAULT_PAINT, ROLE_LABEL, GLOW_ROLES, colorOf, opacityOf, opacityAt, roleAlphaAt, setFormAlpha, paintFormsUsed, loadPaint, randomPalette, randomVivid, hexToHsl } from './paint.js';
 import { buildHull, hullReach } from './hull.js';
 import { makeSheet } from './xsbody.js';
 import { hull2, pushAngle, bandedOutlines } from './skirtpush.js';
@@ -1325,14 +1325,20 @@ function makeUserCopy(src, fresh = false) {
 }
 // ---- 形態（変形の見た目、issue #145。v2-forms.js）：右の「形態」と、パーツエディタの「形態」で切り替える。書き出す形・チェック・小さな絵は形態 1 ----
 let formNow = 1, formAdded = 1, formAnim = null;   // formAdded：「＋」で足した数（ブロックに書くまでは数に入らないので）
-const formCount = () => Math.min(FORM_MAX, Math.max(formAdded, formsUsed(kept().map(it => byId[it.part])), itemFormsUsed(kept())));
+const formCount = () => Math.min(FORM_MAX, Math.max(formAdded, formsUsed(kept().map(it => byId[it.part])), itemFormsUsed(kept()), paintFormsUsed(paint)));
 const formRoots = () => groups.flatMap(g => [g, ...g.userData.extra.values()]);
 /** メッシュ o の、塗りのとおりの材質（形態で色を変える時は、この写しに色を入れる） */
 function formMat(o) { return o.userData.meshPart ? o.userData.fb?.m ?? o.material : o.userData.pc.blockout && o.userData.def?.free ? draftMat : material(o.userData.pc, o.userData.def); }
+/** メッシュ o の形態 n の不透明度（塗りの役の形態ごとの透明度、issue #863。塗らないメッシュは形態で変わらないので -1） */
+function formOp(o, n) {
+  const pc = o.userData.pc, def = o.userData.def;
+  if (o.userData.meshPart || (pc.blockout && def?.free) || ((def?.free || def?.deco) && !pc.role)) return -1;
+  return opacityAt(pc, paint, n);
+}
 function showFormNow() {
   const v = formAnim ? { from: formAnim.from, to: formAnim.to, el: performance.now() - formAnim.t0 } : { from: formNow, to: formNow, el: Infinity };
   // （置いたパーツごとに、その遅れを引いた途中の見た目：issue #813）
-  groups.forEach((g, i) => showForms([g, ...g.userData.extra.values()], v.from, v.to, (v.el - formDelayOf(items[i])) / FORM_MS, formMat));
+  groups.forEach((g, i) => showForms([g, ...g.userData.extra.values()], v.from, v.to, (v.el - formDelayOf(items[i])) / FORM_MS, formMat, formOp));
   placeItemForms(v);
 }
 /** 置いたパーツの形態（item.forms）を、形態の途中 v（null は形態 1）の置き方にする */
@@ -1344,10 +1350,10 @@ function switchForm(n) {
   n = Math.max(1, Math.min(formCount(), n));
   if (n === formNow && !formAnim) return;
   formAnim = { from: formNow, to: n, t0: performance.now() }; formNow = n;
-  renderForms();
+  renderForms(); showPaint();   // （色の欄の透明度は、今の形態の値）
 }
 function addForm() { if (formCount() >= FORM_MAX) return; formAdded = formCount() + 1; switchForm(formAdded); }
-function resetForms() { formNow = 1; formAdded = 1; formAnim = null; renderForms(); }
+function resetForms() { formNow = 1; formAdded = 1; formAnim = null; renderForms(); showPaint(); }
 function renderForms() {
   const bar = $('#formBar'); if (!bar) return;
   const n = formCount();
@@ -1525,13 +1531,13 @@ function applyPaint() {
   showFormNow();
 }
 const ROLE_KEYS = Object.keys(ROLE_LABEL);
-/** 役 r の透明度（%。塗りの alpha は不透明度） */
-const tpOf = r => Math.round((1 - (paint.alpha?.[r] ?? 1)) * 100);
+/** 役 r の、今の形態の透明度（%。塗りの alpha・formAlpha は不透明度。形態 2 からは paint.formAlpha、issue #863） */
+const tpOf = r => Math.round((1 - roleAlphaAt(r, paint, formNow)) * 100);
 function showPaint() {
   $('#paintTeam').checked = !!paint.team;
   const el = $('#paintBox'), row = r => `<div class="pal"><input type="color" data-role="${r}" value="${paint.pal[r]}"><span>${ROLE_LABEL[r]}</span><label title="「いい感じに塗る」でこの色を変えない"><input type="checkbox" data-lock="${r}" ${paint.lock?.[r] ? 'checked' : ''}>固定</label>`
     // 透明度（issue #746）：0% は不透明、100% は見えない。その役のブロックがみな同じだけ透ける（盾・武器も、ブロックの色の役で選んだ枠の透明度になる）
-    + `<div class="palA"><span>透明度</span><input type="range" min="0" max="100" step="5" data-alpha="${r}" value="${tpOf(r)}"><b>${tpOf(r)}%</b></div></div>`;
+    + `<div class="palA"><span title="${formNow > 1 ? `形態 ${formNow} での透明度（形態 1 と同じにすると、形態 1 の値に従う）` : '形態 1 の透明度（ほかの形態も、変えていなければこの値）'}">${formNow > 1 ? `透明度（形態 ${formNow}）` : '透明度'}</span><input type="range" min="0" max="100" step="5" data-alpha="${r}" value="${tpOf(r)}"><b>${tpOf(r)}%</b></div></div>`;
   // 光らない色・光る色に分けて並べる。追加の色・発光 2〜3 は、パーツエディタでブロックの「色の役」に選んだ所だけに付く
   el.innerHTML = '<div class="hint">光らない色</div>' + ROLE_KEYS.filter(r => !GLOW_ROLES.has(r)).map(row).join('')
     + '<div class="hint">光る色</div>' + ROLE_KEYS.filter(r => GLOW_ROLES.has(r)).map(row).join('')
@@ -1542,7 +1548,13 @@ function showPaint() {
         + '<div class="hint">部位名のパーツは、主装甲をその色で塗る。差し色のブロックもビビッドの色になる</div>'
       : '<div class="hint">なし（「ビビッドを差す」で、鮮やかな色を 1〜3 色、目を引く部位に入れる）</div>');
   for (const i of el.querySelectorAll('[data-role]')) i.oninput = () => { paint.pal[i.dataset.role] = i.value; paint.type = ''; applyPaint(); save(); };
-  for (const i of el.querySelectorAll('[data-alpha]')) i.oninput = () => { const r = i.dataset.alpha, t = +i.value, alpha = { ...(paint.alpha ?? {}) }; if (t > 0) alpha[r] = (100 - t) / 100; else delete alpha[r]; paint.alpha = alpha; i.nextElementSibling.textContent = `${t}%`; applyPaint(); save(); };
+  for (const i of el.querySelectorAll('[data-alpha]')) i.oninput = () => {
+    const r = i.dataset.alpha, t = +i.value;
+    // 形態 2 からは、その形態だけの透明度（paint.formAlpha、issue #863）。形態 1 は今までどおり paint.alpha
+    if (formNow > 1) setFormAlpha(paint, formNow, r, (100 - t) / 100);
+    else { const alpha = { ...(paint.alpha ?? {}) }; if (t > 0) alpha[r] = (100 - t) / 100; else delete alpha[r]; paint.alpha = alpha; }
+    i.nextElementSibling.textContent = `${t}%`; applyPaint(); save();
+  };
   for (const i of el.querySelectorAll('[data-lock]')) i.onchange = () => { paint.lock = { ...paint.lock, [i.dataset.lock]: i.checked }; save(); };
   for (const i of el.querySelectorAll('[data-vivid]')) i.oninput = () => { paint.vivid.colors[+i.dataset.vivid] = i.value; applyPaint(); save(); };
 }
@@ -2467,7 +2479,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '6fb99a1';
+const BUILD = '49078fc';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

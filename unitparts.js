@@ -18,7 +18,7 @@ import { FREE_SETS } from './parts/free/artillery.js';
 import { FREE_SETS as EYE_SETS } from './parts/free/eyes.js';
 import * as THREE from 'three';
 import { headDims, faceOf } from './xsasm-random.js';
-import { colorOf, roleAlpha, roleOf } from './paint.js';
+import { colorOf, roleAlpha, roleAlphaForm, roleOf } from './paint.js';
 import { makeSheet } from './xsbody.js';
 
 const S = makeSheet();
@@ -109,7 +109,14 @@ export function unitParts(doc, { shaped = false } = {}) {
   const team = !!paint?.team && !(paint.vivid?.colors?.length);
   // 塗りの役の透明度（paint.alpha、issue #746）：その役のブロックは alpha（不透明度）を持って書き出される（xsengine.js が透ける材質にする）。
   // ブロックの自分の opacity（体ジェネレーターの光）は今までどおり書き出しでは使わない（今の機体の見た目を変えない）
-  const alphaOf = pc => { const a = roleAlpha(pc, paint); return a != null ? { alpha: a } : {}; };
+  // 形態ごとの役の透明度（paint.formAlpha、issue #863）：形態 1 と違う形態だけ formAlpha: { 形態: 不透明度（1 は透けない） }。xsengine.js が材質を分け、
+  // その材質に形態ごとの値を書く（ゲームは AXIS の間の形態 2 へ動かす時に、その値へ透明度を動かす：client/src/models.ts axisMorphOf）
+  const formNs = Object.keys(paint?.formAlpha ?? {}).map(Number).filter(n => n > 1).sort((a, b) => a - b);
+  const alphaOf = pc => {
+    const a = roleAlpha(pc, paint), fa = {};
+    for (const n of formNs) { const v = roleAlphaForm(pc, paint, n); if (v != null) fa[n] = v; }
+    return { ...(a != null ? { alpha: a } : {}), ...(Object.keys(fa).length ? { formAlpha: fa } : {}) };
+  };
   const paintOf = (pc, def) => (team && roleOf(pc) === 'accent' ? { color: '#f2f2f2', team: true, ...alphaOf(pc) } : { color: colorOf(pc, def.cat, paint), ...alphaOf(pc) });
   const { k, at } = headPlace(items, adj);
   const head = items.filter(it => isHead(it.part)).flatMap(it => {

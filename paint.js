@@ -61,6 +61,39 @@ export function roleAlpha(pc, paint) {
 /** エディタで描く不透明度：塗りの役の透明度、無ければブロックの自分の opacity（無ければ null＝不透明） */
 export const opacityOf = (pc, paint) => roleAlpha(pc, paint) ?? pc.opacity ?? null;
 
+// 形態ごとの役の透明度（issue #863、もちゅなさん「形態ごとにマテリアルの透明度を変えられるようにしてほしい」）：
+//   paint.formAlpha = { 形態の番号（2〜）: { 役: 不透明度 0〜1 } }。書いていない役は形態 1（paint.alpha）と同じ。
+//   形態 1 で透ける役を、ある形態では透けなくする時は 1 を書く（「形態 1 と同じ」と区別するため）。
+const roundA = a => clamp(Math.round(a * 100) / 100, 0, 1);
+/** 役 role の、形態 n での不透明度（0〜1。透けなければ 1） */
+export function roleAlphaAt(role, paint, n) {
+  const f = n > 1 ? paint?.formAlpha?.[n] : null;
+  const a = f && role in f ? f[role] : paint?.alpha?.[role];
+  return a != null && a < 1 ? roundA(a) : 1;
+}
+/** 塗りの形態ごとの透明度が使っている形態の数（1〜） */
+export const paintFormsUsed = paint => Math.max(1, ...Object.keys(paint?.formAlpha ?? {}).map(Number).filter(n => n > 1 && Object.keys(paint.formAlpha[n] ?? {}).length));
+/** 役 role の形態 n の不透明度を a にする（形態 1 と同じになったら消す：データに形態 1 と同じ物を残さない） */
+export function setFormAlpha(paint, n, role, a) {
+  const all = { ...(paint.formAlpha ?? {}) }, f = { ...(all[n] ?? {}) };
+  if (roundA(a) === roleAlphaAt(role, paint, 1)) delete f[role]; else f[role] = roundA(a);
+  if (Object.keys(f).length) all[n] = f; else delete all[n];
+  if (Object.keys(all).length) paint.formAlpha = all; else delete paint.formAlpha;
+}
+/** ブロック pc の、形態 n での塗りの役の不透明度（役の無いブロック・形態 1 と同じなら null） */
+export function roleAlphaForm(pc, paint, n) {
+  const role = roleOf(pc);
+  if (!role || n <= 1) return null;
+  const a = roleAlphaAt(role, paint, n);
+  return a !== roleAlphaAt(role, paint, 1) ? a : null;
+}
+/** エディタで描く、形態 n の不透明度（形態 1 は opacityOf と同じ。null＝不透明） */
+export function opacityAt(pc, paint, n) {
+  const a = roleAlphaForm(pc, paint, n);
+  if (a == null) return opacityOf(pc, paint);
+  return a < 1 ? a : pc.opacity ?? null;
+}
+
 const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 /** ブロック pc（部位 cat のパーツの中）の色 */
 export function colorOf(pc, cat, paint) {
@@ -105,7 +138,7 @@ export function randomPalette(rnd = Math.random, prev = null) {
     const gl = [...glows].sort(() => rnd() - 0.5), glow = gl[0] ?? GLOWS[0], rest = GLOWS.filter(g => g !== glow).sort(() => rnd() - 0.5);
     const pal = { main: hslToHex(...main), sub: hslToHex(...sub), frame: hslToHex(...frame), accent: hslToHex(...accent), ex1: hslToHex(...ex1), ex2: hslToHex(...ex2), ex3: hslToHex(...ex3), glow, glow2: rest[0], glow3: rest[1] };
     for (const role of Object.keys(pal)) if (lock[role] && prev?.pal?.[role]) pal[role] = prev.pal[role];
-    return { type: type[0], pal, lock: { ...lock }, alpha: { ...(prev?.alpha ?? {}) }, vivid: prev?.vivid ?? { colors: [], on: {} } };
+    return { type: type[0], pal, lock: { ...lock }, alpha: { ...(prev?.alpha ?? {}) }, ...(prev?.formAlpha ? { formAlpha: structuredClone(prev.formAlpha) } : {}), vivid: prev?.vivid ?? { colors: [], on: {} } };
   }
   return prev ?? DEFAULT_PAINT();
 }

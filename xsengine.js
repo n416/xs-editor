@@ -33,6 +33,8 @@ export const DEFAULTS = {
   opacity: null,           // a see-through part (lights from the body generator): 0..1, null = solid
   alpha: null,             // Ver2's paint made this part see-through (its colour role's 透明度, issue #746): 0..1, null = solid. The unit's
                            //     model draws it so (materials of its own, transparent); `opacity` is not used there
+  formAlpha: null,         // ... and in Ver2's other 形態 (issue #863): { form number (2..): opacity 0..1, 1 = solid }, only the forms that differ
+                           //     from form 1. Its own materials again, which carry it (userData.formAlpha, glTF extras) for the game's AXIS shape
   pos: [0, 0, 0], rot: [0, 0, 0], scl: [1, 1, 1],
   side: null, top: null,   // extrude only: outlines seen from the side [[z, y], ...] and from above [[x, z], ...]; null = none
   planes: null,            // kind 'hull' only: the planes of a convex solid [[nx, ny, nz, d, bevel?], ...] (hull.js); n·p ≤ d is kept
@@ -456,6 +458,14 @@ const LINKS = { forearm: ['elbow', ELBOW_AXES[2], BEND.elbow], shin: ['knee', KN
 
 /** Ver2's paint opacity of a part as a whole percent (1..99), or 0 when it is solid (alpha null or 1) */
 const alphaKey = p => (p.alpha != null && p.alpha < 1 ? Math.max(0, Math.min(99, Math.round(p.alpha * 100))) || '0' : 0);
+/** Ver2's paint opacity of a part in its other 形態 (issue #863) as a key: '2:30,3:100' (form:percent), '' when none differs */
+const formAlphaKey = p => Object.entries(p.formAlpha ?? {}).filter(([n, a]) => +n > 1 && a != null).sort((x, y) => x[0] - y[0]).map(([n, a]) => `${+n}:${Math.max(0, Math.min(100, Math.round(a * 100)))}`).join(',');
+/** a material key's opacity in form 1 (null = solid), its other forms' ({ form: opacity }, null = none) and the name's suffix */
+function alphaOfKey(key) {
+  const a = /\|a(\d+)/.exec(key), f = /\|f([\d:,]+)/.exec(key);
+  const alpha = a ? +a[1] / 100 : null, form = f ? Object.fromEntries(f[1].split(',').map(e => { const [n, v] = e.split(':'); return [n, +v / 100]; })) : null;
+  return { alpha, form, sfx: (alpha != null ? `_a${a[1]}` : '') + (form ? '_f' + Object.entries(form).map(([n, v]) => `${n}a${Math.round(v * 100)}`).join('_') : '') };
+}
 function materialClass(p) {
   if (p.kind === 'mesh') return 'skin:' + (MESHES.get(p.mesh)?.texId ?? '');
   if (p.team) return 'team';
@@ -1451,14 +1461,14 @@ function buildGameModel(opt = {}) {
     for (const pc of pieces) {
       let cls = isBazooka(pc.part) ? 'bazooka' : isGun(pc.part) ? 'gun' : materialClass(pc.part);
       if (cls.startsWith('skin') && !pc.geo.attributes.uv) cls = 'body';
-      const a = alphaKey(pc.part), key = (cls === 'glow' && level === 0 ? 'glow:' + pc.part.color : cls) + (a ? '|a' + a : '');   // (see-through parts: a material of their own per opacity)
+      const a = alphaKey(pc.part), fa = formAlphaKey(pc.part), key = (cls === 'glow' && level === 0 ? 'glow:' + pc.part.color : cls) + (a ? '|a' + a : '') + (fa ? '|f' + fa : '');   // (see-through parts: a material of their own per opacity, and per opacity in the other forms)
       (groups.get(key) || groups.set(key, []).get(key)).push(pc);
     }
     // stay within the draw-call budget (the belts come on top: a tracked XS may use 5 + 2, gltfrig.ts drawLimit):
     // fold extra glow colours into one, then metal into body
     const budget = GAME_LIMITS.drawCalls;
     if (level === 0 && groups.size > budget) {
-      const glowKeys = [...groups.keys()].filter(k => k.startsWith('glow:') && !k.includes('|a'));
+      const glowKeys = [...groups.keys()].filter(k => k.startsWith('glow:') && !k.includes('|a') && !k.includes('|f'));
       const keep = glowKeys.shift();
       for (const k of glowKeys) { groups.get(keep).push(...groups.get(k)); groups.delete(k); }
     }
@@ -1467,7 +1477,7 @@ function buildGameModel(opt = {}) {
       groups.delete('metal');
     }
     for (const [key, list] of groups) {
-      const cls = key.split(/[:|]/)[0], alpha = key.includes('|a') ? +key.split('|a')[1] / 100 : null;
+      const cls = key.split(/[:|]/)[0], { alpha, form: formAlpha, sfx } = alphaOfKey(key);
       const P = [], N = [], C = [], SI = [], SW = [], UV = [], Q = [], R = [];   // R：ロマン砲変形の印（unitparts.js p.roman：スロット × 2 + 出るなら 1、0 は印なし）
       const skinTex = cls === 'skin' ? MESHES.get(list[0].part.mesh)?.tex : null;
       let metal = 0, rough = 0, n = 0;
@@ -1507,11 +1517,12 @@ function buildGameModel(opt = {}) {
       const merged = mergeVertices(g, 1e-5);   // share identical corners: same look, far smaller file
       const glowColor = cls === 'glow' ? new THREE.Color(list[0].part.color) : null;
       const mat = new THREE.MeshStandardMaterial({
-        name: (cls === 'team' ? 'team_color' : cls === 'glow' ? `glow_${[...groups.keys()].indexOf(key)}` : cls) + (alpha != null ? `_a${Math.round(alpha * 100)}` : ''),
+        name: (cls === 'team' ? 'team_color' : cls === 'glow' ? `glow_${[...groups.keys()].indexOf(key)}` : cls) + sfx,
         vertexColors: !skinTex, map: skinTex ?? null, metalness: n ? metal / n : 0.3, roughness: n ? rough / n : 0.5,
         emissive: glowColor || 0x000000, emissiveIntensity: glowColor ? 1 : 0,
         ...(alpha != null ? { transparent: true, opacity: alpha, depthWrite: false } : {}),   // (glTF: alphaMode BLEND; the game's loader makes it see-through)
       });
+      if (formAlpha) mat.userData.formAlpha = formAlpha;   // (glTF extras: the opacity in each other form, issue #863; the game reads form 2's for AXIS)
       const mesh = new THREE.SkinnedMesh(merged, mat);
       mesh.name = `xs_${mat.name}${level ? '_lod' + level : ''}`;
       if (level === 0) mesh.userData.xsParts = partRanges;   // glTF extras: [label, bone, first triangle, triangles, flags: 1 hand weapon, 2 takes no hits, 4 a light]

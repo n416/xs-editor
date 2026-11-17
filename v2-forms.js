@@ -85,14 +85,23 @@ export function keepBase(o) { o.userData.fb = { p: o.position.clone(), q: o.quat
  * roots の中のメッシュを、形態 from → to の途中 t（0〜1）の見た目にする。baseMat(o)：塗りの材質（色を変える時はその写しに色を入れる）
  * 形態 1 のまま（from = to = 1）なら、覚えた置き方と塗りの材質に戻すだけ
  */
-export function showForms(roots, from, to, t, baseMat) {
+export function showForms(roots, from, to, t, baseMat, opAt = null) {
   const k = ease(Math.min(1, Math.max(0, t)));
   for (const root of roots) root.traverse(o => {
     if (!o.isMesh || !o.userData.pc) return;
     const fb = o.userData.fb ?? (keepBase(o), o.userData.fb), pc = o.userData.pc;
-    const plain = !pc.forms || (from === 1 && to === 1);
+    // 形態ごとの塗りの透明度（issue #863、paint.js opacityAt）：opAt(o, n) は形態 n の不透明度（null＝不透明）。形態 1 と違う所だけ変える
+    const live = !!opAt && !(from === 1 && to === 1), o1 = live ? opAt(o, 1) : null;
+    const oa = live ? opAt(o, from) : null, ob = live ? opAt(o, to) : null, opDiff = live && (oa !== o1 || ob !== o1);
+    const plain = (!pc.forms && !opDiff) || (from === 1 && to === 1);
     if (plain) {
       if (o.userData.formed) { o.position.copy(fb.p); o.quaternion.copy(fb.q); o.scale.copy(fb.s); o.material = baseMat(o); o.userData.formed = false; }
+      return;
+    }
+    if (!pc.forms) {   // （形の形態は無く、透明度だけが形態で変わるブロック：置き方はそのまま）
+      o.position.copy(fb.p); o.quaternion.copy(fb.q); o.scale.copy(fb.s);
+      o.material = fadeMat(o, baseMat(o), oa, ob, k);
+      o.userData.formed = true;
       return;
     }
     const mir = mirroredMesh(o), a = look(pc, from, mir, _qa), b = look(pc, to, mir, _qb);
@@ -111,10 +120,29 @@ export function showForms(roots, from, to, t, baseMat) {
       const own = o.userData.formMat?.userData.from === m0 ? o.userData.formMat : (o.userData.formMat = Object.assign(m0.clone(), { userData: { from: m0 } }));
       _col.set(a.color ?? m0.color); _cb.set(b.color ?? m0.color); own.color.copy(_col.lerp(_cb, k));
       if (m0.emissive && m0.emissiveIntensity > 0 && m0.emissive.getHex()) own.emissive.copy(own.color);
-      o.material = own;
-    } else o.material = m0;
+      o.material = opDiff ? fadeMat(o, own, oa, ob, k, true) : seeAs(own, m0.transparent, m0.opacity);
+    } else o.material = opDiff ? fadeMat(o, m0, oa, ob, k) : m0;
     o.userData.formed = true;
   });
+}
+/**
+ * 形態の間の不透明度（a → b、null は不透明）を入れた材質。m0 の写しをメッシュごとに 1 つ持つ（色の写し own の時は、それに直に入れる）。
+ * 透けない（1）なら透けない材質のまま（深度を書く）
+ */
+function fadeMat(o, m0, a, b, k, own = false) {
+  const op = (a ?? 1) + ((b ?? 1) - (a ?? 1)) * k;
+  if (op >= 0.999 && !own) {
+    // （形態 1 で透ける役を、この形態で透けなくした：写しを透けない材質に）
+    if (!m0.transparent) return m0;
+  }
+  const m = own ? m0 : o.userData.fadeMat?.userData.from === m0 ? o.userData.fadeMat : (o.userData.fadeMat = Object.assign(m0.clone(), { userData: { from: m0 } }));
+  return seeAs(m, op < 0.999, op);
+}
+/** 材質 m を、透ける（op）・透けないにする（透けるかどうかが変わる時は描き方を作り直す） */
+function seeAs(m, see, op) {
+  if (m.transparent !== see) { m.transparent = see; m.needsUpdate = true; }
+  m.opacity = see ? op : 1; m.depthWrite = !see;
+  return m;
 }
 
 /**
