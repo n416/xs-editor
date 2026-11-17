@@ -26,7 +26,7 @@ import { initAi } from './v2-ai.js';
 import { initShare } from './v2-share.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
-import { FORM_MAX, FORM_MS, formOf, formsUsed, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
+import { FORM_MAX, FORM_MS, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
@@ -686,6 +686,7 @@ function tick(now) {
   flashTick(now);
   if (formAnim) { showFormNow(); if (now - formAnim.t0 >= FORM_MS) { formAnim = null; showFormNow(); } }
   shotTick(now);
+  flameTick(now);
   resize(); orbit.update(); if (PE.active()) PE.tick(); renderer.render(scene, camera); requestAnimationFrame(tick);
 }
 
@@ -1368,6 +1369,7 @@ function fillItemForm() {
   box.innerHTML = `<div class="bar"><b style="font-size:12px;align-self:center">形態</b>${seg}</div>` + (fN === 1
     ? '<div class="hint">形態 1 はいつもの置き方（ゲーム用に書き出す形）。形態 2 からを選ぶと、その形態でのこのパーツ全体の見た目（出す・消す、ずらす、回す）を決められる。ブロックごとに変えるのは、パーツエディタの「形態」</div>'
     : `<label class="chk"><input type="checkbox" id="iFHide" ${fv.hide ? 'checked' : ''}>形態 ${fN} では、このパーツを出さない</label>`
+      + (isJet(it) ? `<label class="chk" title="この噴射口（炎の点）から、形態 ${fN} では炎を出さない。「噴射口」の欄の「炎の見本を出す」で見える。形態 1（ゲームに書き出す形）はいつも出す"><input type="checkbox" id="iFNoFlame" ${fv.noFlame ? 'checked' : ''}>形態 ${fN} では、炎を出さない</label>` : '')
       + `<div class="row one"><label>ずらす</label>${[0, 1, 2].map(a => `<input type="number" step="0.01" data-ifp="${a}" value="${p[a]}">`).join('')}</div>`
       + `<div class="row one"><label>回す</label>${[0, 1, 2].map(a => `<input type="number" step="5" data-ifr="${a}" value="${r[a]}">`).join('')}</div>`
       + '<div class="hint one">ずらす：左右・上下・前後（位置の欄と同じ向き）。回す：度、パーツの原点（つまみの出る所）で、パーツの向きの x・y・z の軸の回り。「反対側にも」で写すと左右を返す。つまみと位置・回転・拡大の欄は、形態 1 の置き方を動かす</div>'
@@ -1378,6 +1380,10 @@ function fillItemForm() {
   const set = change => { if (change) setForm(it, fN, change); else if (it.forms) { delete it.forms[fN]; if (!Object.keys(it.forms).length) delete it.forms; } showFormNow(); };
   const vec = k => [0, 1, 2].map(a => +box.querySelector(`[data-${k}="${a}"]`).value || 0);
   $('#iFHide').onchange = e => { set({ hide: e.target.checked || null }); save(); renderForms(); };
+  if ($('#iFNoFlame')) $('#iFNoFlame').onchange = e => {
+    set({ noFlame: e.target.checked || null }); save(); renderForms();
+    if (!$('#jetFlameOn').checked) { $('#jetFlameOn').checked = true; note('炎の見本を出しました（「噴射口」の欄の「炎の見本を出す」）'); }
+  };
   for (const el of box.querySelectorAll('[data-ifp],[data-ifr]')) { el.oninput = () => set({ p: vec('ifp'), r: vec('ifr') }); el.onchange = () => save(); }
   $('#bIFReset').onclick = () => { set(null); save(); renderForms(); };
 }
@@ -1411,6 +1417,33 @@ function shotTick(now) {
     m.visible = t >= 0;
     if (t >= 0) { m.scale.z = 1.8 * Math.min(1, t * 3); m.material.opacity = 0.95 * (1 - t); }
     return true;
+  });
+}
+// ---- 炎の見本（issue #812、テスター ポッチャさん「噴射口のエフェクトも形態ごとにONOFFさせてほしい」）：「噴射口」の欄の「炎の見本を出す」で、
+// 置いた噴射口・炎の点（jetshield.js の jet・jetpoint）の口から、噴く向き（−z）へ炎の形を出す。エディタの中だけ（書き出さない・小さな絵に写さない）。
+// 置いたパーツの組の子なので、形態のずれ（ずらす・回す・出さない）と一緒に動き、形態ごとの「炎を出さない」（item.forms[n].noFlame、
+// v2-forms.js itemFlame）で、形態を移る間に縮んで消える・伸びて出る。名前に「噴射口」の付いた部品からの炎は形が分かりにくいので出さない
+// （「部品の噴射口も動かせるようにする」で炎の点にすれば出る）[独自]。形・色はゲームの炎に寄せた目安 [独自]
+const FLAME_LEN = 0.5;   // 炎の長さ（拡大 1 のとき。口の半径 JET_R の約 8 倍）[独自]
+const flameGeos = [[JET_R * 0.95, FLAME_LEN], [JET_R * 0.55, FLAME_LEN * 0.6]].map(([r, h]) => new THREE.ConeGeometry(r, h, 14, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -h / 2));
+const flameMats = [0xff8a3d, 0xfff1c4].map(c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+let flamesHidden = false;   // （小さな絵を撮る間）
+function flameOf(g) {
+  if (g.userData.flame) return g.userData.flame;
+  const f = new THREE.Group(); f.name = '炎の見本';
+  for (let k = 0; k < 2; k++) { const m = new THREE.Mesh(flameGeos[k], flameMats[k]); m.renderOrder = 11; m.raycast = () => {}; f.add(m); }
+  g.add(f); g.userData.flame = f;
+  return f;
+}
+function flameTick(now) {
+  const on = !flamesHidden && !!$('#jetFlameOn')?.checked;
+  groups.forEach((g, i) => {
+    if (!g) return;
+    const it = items[i], k = on && isJet(it) ? itemFlame(it, itemView) : 0;
+    if (!k && !g.userData.flame) return;
+    const f = flameOf(g);
+    f.visible = k > 0.01;
+    if (f.visible) f.scale.set(k, k, k * (1 + 0.06 * Math.sin(now / 45 + i * 1.7)));   // （少し揺らす）
   });
 }
 /** パーツを直している間は、組み替えの操作を止める */
@@ -1926,7 +1959,9 @@ function unitThumb() {
   endFlash(); gizmo.visible = false; for (const m of ghostAll) m.visible = false;
   resize(); setView('threeq'); camera.position.lerp(orbit.target, 0.1); camera.updateMatrixWorld();
   showForms(formRoots(), 1, 1, 1, formMat); placeItemForms(null);   // （小さな絵は形態 1）
+  flamesHidden = true; flameTick(0);   // （炎の見本は写さない）
   renderer.render(scene, camera);
+  flamesHidden = false;
   showFormNow();
   const cv = document.createElement('canvas'), src = renderer.domElement, side = Math.min(src.width, src.height);
   cv.width = cv.height = 220;
@@ -2403,7 +2438,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '927c39f';
+const BUILD = 'e18923d';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

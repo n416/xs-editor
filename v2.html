@@ -271,7 +271,8 @@
     <div id="jetList" class="items" style="margin-top:4px"></div>
     <div id="jetDir" hidden style="margin-top:4px"><b style="font-size:12px">噴射の向き</b><div style="display:flex;align-items:center;gap:4px;margin:2px 0"><span title="0° が真後ろ。+ で機体の左（+x）へ、− で右へ（付ける骨の、立った姿勢の向きで）">左右</span><input type="number" step="1" id="jetYaw" style="width:64px">°<span style="margin-left:10px" title="0° が水平。− で下へ、+ で上へ">上下</span><input type="number" step="1" id="jetPitch" style="width:64px">°</div><div class="hint">1° きざみ。左右は 0° が真後ろ・+ が機体の左、上下は 0° が水平・− が下。矢印を押したままドラッグしても、押している所の方へ向く（矢印も一緒に回る）</div></div>
     <div class="bar"><button id="bJetAdd" class="acc small" title="炎を出す噴射口の部品を 1 つ、胴の後ろに置く（背中のタブの「噴射口」と同じ）。オレンジの矢印が噴射の向き">＋ 噴射口を足す</button><button id="bJetPoints" class="small" title="ランドセルの口など、名前に「噴射口」の付いた部品から出る炎を、1 つずつ動かせる炎の点にする（点があると、部品からは炎が出なくなる）">部品の噴射口も動かせるようにする</button><button id="bJetReset" class="small" title="炎の点を全部外して、部品の噴射口から炎が出るように戻す" hidden>炎の点を外す</button></div>
-    <div class="hint">選んで、つまみか「位置・回転・拡大」で動かす（回すと矢印も回る。拡大で炎の太さ）。増やすのは「複製」「反対側にも」、消すのは一覧の × か「外す」。腕・脚には「付ける骨」</div>
+    <label class="chk" title="置いた噴射口と炎の点から、炎の見本を出す（エディタの中だけ。形態を切り替えると、形態ごとの「炎を出さない」も見える）"><input type="checkbox" id="jetFlameOn">炎の見本を出す（置いた噴射口・炎の点）</label>
+    <div class="hint">選んで、つまみか「位置・回転・拡大」で動かす（回すと矢印も回る。拡大で炎の太さ）。形態 2 からで炎を止めるのは、右の「置いたパーツ」の「形態」の「炎を出さない」。増やすのは「複製」「反対側にも」、消すのは一覧の × か「外す」。腕・脚には「付ける骨」</div>
   </details>
   <details class="asm" id="shieldBox">
     <summary>盾<span>戦闘で左手に持つ盾の見た目</span></summary>
@@ -364,6 +365,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=927c39f"></script>
+<script type="module" src="./v2.js?v=e18923d"></script>
 </body>
 </html>

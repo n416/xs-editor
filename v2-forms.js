@@ -42,7 +42,7 @@ function look(pc, n, mirrored, q) {
 const mirroredMesh = o => !!o.userData.pc?.mirror && (o.userData.inst ?? 0) % 2 === 1;
 
 // ---- 置いたパーツ 1 つごとの形態（issue #810：右の「置いたパーツ」で選んだパーツ単体の形態）----
-//   item.forms[n] = { hide?: true（この形態では出さない）, p?: [x, y, z]（ずらす。右の「位置」と同じ 左右・上下・前後）, r?: [x, y, z]（回す。度、パーツの原点で・パーツの向きの軸で） }
+//   item.forms[n] = { hide?: true（この形態では出さない）, noFlame?: true（噴射口・炎の点：この形態では炎を出さない。下の itemFlame）, p?: [x, y, z]（ずらす。右の「位置」と同じ 左右・上下・前後）, r?: [x, y, z]（回す。度、パーツの原点で・パーツの向きの軸で） }
 // ブロックの形態（pc.forms）の上に重なる（ブロックが動いた形のまま、パーツごと動く）。色はブロックの形態で変える
 /**
  * 置いたパーツ it の、形態 view.from → view.to の途中 view.t（0〜1）のずれ（形態 1 のまま・形態の無いパーツは null）
@@ -53,6 +53,15 @@ export function itemFormDelta(it, view) {
   const k = ease(Math.min(1, Math.max(0, view.t))), qb = new THREE.Quaternion(), q = new THREE.Quaternion();
   const a = look(it, view.from, false, q), b = look(it, view.to, false, qb);
   return { p: a.p.lerp(b.p, k), q: q.slerp(qb, k), s: Math.max(a.s + (b.s - a.s) * k, 1e-4) };
+}
+// 噴射口の部品・炎の点（parts/back/jetshield.js）は、形態ごとに炎を出さない事もできる（issue #812、テスター ポッチャさん
+// 「噴射口のエフェクトも形態ごとにONOFFさせてほしい」）：item.forms[n].noFlame = true。形態 1 はゲームに書き出す形なので、いつも出す。
+// 炎はエディタの見本（v2.js flameTick）だけで、戦場では変形しないので、ゲームの炎は今までどおり
+/** 置いたパーツ it の炎の出方（0 出さない〜1 出す）：形態 view.from → view.to の途中 view.t。形態 1 のまま（view が null）は 1 */
+export function itemFlame(it, view) {
+  if (!view) return 1;
+  const on = n => (formOf(it, n)?.noFlame ? 0 : 1), a = on(view.from), b = on(view.to);
+  return a + (b - a) * ease(Math.min(1, Math.max(0, view.t)));
 }
 /** 左右反転の写し（xsasm-random.js mirrorOf）の形態：ずらすの左右と、回すの y・z を逆に（位置・回転の写し方と同じ） */
 export function mirrorForms(forms) {
