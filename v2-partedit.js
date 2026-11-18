@@ -22,6 +22,14 @@ import { FORM_MAX, formOf, setForm } from './v2-forms.js';
 export const MOUTH_CHOICES = { '': 'なし（名前に「銃口」「ビームの口」があればそこ）', muzzle: '手に持つ武器の銃口', arm: '腕の武器の口（ビーム・腕の銃）', head: '頭の機関砲の口', chest: '胸の武器の口', belly: '腹の武器の口', shoulder: '肩の砲・ロケットの口', back: 'ミサイルの発射口（背中・肩当て）', shield: '盾の武器の口' };
 const mouthRow = pc => `<div class="row"><label>武器の口</label><select id="peMouth">${Object.entries(MOUTH_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.mouth ?? '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select><button id="peFire" class="small" title="選んだ口から、試しにビームを撃って見せる（このブロックの真ん中から機体の前へ）">試し撃ち</button></div>
   <div class="hint">その種類の武器を撃つと、弾やビームがこのブロックの真ん中から出る（ゲーム用に書き出した形で）。決まるのは出る場所だけで、武器の種類と強さは機体の種別で決まる。左右のある口（腕・頭・肩・ミサイル）は、ブロックが機体のどちら側にあるかで左右が決まる</div>`;
+/** 「色の役」の選択肢。塗らないブロック（武器の飾りの役 keep・光って当たりの無いブロック・透けるブロック）は「塗らない」を選んだ形で出す。
+ *  前はどの役も選ばれていない形で、画面には先頭の「主装甲」が出て、そこで「主装甲」を選んでも変わった事にならず色が変わらなかった
+ *  （テスター アズキトギさん 2026-11-18「「武器の飾り」…だけ色が変わらない」、issue #949） */
+const roleRows = (pc, d) => {
+  const now = roleOf(pc) ?? 'keep', keep = now === 'keep' || 'role' in pc;
+  return (keep ? `<option value="keep" ${now === 'keep' ? 'selected' : ''}>${d?.deco ? '塗らない（武器の色のまま）' : '塗らない（ブロックの色のまま）'}</option>` : '')
+    + Object.entries(ROLE_LABEL).map(([k, v]) => `<option value="${k}" ${now === k ? 'selected' : ''}>${v}</option>`).join('');
+};
 const r5 = v => Math.round(v * 1e5) / 1e5, r12 = v => Math.round(v * 1e12) / 1e12, r4 = v => Math.round(v * 1e4) / 1e4, r1 = v => Math.round(v * 10) / 10;
 const fmt = v => String(+(+v).toFixed(4));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -721,7 +729,7 @@ export function initPartEdit(ctx) {
       <div class="row"><label>名前</label><input type="text" id="peBlockName" value="${esc(pc.name)}"></div>
       <div class="row"><label>はたらき</label><div class="seg" style="flex:1"><button data-op="add" class="${sub ? '' : 'on'}" title="形を足す">＋ 足す</button><button data-op="sub" class="${sub ? 'on' : ''}" title="自分より上に並ぶブロックを、この形で削る">− 引く</button></div></div>
       ${sub ? '' : free ? `<div class="row"><label>色</label><input type="color" id="peColor" value="${/^#[0-9a-f]{6}$/i.test(pc.color ?? '') ? pc.color : '#c3c9d2'}" style="width:48px;height:24px;padding:0"><label class="chk" style="width:auto;flex:1"><input type="checkbox" id="peTeam" ${pc.team ? 'checked' : ''}>陣営色で塗る</label></div>`
-        : `<div class="row"><label>色の役</label><select id="peRole">${Object.entries(ROLE_LABEL).map(([k, v]) => `<option value="${k}" ${roleOf(pc) === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>`}`);
+        : `<div class="row"><label>色の役</label><select id="peRole">${roleRows(pc, d)}</select></div>`}`);
     // 位置と大きさ
     html.push('<h2>位置と大きさ</h2>');
     if (hullEdit(pc)) {
@@ -845,7 +853,14 @@ export function initPartEdit(ctx) {
     if (!sub) wireForms([pc], pc);
     if ($('#peBlend')) $('#peBlend').onchange = e => { if (e.target.value) pc.blendTo = e.target.value; else delete pc.blendTo; commit(); };
     // （役を書いたブロックは役も：武器の飾りの写しは役 keep のままで、選んだ役が塗りの色にならなかった。テスター 静流りおさん 2026-11-08）
-    if ($('#peRole')) $('#peRole').onchange = e => { const r = e.target.value; pc.color = ROLE_COLOR[r]; if (GLOW_ROLES.has(r)) pc.glow = true; else delete pc.glow; if ('role' in pc) pc.role = r; ctx.repaint(); dimOthers(); commit(); renderLeft(); };
+    // （役を持つブロック＝武器の飾り：色は書き換えない。役が色を決め、「塗らない」に戻すと武器の色に戻る。issue #949）
+    if ($('#peRole')) $('#peRole').onchange = e => {
+      const r = e.target.value;
+      if (r === 'keep') { if ('role' in pc) pc.role = 'keep'; }
+      else if ('role' in pc) { pc.role = r; pc.glow = GLOW_ROLES.has(r); }   // （飾りの光るかどうかは名前からも決まるので、消さずに false）
+      else { pc.color = ROLE_COLOR[r]; if (GLOW_ROLES.has(r)) pc.glow = true; else delete pc.glow; }
+      ctx.repaint(); dimOthers(); commit(); renderLeft();
+    };
     for (const el of E.right.querySelectorAll('[data-f]')) {
       el.oninput = () => { const v = parseFloat(el.value); if (!Number.isFinite(v)) return; binds[el.dataset.f].set(v); for (const o of E.right.querySelectorAll(`[data-f="${el.dataset.f}"]`)) if (o !== el) o.value = el.type === 'range' ? fmt(v) : v; live(); prof?.draw(); };
       el.onchange = () => { if (st.keepCorner) { reselectCorner(st.keepCorner); st.keepCorner = null; } commit(); refresh(false); };
