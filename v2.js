@@ -1881,7 +1881,8 @@ $('#bGame').onclick = async () => {
   }
   box.textContent = '書き出しています…';
   try {
-    const r = await exportGame(id, stepNote(box, '書き出しています…つながりと関節を調べています'));
+    // 形態 2 のある機体は、その姿も同じ骨・床・高さで <id>_form2.glb に書き出す（ゲームの自分のスキンで、AXIS の間・飛行形態の間その姿へ動く。issue 951）
+    const r = await exportGame(id, stepNote(box, '書き出しています…つながりと関節を調べています'), formCount() > 1 ? { form: 2 } : {});
     const bin = atob(r.glb), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type: 'model/gltf-binary' })); a.download = `${id}.glb`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     if (r.purged) {   // パージで外れた姿（印の付いた部品を除いた姿）：もう 1 つのファイル
@@ -1889,12 +1890,18 @@ $('#bGame').onclick = async () => {
       await new Promise(ok => setTimeout(ok, 400));   // （続けて 2 つ落とすと、ブラウザが 2 つ目を止めることがある）
       const b = document.createElement('a'); b.href = URL.createObjectURL(new Blob([p8], { type: 'model/gltf-binary' })); b.download = `${id}_purged.glb`; b.click(); setTimeout(() => URL.revokeObjectURL(b.href), 2000);
     }
+    if (r.form) {   // 形態 2 の姿：もう 1 つのファイル
+      const fb = atob(r.form), f8 = new Uint8Array(fb.length); for (let i = 0; i < fb.length; i++) f8[i] = fb.charCodeAt(i);
+      await new Promise(ok => setTimeout(ok, 400));
+      const b = document.createElement('a'); b.href = URL.createObjectURL(new Blob([f8], { type: 'model/gltf-binary' })); b.download = `${id}_form2.glb`; b.click(); setTimeout(() => URL.revokeObjectURL(b.href), 2000);
+    }
     const ok = (v, lim) => (v <= lim ? '✓' : '✗');
     box.innerHTML = `<b>${id}.glb を書き出しました</b>（${(u8.length / 1048576).toFixed(1)} MB）<br>`
       + `つながり ${r.floating.length ? `✗ 離れている部品 ${r.floating.length} 組` : '✓'} ／ 関節 ${r.loose.length ? `✗ ${r.loose.length} 個の動きで外れる・めり込む` : '✓'}<br>`
       + `三角形 ${r.report.tris.map((t, i) => `${t.toLocaleString()} ${ok(t, GAME_LIMIT[i])}`).join(' / ')}（近く・中・遠く）、描画 ${r.report.calls[0]} 回 ${ok(r.report.calls[0], 5)}、骨 ${r.report.bones.length} 本<br>`
       + `炎の出る噴射口 ${r.report.jets} 個（${r.report.ownJets ? '置いた噴射口' : '部品の噴射口'}）、盾 ${r.report.shield ? `あり（三角形 ${r.report.shield.tris.toLocaleString()}）` : 'なし（ゲームのいつもの盾）'}<br>`
       + (r.purged ? `パージで外れた姿 ${id}_purged.glb も書き出しました（「パージで外れる」の部品 ${kept().filter(it => it.purge).length} 個を除いた姿。ゲームでパージできる機体で、外れた後の姿に使う）<br>` : '')
+      + (r.form ? `形態 2 の姿 ${id}_form2.glb も書き出しました（ゲームの自分のスキンで ${id}.glb と一緒に選ぶと、AXIS の間・飛行形態の間その姿になる）<br>` : '')
       + [...r.floating.slice(0, 4).map(f => '離れている：' + esc(f)), ...r.loose.slice(0, 4).map(esc)].map(t => `<span style="color:var(--warn)">${t}</span><br>`).join('')
       + `<span class="hint">ゲームに入れるには public/models/${id}.glb に置き、出す前のテスト 3 つ（docs/models.md）を通す。手持ちの武器は${id[0] === 'b' ? ' GIO' : '連合'}の強襲のもの</span>`;
   } catch (e) { box.textContent = '書き出せませんでした：' + (e?.message ?? e); }
@@ -2528,7 +2535,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '94cd269';
+const BUILD = 'a3e83f3';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
