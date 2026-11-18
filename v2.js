@@ -2496,7 +2496,7 @@ if (new URLSearchParams(location.search).has('share')) SHARE.open();
 // ---- ゲームのスキンにする（issue #259 の 2）：?skin=<id>&as=<種別>&reply=<ゲームのページの origin> で、ゲームのページの中の見えない窓として開かれる。
 // みんなの機体のその 1 つを開き、「ゲーム用に書き出す」と同じ exportGame で .glb を作って、親のページ（ゲーム）へ postMessage で渡す。
 // 渡す物：{ xsskin: 'step', done, total } 関節を調べている途中 → { xsskin: 'glb', glb (ArrayBuffer), purged (ArrayBuffer、「パージで外れる」の部品が
-// ある時だけ：それを除いた姿、ゲームはパージの後にこちらを着る), title, floating, loose } か { xsskin: 'error', error }
+// ある時だけ：それを除いた姿、ゲームはパージの後にこちらを着る), form (ArrayBuffer、形態 2 がある時だけ：その姿), title, floating, loose } か { xsskin: 'error', error }
 if (SKIN_MODEL && window.parent !== window) (async () => {
   const q = new URLSearchParams(location.search), as = q.get('as') ?? '', to = q.get('reply') ?? '';
   const send = (m, tr) => { try { window.parent.postMessage(m, /^https?:\/\/[^/]+$/.test(to) ? to : '*', tr); } catch { /* the game's page went */ } };
@@ -2508,10 +2508,11 @@ if (SKIN_MODEL && window.parent !== window) (async () => {
     else if (Array.isArray(r.scene)) openE1(r.scene, title, r.model?.role ?? '');
     else throw new Error(r.error || 'この機体は開けません（形が分かりません）。');
     if (JSON.stringify(unitDoc()).includes('"kind":"mesh"')) for (let i = 0; i < 300 && !kept().every(it => (byId[it.part]?.pieces ?? []).every(pc => pc.kind !== 'mesh' || MESHES.has(pc.mesh))); i++) await new Promise(ok => setTimeout(ok, 100));
-    const out = await exportGame(as, (done, total) => send({ xsskin: 'step', done, total }));
+    // 形態 2 のある機体は、その姿も同じ骨・床・高さで焼いて渡す（form）：ゲームは AXIS の間（変形できる XS は飛行形態の間）その姿へ動かす（issue 932）
+    const out = await exportGame(as, (done, total) => send({ xsskin: 'step', done, total }), formCount() > 1 ? { form: 2 } : {});
     const bytes = (b64) => { const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return u8.buffer; };
-    const glb = bytes(out.glb), purged = out.purged ? bytes(out.purged) : undefined;
-    send({ xsskin: 'glb', glb, purged, title, floating: out.floating.length, loose: out.loose.length }, purged ? [glb, purged] : [glb]);
+    const glb = bytes(out.glb), purged = out.purged ? bytes(out.purged) : undefined, form = out.form ? bytes(out.form) : undefined;
+    send({ xsskin: 'glb', glb, purged, form, title, floating: out.floating.length, loose: out.loose.length }, [glb, ...purged ? [purged] : [], ...form ? [form] : []]);
   } catch (e) { send({ xsskin: 'error', error: String(e?.message ?? e) }); }
 })();
 $('#bFire').onclick = () => testFire(null);
@@ -2527,7 +2528,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'f3bf962';
+const BUILD = '6e6a9e9';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
