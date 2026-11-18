@@ -747,6 +747,9 @@ function attachPoints(pieces) {
     }
   }
   for (const [name, m] of marks) out[name] = { pos: m.box.getCenter(new THREE.Vector3()), bone: m.bone };
+  // a unit whose right forearm ends in a weapon, with no hand (アマビコさんの「アッガーノB案」, m_y2YjoFE69TMI: the launcher on the
+  // right arm, the fist on the left): what is held (the heat axe's claws) comes out of the arm's beam mouth, not loose at the shoulder [独自]
+  if (!out.hand_r && out.arm_muzzle_r?.bone === 'forearm_r') out.hand_r = { pos: out.arm_muzzle_r.pos.clone(), bone: 'forearm_r' };
   // the back's two largest nozzles, one a side (docs/models.md; the game's own flames come from jet_<n>, below)
   const back = nozzlesOf(pieces).filter(n => n.bone === 'torso');
   for (const s of ['l', 'r']) { const t = back.find(n => (s === 'l' ? n.pos.x > 0.02 : n.pos.x < -0.02)); if (t) out['thruster_' + s] = { pos: t.pos, bone: 'torso' }; }
