@@ -1913,9 +1913,44 @@ $('#bGame').onclick = async () => {
       + `炎の出る噴射口 ${r.report.jets} 個（${r.report.ownJets ? '置いた噴射口' : '部品の噴射口'}）、盾 ${r.report.shield ? `あり（三角形 ${r.report.shield.tris.toLocaleString()}）` : 'なし（ゲームのいつもの盾）'}<br>`
       + (r.purged ? `パージで外れた姿 ${id}_purged.glb も書き出しました（「パージで外れる」の部品 ${kept().filter(it => it.purge).length} 個を除いた姿。ゲームでパージできる機体で、外れた後の姿に使う）<br>` : '')
       + (r.form ? `形態 2 の姿 ${id}_form2.glb も書き出しました（ゲームの自分のスキンで ${id}.glb と一緒に選ぶと、AXIS の間・飛行形態の間その姿になる）<br>` : '')
+      + skinStepsHtml(id, { purged: !!r.purged, form: !!r.form, bad: r.floating.length > 0 || r.loose.length > 0 })
       + [...r.floating.slice(0, 4).map(f => '離れている：' + esc(f)), ...r.loose.slice(0, 4).map(esc)].map(t => `<span style="color:var(--warn)">${t}</span><br>`).join('')
-      + `<span class="hint">ゲームに入れるには public/models/${id}.glb に置き、出す前のテスト 3 つ（docs/models.md）を通す。手持ちの武器は${id[0] === 'b' ? ' GIO' : '連合'}の強襲のもの</span>`;
+      + `<span class="hint">（開発者向け）ゲームの標準の形にするには public/models/${id}.glb に置き、出す前のテスト 3 つ（docs/models.md）を通す。手持ちの武器は${id[0] === 'b' ? ' GIO' : '連合'}の強襲のもの</span>`;
   } catch (e) { box.textContent = '書き出せませんでした：' + (e?.message ?? e); }
+};
+// ---- 書き出した .glb を、ゲームで自分のスキンにする手順（日本語と English）----
+// [テスター アズキトギさん 2026-11-20 #色々なツールへの要望「自分で作った機体エディタのモデルってどうやってスキンとして使うんですか？」、
+//  ポッチャさんの答え「エクオンの設定のその他の方にぶち込む」「たまに骨の設定が間違ってる場合があるんで」; 依頼主 2026-11-20「あのスレッドの内容は手厚く」]
+// 書き出しの後に出し、「ゲームでスキンにするには？」でも書き出さずに出す。ゲームの側の同じ手順は client/src/settingsui.ts の skinhelp
+const KIND_EN = { raid: 'Raid', heavy: 'Heavy', support: 'Support', sniper: 'Sniper', artillery: 'Artillery (tracks)', artillery_leg: 'Artillery (legs)' };
+function skinStepsHtml(id, o = {}) {
+  const ja = $('#gameId').selectedOptions[0]?.textContent ?? id, role = id.replace(/^[ab]_/, ''), en = `${id[0] === 'b' ? 'GIO' : 'Union'} ${KIND_EN[role] ?? role}`;
+  const more = [o.purged && `${id}_purged.glb`, o.form && `${id}_form2.glb`].filter(Boolean);
+  const k = t => `<kbd>${t}</kbd>`;
+  return `<div class="skinsteps"><b class="sk-h">ゲームで自分のスキンにする</b><ol>`
+    + `<li><span>${k('書き出す')}で <b>${id}.glb</b> ができる</span></li>`
+    + `<li><span>ゲームの ${k('設定')} → ${k('その他')}</span></li>`
+    + `<li><span>${k('機体')}で「${ja}」の XS を選ぶ</span></li>`
+    + `<li><span>${k('.glb を選ぶ')}で ${id}.glb を入れる</span></li>`
+    + `<li><span>次の出撃から自分の XS が着る</span></li></ol>`
+    + (more.length ? `<p class="sk-one">${more.join('・')} も Ctrl で一緒に選ぶ</p>` : '')
+    + `<p class="sk-one">※ 自分の画面だけ。ほかの人には見えません</p>`
+    + (o.bad ? `<p class="sk-one sk-warn">✗ があります → ${k('チェックだけする')}で直してから</p>` : '')
+    + `<details><summary>注意を見る</summary><ul>`
+    + `<li><b>ほかの人には見えない</b><br>このブラウザの自分の画面だけ。みんなに見せるなら${k('みんなの機体')}へ</span></li>`
+    + `<li><b>種別が違うと崩れる</b><br>部品がめり込む・浮く。✗ の出た機体も崩れる</span></li>`
+    + `<li><b>崩れた時・戻す時</b><br>種別を合わせ、✗ を直して書き出し直す<br>ゲームの${k('外す')}で標準の見た目へ</li></ul></details>`
+    + `<details><summary>English</summary><ol>`
+    + `<li><span>${k('書き出す')} (Export) makes <b>${id}.glb</b></span></li>`
+    + `<li><span>In the game: ${k('Settings')} → ${k('Other')}</span></li>`
+    + `<li><span>Under ${k('XS')}, pick a "${en}" XS</span></li>`
+    + `<li><span>${k('Choose .glb')} and pick ${id}.glb</span></li>`
+    + `<li><span>From your next launch your XS wears it</span></li></ol>`
+    + `<p class="sk-one">Only on your own screen: no one else sees it.</p></details></div>`;
+}
+$('#bSkinHow').onclick = () => {
+  if (shipKind()) { $('#gameOut').textContent = '艦は、自分のスキンにできません（XS の種別を選ぶと手順が出ます）'; return; }
+  $('#gameOut').innerHTML = skinStepsHtml($('#gameId').value);
 };
 /** チェックだけ：つながりと関節を調べて、結果をぜんぶ出す（ファイルは作らない） */
 $('#bCheck').onclick = async () => {
@@ -2571,7 +2606,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '6c3276e';
+const BUILD = '23df2f9';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
