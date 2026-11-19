@@ -174,7 +174,7 @@
    "bazooka": false
   },
   "a_raid_03": {
-   "name": "装甲強化型ジェム",
+   "name": "装甲強化仕様ジェム",
    "melee": "saber",
    "tracked": false,
    "kneel": false,
@@ -282,7 +282,7 @@
    "bazooka": true
   },
   "a_raid_09": {
-   "name": "ジェム寒冷地仕様",
+   "name": "ジェム寒冷地対応型",
    "melee": "saber",
    "tracked": false,
    "kneel": false,
@@ -345,7 +345,7 @@
    "bazooka": true
   },
   "a_support_05": {
-   "name": "ジェム・スループ",
+   "name": "ジェム・サーチャー",
    "melee": null,
    "tracked": false,
    "kneel": false,
