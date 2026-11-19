@@ -152,29 +152,32 @@ function seeAs(m, see, op) {
  * boxOf：partgeo.js のブロックの範囲（パーツの座標、pos 込み）。opt.shape：形だけ（色は形態 1 のまま）。光の部品は色ごとに材質が分かれるので、
  * 色を替えると模型の三角形の並びが形態 1 と変わる：ゲームは同じ並びの 2 つの模型の間を頂点ごとに動かす（client/src/models.ts axisMorph）
  */
+// opt.shrinkHidden：出さないブロックを除かず、真ん中へ HIDE_S まで縮めて残す（武器の形態 2：形態 1 と同じブロック・同じ並びの三角形にして、
+// 書き出しが 2 つの形の間の動き（モーフ）にする。xsengine.js buildWeapon の opt.form2。画面の切り替えも出さない側は縮んで消える）
+const HIDE_S = 0.01;
 export function bakeForm(doc, n, boxOf, opt = {}) {
   const out = structuredClone(doc), M = new THREE.Matrix4(), T = new THREE.Matrix4(), c = new THREE.Vector3(), q = new THREE.Quaternion();
   for (const def of Object.values(out.userParts ?? {})) {
     if (!Array.isArray(def?.pieces)) continue;
-    def.pieces = def.pieces.filter(pc => !formOf(pc, n)?.hide);
+    if (!opt.shrinkHidden) def.pieces = def.pieces.filter(pc => !formOf(pc, n)?.hide);
     for (const pc of def.pieces) {
       const f = formOf(pc, n);
       delete pc.forms;
       if (!f) continue;
       if (f.color && !opt.shape) pc.color = f.color;
-      const p = f.p ?? [0, 0, 0], r = f.r ?? [0, 0, 0];
-      if (!p.some(v => v) && !r.some(v => v)) continue;
+      const p = f.p ?? [0, 0, 0], r = f.r ?? [0, 0, 0], s = opt.shrinkHidden && f.hide ? HIDE_S : 1;
+      if (!p.some(v => v) && !r.some(v => v) && s === 1) continue;
       // ブロックの座標（パーツの座標から pos を引いた物）で：x' = c + p + R (x − c)
       const pos = pc.pos ?? [0, 0, 0];
       boxOf(pc).getCenter(c).sub(new THREE.Vector3(...pos));
       q.setFromEuler(_e.set(r[0] * D, r[1] * D, r[2] * D, 'XYZ'));
-      M.makeTranslation(c.x + p[0], c.y + p[1], c.z + p[2]).multiply(T.makeRotationFromQuaternion(q)).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
+      M.makeTranslation(c.x + p[0], c.y + p[1], c.z + p[2]).multiply(T.makeRotationFromQuaternion(q)).multiply(new THREE.Matrix4().makeScale(s, s, s)).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
       if (Array.isArray(pc.planes) && !pc.tf) {
-        // 面 n·x ≤ d → (R n)·x' ≤ d − n·c + (R n)·(c + p)
+        // 面 n·x ≤ d → (R n)·x' ≤ s (d − n·c) + (R n)·(c + p)（s：縮める割合。ふだんは 1）
         const cp = new THREE.Vector3(c.x + p[0], c.y + p[1], c.z + p[2]);
         pc.planes = pc.planes.map(pl => {
           const nn = new THREE.Vector3(pl[0], pl[1], pl[2]), nr = nn.clone().applyQuaternion(q);
-          return [nr.x, nr.y, nr.z, pl[3] - nn.dot(c) + nr.dot(cp), ...pl.slice(4)];
+          return [nr.x, nr.y, nr.z, s * (pl[3] - nn.dot(c)) + nr.dot(cp), ...pl.slice(4)];
         });
       } else {
         const tf = pc.tf ?? {}, tr = tf.r ?? [0, 0, 0];

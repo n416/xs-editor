@@ -26,6 +26,7 @@ import { initAi } from './v2-ai.js';
 import { initShare } from './v2-share.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
+import { makeWeaponBench } from './v2-weapon.js';
 import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, formDelayOf, formSpanOf, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
@@ -124,8 +125,16 @@ const guideGroup = new THREE.Group(); scene.add(guideGroup);   // 艦のガイ�
 const root = new THREE.Group(); scene.add(root);
 const gizmo = new TransformControls(camera, canvas);
 gizmo.setSize(0.8);
-gizmo.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; if (PE.active()) { if (!e.value) PE.onDragEnd(); return; } if (e.value) { if (gizmo.object === pivot) pivotStart(); return; } save(); rebuild(); });
-gizmo.addEventListener('objectChange', () => { if (PE.active()) { PE.onGizmoChange(); return; } if (gizmo.object === pivot) { pivotMove(); return; } if (selected >= 0) { readBackFromGroup(items[selected], gizmo.object); applyToGroup(items[selected], groups[selected]); fillFields(); } });
+// 「武器を作る」の欄（v2-weapon.js）：持っている武器の点（握り・銃口・刃の根元・刃の先）・元の武器の点線の箱・武器だけを見る
+const bench = makeWeaponBench({
+  get gizmo() { return gizmo; }, get orbit() { return orbit; }, get camera() { return camera; }, byId,
+  items: () => items, groups: () => groups, form: () => formNow,
+  own: i => { const it = items[i]; if (!it) return null; const d = byId[it.part]; if (d?.user) return d; const c = makeUserCopy(d); keepUser(c); it.part = c.id; return c; },
+  persist: () => persistUser(), save: () => save(), rebuild: () => rebuild(), note: (t, w) => note(t, w),
+  side: () => ($('#gameId').value[0] === 'b' ? 'b' : 'a'),
+});
+gizmo.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; if (!PE.active() && gizmo.object?.userData.wpt) { if (!e.value) bench?.onDragEnd(); return; } if (PE.active()) { if (!e.value) PE.onDragEnd(); return; } if (e.value) { if (gizmo.object === pivot) pivotStart(); return; } save(); rebuild(); });
+gizmo.addEventListener('objectChange', () => { if (PE.active()) { PE.onGizmoChange(); return; } if (bench?.onGizmo()) return; if (gizmo.object === pivot) { pivotMove(); return; } if (selected >= 0) { readBackFromGroup(items[selected], gizmo.object); applyToGroup(items[selected], groups[selected]); fillFields(); } });
 scene.add(gizmo);
 
 /** 関節のまわりに回す入れ物：outer は関節の位置で回り、inner は元の座標（中の物は立った姿勢の世界の座標のまま置く） */
@@ -614,6 +623,7 @@ function rebuild() {
   rebuildMain();
   drawEdges();
   applyPurgeView();
+  if (!PE.active()) bench?.afterRebuild();
 }
 
 // ---- パージ後を見る（issue #745）：「パージで外れる」の印（item.purge）を付けた部品を隠す。見た目だけ（保存・書き出す形は変わらない）。パーツエディタの間は隠さない ----
@@ -1178,6 +1188,7 @@ function renderCatalog() {
     const list = tabList(half, list0);
     const sec = document.createElement('div'); sec.className = 'half'; sec.dataset.half = half; sec.hidden = half !== tab; el.appendChild(sec);
     if (half === 'weapon') {   // 手持ちの武器：名前の決まりと、新しく作るボタン
+      const wb = document.createElement('div'); wb.className = 'wbench'; wb.style.cssText = 'margin-top:8px;padding:6px 8px;border:1px solid var(--line, #3a3f48);border-radius:6px;display:flex;flex-direction:column;gap:4px'; sec.appendChild(wb); bench?.mount(wb);
       const top = document.createElement('div'); top.className = 'hint'; top.style.marginTop = '8px';
       top.innerHTML = '右手に持つ武器。押すと持つ（今の武器と入れ替わる）。腕の長さや手を変えても、手に付いていく。「直す」でパーツエディタ。<br>ブロックの名前で、ゲームでの扱いが決まる：「ライフル」「銃」「マガジン」「マズル」＝銃（格闘・投げる間は隠れる）、「バズーカ」＝バズーカ（選んだときだけ出る）、「マズル」「銃口」＝弾の出る所。<br>機体が武器を持っていなければ、書き出すときに陣営の強襲の 1 式を持たせる。<div class="row" style="margin-top:6px"><button class="small" id="bNewWeapon" style="flex:1">新しい武器を作る</button></div>腕を下ろした姿勢では、銃は下を向く（腕を前へ上げると前を向く）。<br>下の「武器の飾り」は、同じ武器の形を見た目だけの部品として足す（いくつでも。腰・背中・腕など好きな骨に付けて、動かす・回す・大きさを変える。撃つ所・強さは変わらない）。';
       sec.appendChild(top);
@@ -1993,11 +2004,26 @@ async function runAutoFix(id, box) {
 }
 /** 持っている武器だけを、武器のモデルとして書き出す（w_<陣営>_<形の名前>.glb：骨なし・メートル・握る所が原点・長さは -Z。docs/model-delivery-design.md）。
  *  機体の腕の長さや置いた向きには関係なく、その武器を作ったときの形のまま出す */
+// 「武器を作る」（v2-weapon.js）で置いた点（def.wpts）と、形態 2（変形する武器）も入れる：形態 2 はブロックの形態を焼き込んだ部品（出さないブロックは
+// 縮めて残す：同じ並びの三角形）を xsengine.js buildWeapon の opt.form2 に渡し、模型の中の動き（モーフ）と点 muzzle_2・blade_tip_2・grip_2 になる
+/** 武器の文書 { parts, hand_r, points, form2 }（samples/w_<陣営>_<形の名前>.json と同じ形。tools/exportweapon.ts・tools/sharewpn.ts もこれを使う） */
+function weaponDoc(def) {
+  const doc = d => ({ items: [{ part: d.id, mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] }], adj: { ...ADJ0 }, paint: null, userParts: {} });
+  const { parts } = unitParts(doc(def), { shaped: true });
+  const wp = bench?.pointsOf(def) ?? {};
+  let form2 = null;
+  if (formsUsed([def]) > 1) {
+    const baked = bakeForm({ userParts: { [def.id]: def } }, 2, blockBox, { shape: true, shrinkHidden: true }).userParts[def.id];
+    const keep = byId[def.id];
+    byId[def.id] = { ...def, pieces: baked.pieces };
+    try { form2 = { parts: unitParts(doc(def), { shaped: true }).parts, hand: wp.hand2, points: wp.points2 }; } finally { byId[def.id] = keep; }
+  }
+  return { parts, hand_r: (def.hand ?? [0, 0, 0]).slice(), points: wp.points, form2 };
+}
 async function exportWeaponGlb(def, name) {
-  const X = await editorWorker();
-  const { parts } = unitParts({ items: [{ part: def.id, mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] }], adj: { ...ADJ0 }, paint: null, userParts: {} }, { shaped: true });
-  X.load({ parts, ai: '', role: '' });
-  return X.exportWeapon(def.hand ?? [0, 0, 0]);
+  const X = await editorWorker(), d = weaponDoc(def);
+  X.load({ parts: d.parts, ai: '', role: '' });
+  return X.exportWeapon(d.hand_r, { points: d.points, form2: d.form2 });
 }
 $('#bWeaponGlb').onclick = async () => {
   if (busy()) return;
@@ -2005,14 +2031,15 @@ $('#bWeaponGlb').onclick = async () => {
   if (!def) { box.textContent = '武器を持っていません。左の「武器」のタブで、書き出す武器を持たせてください'; return; }
   const shape = ($('#weaponShape').value.trim() || def.shape || '').replace(/[^a-z0-9_]/gi, '').toLowerCase();
   if (!shape) { box.textContent = '形の名前（半角の英数字と _。例 heat_axe）を入れてください。ゲームの武器のデータの「held」と同じ名前'; return; }
-  const file = `w_${$('#gameId').value[0] === 'b' ? 'b' : 'a'}_${shape}.glb`;
+  const file = `w_${def.faction === 'a' || def.faction === 'b' ? def.faction : $('#gameId').value[0] === 'b' ? 'b' : 'a'}_${shape}.glb`;   // （陣営は「武器を作る」の陣営、無ければ書き出しの機体の陣営）
   box.textContent = '書き出しています…';
   try {
     const r = await exportWeaponGlb(def, shape), p = r.report;
     const bin = atob(r.glb), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type: 'model/gltf-binary' })); a.download = file; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     box.innerHTML = `<b>${file} を書き出しました</b>（${(u8.length / 1024).toFixed(0)} KB）<br>握る所から先まで ${p.len.toFixed(2)} m・後ろへ ${p.behind.toFixed(2)} m、三角形 ${p.tris.toLocaleString()}、描画 ${p.calls} 回${p.muzzle ? '、弾の出る所あり' : ''}<br>`
-      + `<span class="hint">public/models/${file} に置くと、ゲームがその武器の形として手に持たせる（今つながっているのはヒートアックス：heat_axe）</span>`;
+        + (p.form2 ? (p.form2.ok ? '形態 2（変形）：動きとして入りました<br>' : `<span style="color:var(--warn)">形態 2（変形）：動きにできませんでした（${p.form2.why}）。削る部品が形態 2 で動くと、形が変わって動きにできません</span><br>`) : '')
+      + `<span class="hint">ゲームに入れるのは、作品を「みんなの機体」に投稿して採用された時（運営が tools/sharewpn.ts で取り込む）。public/models/${file} に置くと、その形の名前の武器が手に持つ形になる</span>`;
   } catch (e) { box.textContent = '書き出せませんでした：' + (e?.message ?? e); }
 };
 /** ふつうの .glb：今の形（立った姿勢）を、骨なしで書き出す */
@@ -2486,6 +2513,15 @@ const SHARE = initShare({
   },
   // つながりと関節（「チェックだけする」と同じ調べ方）
   check: async onStep => {
+    // 武器だけの作品（置いたパーツが手持ちの武器だけ、「武器を作る」）：機体のつながり・関節ではなく、武器として書き出して点と形態 2 を見る
+    const only = kept(), wdef = only.length && only.every(it => byId[it.part]?.tab === 'weapon') ? byId[only[0].part] : null;
+    if (wdef) {
+      const r = await onEngine(() => exportWeaponGlb(wdef, 'check')), p = r.report;
+      const lines = [`武器だけの作品として調べました：握りから先まで ${p.len.toFixed(2)} m・三角形 ${p.tris.toLocaleString()}`,
+        p.muzzle ? '銃口の点 ✓' : '銃口の点なし（格闘の武器なら要りません）',
+        ...(p.form2 ? [p.form2.ok ? '形態 2（変形）✓' : `形態 2（変形）✗ ${p.form2.why}`] : [])];
+      return { ok: !p.form2 || p.form2.ok, text: lines.join(String.fromCharCode(10)) };
+    }
     const id = $('#gameId').value, X = await editorWorker();
     const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
     const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));
@@ -2535,7 +2571,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '69b54be';
+const BUILD = '6c3276e';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
@@ -2658,10 +2694,14 @@ for (const [f, id, name] of [['a', 'w·a', '連合の強襲の 1 式（ライフ
   } catch (e) { console.warn('weapons', f, e); }
 }
 // 自分のモデルとして書き出す武器（ゲームが手に持たせる 1 つの形。samples/w_<陣営>_<形の名前>.json）。def.shape が、ゲームでの形の名前
-for (const file of ['w_a_machine_gun', 'w_b_machine_gun', 'w_a_beam_rifle', 'w_a_beam_rifle_f1', 'w_b_beam_rifle', 'w_a_beam_shotgun', 'w_b_beam_shotgun', 'w_a_charge_rifle', 'w_b_charge_rifle', 'w_a_bazooka', 'w_b_bazooka', 'w_a_sniper_rifle', 'w_b_sniper_rifle', 'w_a_charge_sniper', 'w_b_charge_sniper', 'w_a_beam_sniper', 'w_b_beam_sniper', 'w_a_repair_torch', 'w_b_repair_torch', 'w_a_knife', 'w_b_knife', 'w_a_saber', 'w_b_saber', 'w_a_aqua_beam', 'w_b_aqua_beam', 'w_a_harpoon', 'w_b_harpoon', 'w_a_aqua_charge', 'w_b_aqua_charge', 'w_a_aqua_missile', 'w_b_aqua_missile', 'w_b_heat_axe']) {
+// （テスターの作品から取り込んだ武器は samples/w-index.json：tools/sharewpn.ts が足す）
+const W_TAKEN = await fetch('./samples/w-index.json').then(r => (r.ok ? r.json() : []), () => []).catch(() => []);
+for (const file of ['w_a_machine_gun', 'w_b_machine_gun', 'w_a_beam_rifle', 'w_a_beam_rifle_f1', 'w_b_beam_rifle', 'w_a_beam_shotgun', 'w_b_beam_shotgun', 'w_a_charge_rifle', 'w_b_charge_rifle', 'w_a_bazooka', 'w_b_bazooka', 'w_a_sniper_rifle', 'w_b_sniper_rifle', 'w_a_charge_sniper', 'w_b_charge_sniper', 'w_a_beam_sniper', 'w_b_beam_sniper', 'w_a_repair_torch', 'w_b_repair_torch', 'w_a_knife', 'w_b_knife', 'w_a_saber', 'w_b_saber', 'w_a_aqua_beam', 'w_b_aqua_beam', 'w_a_harpoon', 'w_b_harpoon', 'w_a_aqua_charge', 'w_b_aqua_charge', 'w_a_aqua_missile', 'w_b_aqua_missile', 'w_b_heat_axe', ...W_TAKEN]) {
   try {
     const w = await (await fetch(`./samples/${file}.json`)).json();
-    registerUser({ ...freeDef(`w·${file.slice(2)}`, w.name, w.parts, { tab: 'weapon', from: 'sample' }), cat: WEAPON_CAT, user: false, hand: w.hand_r, shape: w.shape, faction: w.faction });
+    // テスターの作品から取り込んだ武器（tools/sharewpn.ts）：作品の武器の自分のパーツ（形態・点のまま）を src に持つ
+    if (w.src?.pieces) registerUser({ ...w.src, id: `w·${file.slice(2)}`, name: w.name, cat: WEAPON_CAT, user: false, free: true, half: 'free', tab: 'weapon', hand: w.hand_r, shape: w.shape, faction: w.faction });
+    else registerUser({ ...freeDef(`w·${file.slice(2)}`, w.name, w.parts, { tab: 'weapon', from: 'sample' }), cat: WEAPON_CAT, user: false, hand: w.hand_r, shape: w.shape, faction: w.faction });
   } catch (e) { console.warn('weapon', file, e); }
 }
 // 置き場（IndexedDB）を開く。前の置き場（localStorage）に残っていた機体・パーツは、ここで移る
@@ -2686,7 +2726,7 @@ save();
 showUnitName();
 requestAnimationFrame(tick);
 // 確かめるための出口（画面の外から、置いた部品と視点を見る）
-window.__asm = { exportWeaponGlb, ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, selectOne, picked: () => picked, pivot, groupPicked, ungroupPicked, userParts, byId };
+window.__asm = { exportWeaponGlb, weaponDoc, ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, selectOne, picked: () => picked, pivot, groupPicked, ungroupPicked, userParts, byId };
 // ?unit=<機体ファイル（この画面からの相対パス）>：開いたときにその機体を読み込む（試作を見せる用。&save=<名前> を付けると「つづきから」の保存を別の場所にする）
 {
   const u = new URLSearchParams(location.search).get('unit');
