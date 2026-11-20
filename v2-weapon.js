@@ -147,6 +147,8 @@ export function makeWeaponBench(ctx) {
       + `<div class="row" style="gap:4px"><label style="flex:none">陣営</label><select id="wSide"><option value="a" ${sideOf(def) === 'a' ? 'selected' : ''}>連合</option><option value="b" ${sideOf(def) === 'b' ? 'selected' : ''}>GIO</option></select></div>`
       + `<div class="hint">点（形態 ${n}${ctx.form() > 2 ? '。形態 3 からは形態 2 の点' : ''}）：</div>` + KEYS.map(row).join('')
       + `<div class="hint">長さ：握りから先まで ${len ? len.toFixed(2) + ' m' : '—'}${want ? `（今のゲームの形 ${want.toFixed(2)} m）` : ''}${warn ? ` <b style="color:var(--warn)">長さが今の形と大きく違います。${sh.kind === 'melee' ? '格闘の当たりの届きは今のままです' : '射程・当たりは今のままです'}</b>` : ''}</div>`
+      // （ビームサーベル：柄の先の光るブロックが、ゲームの刃になる。client/src/models.ts ownBeam、issue 1053）
+      + (cur === 'saber' ? '<div class="hint">ビームサーベル：柄の先に光るブロック（パーツエディタで色の役を「発光」に、または「発光する」）を置くと、ゲームではその形と色が刃になる（振る間だけ出て、柄の口から伸びる）。置かなければ、今までどおり陣営の色の光の刃</div>' : '')
       + (upside ? '<div class="hint"><b style="color:var(--warn)">銃口が握りより上にあります。腕を下ろした姿勢では、銃口を下へ向けて作ります（このままでは、ゲームで後ろ向きに構えます）</b></div>' : '')
       + `<div class="hint">形態 2 は変形する武器（モードで形が変わる武器）：右の「形態」で形態を足し、パーツエディタでブロックの形態 2 の位置・向き・出す／出さないを決める。形態 2 を見ている間に置いた点は形態 2 の点。書き出しは右の「持っている武器だけを書き出す」</div>`;
     el.querySelector('#wOnly').onchange = e => { only = e.target.checked; ctx.rebuild(); if (only) frame(); };
