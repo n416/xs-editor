@@ -809,6 +809,66 @@ function ungroupPicked() {
   for (const i of picked) delete items[i].grp;
   rebuild(); save(); note('グループを解きました（今は選んだままなので、このまま動かすとまとめて動く）');
 }
+// ---- 骨ごとに選ぶ（issue #1008、テスター アズキトギさん 2026-11-20「特定の骨に紐付けされたパーツ全てをまとめて移動」）：
+// 選んでいるパーツの骨に付いたパーツを全部選ぶ。選んだ後は、今のまとめて動かすつまみがそのまま効く。
+// パーツの骨は、その形が入っている骨の入れ物（カタログの部品は「付ける骨」の欄と同じ。自由な部品（機体エディタの形式）は、形ごとに骨の入れ物へ分かれるので、
+// 形の入っている骨の全部）。2 つ以上の骨にまたがるパーツは、どの骨でも選ばれ、動かすとまるごと動く（パーツの位置は 1 つなので）。
+// 選んでいるパーツが 2 つ以上の骨にまたがる時は、どの骨かを欄で選ぶ（既定は形の一番多い骨）。
+// 左右のある骨（上腕・前腕・太もも・すね・足など）は、既定は同じ側だけ。「左右の両側」に印を付けると反対側の同じ骨も。隠しているパーツ（パージ後・撃ち切り後を見る）は選ばない
+const BONE_WORD = { hips: '腰', torso: '胴', head: '頭', arm: '上腕', elbow: 'ひじ', fore: '前腕', leg: '太もも', knee: 'ひざ', shin: 'すね', foot: '足', shield: '盾' };
+/** 骨の入れ物 h の名前（'arm_l' など。頭の 2 つの入れ物は 'head' に揃える。盾の入れ物は左の前腕と同じ物なので、盾の印のパーツだけ 'shield'） */
+function holderName(h, it) {
+  if (it.bone === 'shield' && h === itemsIn.shield) return 'shield';
+  const k = Object.keys(itemsIn).find(n => n !== 'shield' && itemsIn[n] === h) ?? 'hips';
+  return k === 'headw' ? 'head' : k;
+}
+/** 置いたパーツ i の形が入っている骨と、その形の数（Map。形の多い順）。組み上がっていなければ空 */
+function bonesOf(i) {
+  const it = items[i], g = groups[i], m = new Map();
+  if (!it || !g?.parent) return m;
+  for (const t of [g, ...g.userData.extra.values()]) {
+    if (!t.parent) continue;
+    let n = 0; t.traverse(o => { if (o.isMesh && o.userData.pc) n++; });
+    if (n) { const k = holderName(t.parent, it); m.set(k, (m.get(k) ?? 0) + n); }
+  }
+  if (!m.size) m.set(holderName(g.parent, it), 0);   // （形の無いパーツは、位置の乗る骨）
+  return new Map([...m].sort((x, y) => y[1] - x[1]));
+}
+const boneBase = k => k.replace(/_[lr]$/, '');
+const boneLabel = (k, both) => `${BONE_WORD[boneBase(k)] ?? boneBase(k)}${boneBase(k) !== k && !both ? (k.endsWith('_l') ? '・左' : '・右') : ''}`;
+/** 選んでいるパーツの、選ぶ骨（欄で選んだ物。無ければ形の一番多い骨） */
+function boneToPick() {
+  const bs = selected >= 0 ? [...bonesOf(selected).keys()] : [], v = $('#fPickBone').value;
+  return bs.includes(v) ? v : bs[0] ?? null;
+}
+/** 骨 k に付いたパーツの番号の並び（both：左右の両側） */
+function onBone(k, both) {
+  if (!k) return [];
+  const hit = both && boneBase(k) !== k ? o => boneBase(o) === boneBase(k) : o => o === k;
+  return items.flatMap((_, j) => (groups[j]?.visible !== false && [...bonesOf(j).keys()].some(hit) ? [j] : []));
+}
+function pickBone() {
+  if (PE.active() || selected < 0) return;
+  const k = boneToPick(), sided = !!k && boneBase(k) !== k, both = sided && $('#fBoneBoth').checked, list = onBone(k, both);
+  if (!list.length) return;
+  picked = list; if (!picked.includes(selected)) selected = picked[0];
+  attachGizmo(); renderList(); fillFields(); flash(picked);
+  const wide = list.filter(j => bonesOf(j).size > 1).length;
+  note(`「${boneLabel(k, both)}」に付いたパーツ ${list.length} 個を選びました。つまみ（移動・回転・拡大）でまとめて動く${wide ? `（そのうち ${wide} 個はほかの骨にもまたがるので、まるごと動く）` : ''}`);
+}
+/** 「この骨の部品を全部選ぶ」の欄を、選んでいるパーツに合わせる */
+function showBoneBar() {
+  const bs = selected >= 0 ? [...bonesOf(selected).keys()] : [];
+  $('#boneBar').hidden = !bs.length;
+  if (!bs.length) return;
+  const sel = $('#fPickBone'), keep = sel.dataset.of === String(selected) ? sel.value : '';   // （ほかのパーツを選んだら、形の一番多い骨から）
+  sel.dataset.of = String(selected);
+  sel.innerHTML = bs.map(b => `<option value="${b}">${boneLabel(b, false)}</option>`).join('');
+  sel.value = bs.includes(keep) ? keep : bs[0]; sel.hidden = bs.length < 2;
+  const k = sel.value, sided = boneBase(k) !== k, both = sided && $('#fBoneBoth').checked;
+  $('#bPickBone').textContent = `「${boneLabel(k, both)}」の部品を全部選ぶ（${onBone(k, both).length} 個）`;
+  $('#fBoneBothL').hidden = !sided;
+}
 /** 写した並びのグループを、元と別の新しいグループにする（写したものどうしは同じグループのまま） */
 function regroup(list) {
   const map = new Map(), used = new Set(items.map(it => it.grp).filter(Boolean));
@@ -860,6 +920,7 @@ function renderList() {
   $('#multiInfo').hidden = !many;
   if (many) $('#multiInfo').textContent = `${picked.length} 個を選んでいます${oneGroup ? `（${items[picked[0]].grp.replace(/^g/, 'グループ ')}）` : ''}。つまみ（移動・回転・拡大）でまとめて動く`;
   $('#bGroup').hidden = !many || oneGroup; $('#bUngroup').hidden = !grouped;
+  showBoneBar();   // 骨ごとに選ぶ（issue #1008）
   renderJetShield();
 }
 const FIELDS = { mx: ['mov', 0], my: ['mov', 1], mz: ['mov', 2], rx: ['rot', 0], ry: ['rot', 1], rz: ['rot', 2], sx: ['scal', 0], sy: ['scal', 1], sz: ['scal', 2] };
@@ -904,6 +965,9 @@ $('#fRoman').onchange = () => {
 };
 $('#bGroup').onclick = groupPicked;
 $('#bUngroup').onclick = ungroupPicked;
+$('#bPickBone').onclick = pickBone;
+$('#fBoneBoth').onchange = showBoneBar;
+$('#fPickBone').onchange = showBoneBar;
 
 function addItems(list) { items.push(...list); selected = items.length - 1; rebuild(); save(); if (!PE.active() && !addOnly) flash(list.map((_, k) => items.length - list.length + k)); }
 function removeSelected() {
@@ -2606,7 +2670,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '2a7215c';
+const BUILD = 'd9f499e';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
