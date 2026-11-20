@@ -12,10 +12,12 @@
 //   onChange()       点が変わった（ドラッグ中も）
 //   onCommit()       操作が終わった（元に戻すの 1 区切り）
 //   onGrid(snap, major)  グリッドの刻みが変わった（表示用）
+//   onSelect(i)      選んだ点が変わった（点を押した・消した。-1 は選んでいない）。数値の欄の行を光らせる（issue 1011）
 // }
+// 返す物：draw()・fit()・dispose()・select(i)（数値の欄から点を選ぶ）・selected()
 export function profileEditor(canvas, o) {
   const ctx = canvas.getContext('2d');
-  let size = 0, drag = -1, hover = -1, pan = null, view = { cx: 0, cy: 0, span: 1 }, moved = false;
+  let size = 0, drag = -1, hover = -1, sel = -1, pan = null, view = { cx: 0, cy: 0, span: 1 }, moved = false;
   const up = o.flipY ? -1 : 1;
   const niceStep = x => { const k = Math.pow(10, Math.floor(Math.log10(x))); return [1, 2, 5, 10].map(m => m * k).find(v => v >= x * 0.999); };
   const grid = () => { const major = niceStep(view.span / 5); return { major, minor: major / 5, snap: major / 10 }; };
@@ -78,8 +80,9 @@ export function profileEditor(canvas, o) {
     if (o.closed) ctx.closePath();
     ctx.stroke(); ctx.setLineDash([]);
     pts.forEach((q, i) => {
-      const [cx, cy] = toCanvas(q), hot = i === drag || i === hover;
-      ctx.beginPath(); ctx.arc(cx, cy, hot ? 6 : 4.5, 0, Math.PI * 2); ctx.fillStyle = hot ? '#ffffff' : '#dfe5ee'; ctx.fill(); ctx.strokeStyle = '#15181d'; ctx.lineWidth = 1.5; ctx.stroke();
+      const [cx, cy] = toCanvas(q), hot = i === drag || i === hover, on = i === sel;
+      ctx.beginPath(); ctx.arc(cx, cy, hot || on ? 6 : 4.5, 0, Math.PI * 2); ctx.fillStyle = on ? '#6fb3ff' : hot ? '#ffffff' : '#dfe5ee'; ctx.fill(); ctx.strokeStyle = '#15181d'; ctx.lineWidth = 1.5; ctx.stroke();
+      if (on) { ctx.fillStyle = '#9fcbff'; ctx.fillText(String(i + 1), cx + 8, cy - 8); }   // 数値の欄の番号
     });
   }
   const resize = () => { const s = canvas.clientWidth; if (!s) return; size = s; canvas.width = canvas.height = Math.round(s * devicePixelRatio); ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); draw(); };
@@ -89,7 +92,7 @@ export function profileEditor(canvas, o) {
     const m = local(e);
     let i = hitPoint(m);
     if (i < 0) { const ed = hitEdge(m); if (ed) { i = Math.max(0, ed.index + 1); o.pts().splice(i, 0, snapPt(toWorld(m))); moved = true; } }
-    if (i >= 0) { drag = i; canvas.setPointerCapture(e.pointerId); o.onChange(); draw(); }
+    if (i >= 0) { drag = i; setSel(i); canvas.setPointerCapture(e.pointerId); o.onChange(); draw(); }
     else { pan = { m, cx: view.cx, cy: view.cy }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; }
   };
   canvas.onpointermove = e => {
@@ -112,8 +115,9 @@ export function profileEditor(canvas, o) {
   };
   canvas.ondblclick = e => {
     const i = hitPoint(local(e)), min = o.closed ? 3 : 1;
-    if (i >= 0 && o.pts().length > min) { o.pts().splice(i, 1); hover = -1; o.onChange(); draw(); o.onCommit(); }
+    if (i >= 0 && o.pts().length > min) { o.pts().splice(i, 1); hover = -1; setSel(-1); o.onChange(); draw(); o.onCommit(); }
   };
+  function setSel(i) { if (i === sel) return; sel = i; o.onSelect?.(i); }
   fit(); resize();
-  return { draw, fit: () => { fit(); draw(); }, dispose: () => ro.disconnect() };
+  return { draw, fit: () => { fit(); draw(); }, dispose: () => ro.disconnect(), select: i => { sel = i; draw(); }, selected: () => sel };
 }

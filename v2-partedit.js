@@ -174,6 +174,13 @@ button.on { border-color: var(--acc); background: #2b4a6f; }
 #peRight .pesec > span { display: flex; align-items: end; gap: 3px; }
 #peRight .pesec label.chk { flex-direction: row; align-items: center; gap: 2px; font-size: 11px; white-space: nowrap; }
 #peRight .pesec button { padding: 0 6px; }
+#pePts { display: flex; flex-direction: column; gap: 1px; max-height: 30vh; overflow: auto; margin: 4px 0; }
+#pePts .ptrow { display: grid; grid-template-columns: 22px 1fr 1fr repeat(4, 22px); gap: 2px; align-items: center; padding: 1px 2px; border-radius: 3px; }
+#pePts .ptrow.on { background: #2b4a6f; }
+#pePts .ptrow.head { color: var(--dim); font-size: 11px; }
+#pePts .ptrow > span:first-child { color: var(--dim); text-align: right; padding-right: 2px; }
+#pePts .ptrow input[type=number] { width: 100%; min-width: 0; }
+#pePts .ptrow button { padding: 0; font-size: 11px; height: 20px; }
 #peRight .sl { display: grid; grid-template-columns: 78px 1fr 62px; gap: 6px; align-items: center; margin: 2px 0; }
 #peRight .sl label { color: var(--dim); }
 #peRight .sl input[type=number] { width: 62px; }
@@ -805,6 +812,8 @@ export function initPartEdit(ctx) {
         <div class="hint">${face === 'front' ? '正面から見た形を押し出す。「側面」「上面」も描くと、3 つの形が重なる所だけが残る' : face === 'side' ? `横から見た形（右が前、上が上）。${pc.side ? '' : '点を動かすと使い始める。'}点線はブロックの範囲` : `上から見た形（下が前）。${pc.top ? '' : '点を動かすと使い始める。'}点線はブロックの範囲`}</div>` : ''}
         <canvas id="peProfile"></canvas>
         <div class="hint">点をドラッグ ・ 辺を押して点を足す ・ 点をダブルクリックで消す ・ 何もない所をドラッグで動かす ・ ホイールで拡大縮小</div>
+        <div id="pePts"></div>
+        <div class="hint">点の数値（単位：1 cm = 0.01。ブロックの位置・大きさと同じ）。番号は図の点の順。＋：次の点との間に点を足す ・ ↑↓：並べ替える ・ ×：消す${ex ? '' : '。半径は 0 以上（両端は回転軸へつながる）'}</div>
         <div class="pebar"><label class="chk" style="flex:1"><input type="checkbox" id="peSnap" ${st.snap ? 'checked' : ''}><span id="peSnapLabel">グリッドに合わせる</span></label>${ex && face !== 'front' && pc[face] ? '<button id="peFaceClear">この向きの形を消す</button>' : ''}<button id="peFit">全体を見る</button></div>`);
       if (ex) html.push('<h2>押し出し</h2>', slider('厚み', 'depth', 0.002, +(Math.max(P * 4, val(pc, 'depth') * 2)).toFixed(3), st3), slider('テーパー', 'taper', 0.2, 1.6, 0.01),
         '<h2>厚みの方向の面取り</h2>', slider('面取り幅', 'bevel', 0, +(P * 0.4).toFixed(4), st3), slider('段数', 'bevelSegs', 1, 8, 1));
@@ -898,10 +907,64 @@ export function initPartEdit(ctx) {
       outline: () => (ex ? roundCorners(pts(), val(pc, 'corner'), val(pc, 'cornerSegs'), true) : latheLoop(pc)),
       box: face === 'front' ? null : faceBox,
       marks: face === 'side' ? [['前 →', 'tr'], ['← 後', 'tl']] : face === 'top' ? [['↓ 前', 'bl'], ['↑ 後', 'tl']] : [],
-      onChange: () => { if (!pc[key] && draft) { pc[key] = draft; created = true; } live(); },
+      onChange: () => { use(); live(); syncPts(); },
       onCommit: () => { commit(); if (created) renderRight(); },
       onGrid: (snap, major) => { const el = $('#peSnapLabel'); if (el) el.textContent = `グリッドに合わせる（${snap}）・太線の間隔 ${major}`; },
+      onSelect: i => { for (const r of box.querySelectorAll('[data-pi]')) r.classList.toggle('on', +r.dataset.pi === i); box.querySelector(`[data-pi="${i}"]`)?.scrollIntoView({ block: 'nearest' }); },
     });
+    // ---- 点の数値の欄（issue 1011）：1 行に 1 点。打っている間は形だけ作り直し、打ち終えたら元に戻すの 1 区切り ----
+    function use() { if (!pc[key] && draft) { pc[key] = draft; created = true; } }
+    const box = $('#pePts'), minPts = ex ? 3 : 1;
+    const P = Math.max(...pts().flat().map(Math.abs), 0.01), pstep = P > 0.5 ? 0.01 : 0.001;
+    const axes = !ex ? ['半径', '高さ'] : face === 'side' ? ['x 前後', 'y 上下'] : face === 'top' ? ['x 左右', 'y 前後'] : ['x 左右', 'y 上下'];
+    const v5 = v => String(r5(v));
+    function renderPts() {
+      const sel = prof.selected(), b = (k, i, t, title) => `<button data-${k}="${i}" title="${title}">${t}</button>`;
+      box.innerHTML = `<div class="ptrow head"><span>#</span><span>${axes[0]}</span><span>${axes[1]}</span></div>` + pts().map((q, i) => `<div class="ptrow${i === sel ? ' on' : ''}" data-pi="${i}"><span>${i + 1}</span>`
+        + `<input type="number" step="${pstep}" data-pa="0" value="${v5(q[0])}"${ex ? '' : ' min="0"'}><input type="number" step="${pstep}" data-pa="1" value="${v5(q[1])}">`
+        + b('padd', i, '＋', 'この点の後ろに点を足す（次の点との真ん中）') + b('pup', i, '↑', '1 つ前と入れ替える') + b('pdown', i, '↓', '1 つ後と入れ替える') + b('pdel', i, '×', 'この点を消す') + '</div>').join('');
+    }
+    // 図で点を動かした・足した・消した：行の数が変われば作り直し、同じなら打っている欄のほかの値だけ書き換える
+    function syncPts() {
+      const rows = box.querySelectorAll('[data-pi]');
+      if (rows.length !== pts().length) { renderPts(); return; }
+      rows.forEach((r, i) => r.querySelectorAll('[data-pa]').forEach(el => { if (el !== document.activeElement) el.value = v5(pts()[i][+el.dataset.pa]); }));
+    }
+    const rowOf = el => +el.closest('[data-pi]').dataset.pi;
+    const setPt = el => {
+      const v = parseFloat(el.value); if (!Number.isFinite(v)) return false;
+      use();
+      const i = rowOf(el), a = +el.dataset.pa, q = pts()[i].slice();
+      q[a] = r5(a === 0 && !ex ? Math.max(0, v) : v);
+      pts()[i] = q;
+      return true;
+    };
+    box.oninput = e => { if (e.target.dataset.pa !== undefined && setPt(e.target)) { live(); prof.draw(); } };
+    box.onchange = e => {
+      if (e.target.dataset.pa === undefined) return;
+      setPt(e.target); e.target.value = v5(pts()[rowOf(e.target)][+e.target.dataset.pa]);
+      live(); prof.draw(); commit(); if (created) renderRight();
+    };
+    box.addEventListener('focusin', e => { const r = e.target.closest('[data-pi]'); if (!r) return; prof.select(+r.dataset.pi); for (const o of box.querySelectorAll('[data-pi]')) o.classList.toggle('on', o === r); });   // （onfocusin のプロパティは Chrome に無い）
+    box.onclick = e => {
+      const el = e.target.closest('button'); if (!el) return;
+      const i = rowOf(el), list = () => pts();
+      let to = i;
+      if (el.dataset.padd !== undefined) {
+        const a = list()[i], n = list().length, b = ex ? list()[(i + 1) % n] : list()[i + 1] ?? [0, a[1]];
+        use(); list().splice(i + 1, 0, [r5((a[0] + b[0]) / 2), r5((a[1] + b[1]) / 2)]); to = i + 1;
+      } else if (el.dataset.pup !== undefined || el.dataset.pdown !== undefined) {
+        const j = el.dataset.pup !== undefined ? i - 1 : i + 1;
+        if (j < 0 || j >= list().length) return;
+        use(); const L = list(); [L[i], L[j]] = [L[j], L[i]]; to = j;
+      } else if (el.dataset.pdel !== undefined) {
+        if (list().length <= minPts) { ctx.note(`${ex ? '押し出しの断面は 3 点' : '回転体の断面は 1 点'}より少なくできません`, true); return; }
+        use(); list().splice(i, 1); to = Math.min(i, list().length - 1);
+      } else return;
+      prof.select(to); live(); prof.draw(); commit();
+      if (created) renderRight(); else renderPts();
+    };
+    renderPts();
     $('#peSnap').onchange = e => { st.snap = e.target.checked; };
     $('#peFit').onclick = () => prof.fit();
     if ($('#peFaceClear')) $('#peFaceClear').onclick = () => { pc[key] = null; changed(false); };
