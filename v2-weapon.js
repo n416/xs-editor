@@ -14,7 +14,9 @@ const U = 6;   // 1 の長さ（m）：xsengine.js UNIT_M
 const KEYS = [['hand', '握り', 0xe0412f], ['muzzle', '銃口', 0xe8b400], ['base', '刃の根元', 0x2fa8e0], ['tip', '刃の先', 0x7a5cff]];
 const LEN_WARN = 0.15;   // [独自] 今のゲームの形の長さと、これより違えば知らせる（格闘の当たりの届きは変わらないため）
 let SHAPES = null;
-const shapesP = fetch('./samples/weapon-shapes.json').then(r => r.json()).then(j => (SHAPES = j.shapes)).catch(() => (SHAPES = []));
+// 「元の武器」の候補：ゲームの武器の名前を全部、形ごとに（j.weapons、tools/weaponshapes.ts。ゲームの設定の武器のスキンと同じ一覧、issue 1045）
+let CHOICES = null;
+const shapesP = fetch('./samples/weapon-shapes.json').then(r => r.json()).then(j => { CHOICES = j.weapons ?? null; return (SHAPES = j.shapes); }).catch(() => (SHAPES = []));
 
 /**
  * ctx：{ gizmo, orbit, camera, items(), groups(), byId, form()（今の形態）, own(i)（i 番目の置いたパーツの武器を自分のパーツにして def を返す）,
@@ -124,7 +126,10 @@ export function makeWeaponBench(ctx) {
     const def = defNow(), n = formN();
     if (!def) { el.innerHTML = '<b>武器を作る</b><div class="hint">下の一覧から武器を押して持たせるか、「新しい武器を作る」で作ると、ここで点を置ける</div>'; return; }
     const sh = shapeOf(def), sd = sh && (sh[sideOf(def)] ?? sh.a ?? sh.b), len = lengthOf(def), want = sd ? -sd.min[2] : null;
-    const opts = (SHAPES ?? []).map(s => `<option value="${s.shape}" ${s.shape === (def.wbase ?? def.shape) ? 'selected' : ''}>${s.name}（${s.count}）</option>`).join('');
+    // (形ごとの組に、その形の武器の名前を全部。値は形の名前（def.wbase）、選んだ名前は def.wbaseName（見せるだけ。無ければ組の最初）)
+    const cur = def.wbase ?? def.shape, groups = CHOICES ?? (SHAPES ?? []).map(s => ({ held: s.shape, names: [s.name] }));
+    const curName = groups.find(g => g.held === cur)?.names.includes(def.wbaseName) ? def.wbaseName : groups.find(g => g.held === cur)?.names[0];
+    const opts = groups.map(g => `<optgroup label="${g.held}">${g.names.map(n => `<option value="${g.held}" data-name="${n}" ${g.held === cur && n === curName ? 'selected' : ''}>${n}</option>`).join('')}</optgroup>`).join('');
     const warn = len && want && Math.abs(len - want) > want * LEN_WARN;
     // 向き：腕を下ろした姿勢で、銃口（無ければ刃の先）は握りより下（−y）。上にあると、ゲームでは後ろ向きに構える
     const mz = pointOf(def, 1, 'muzzle') ?? autoMuzzle() ?? pointOf(def, 1, 'tip'), upside = mz && def.hand && mz[1] > def.hand[1];
@@ -146,7 +151,7 @@ export function makeWeaponBench(ctx) {
       + `<div class="hint">形態 2 は変形する武器（モードで形が変わる武器）：右の「形態」で形態を足し、パーツエディタでブロックの形態 2 の位置・向き・出す／出さないを決める。形態 2 を見ている間に置いた点は形態 2 の点。書き出しは右の「持っている武器だけを書き出す」</div>`;
     el.querySelector('#wOnly').onchange = e => { only = e.target.checked; ctx.rebuild(); if (only) frame(); };
     el.querySelector('#wShow').onchange = e => { show = e.target.checked; if (!show) dragKey = null; draw(); };
-    el.querySelector('#wBase').onchange = e => { const d = ctx.own(wIndex()); if (!d) return; d.wbase = e.target.value || undefined; ctx.persist(); ctx.save(); draw(); render(); };
+    el.querySelector('#wBase').onchange = e => { const d = ctx.own(wIndex()); if (!d) return; d.wbase = e.target.value || undefined; d.wbaseName = e.target.selectedOptions[0]?.dataset.name || undefined; ctx.persist(); ctx.save(); draw(); render(); };
     el.querySelector('#wSide').onchange = e => { const d = ctx.own(wIndex()); if (!d) return; d.faction = e.target.value; ctx.persist(); ctx.save(); draw(); render(); };
     for (const b of el.querySelectorAll('[data-wgrab]')) b.onclick = () => grab(b.dataset.wgrab);
     for (const b of el.querySelectorAll('[data-wdrop]')) b.onclick = () => { const d = ctx.own(wIndex()); if (!d) return; delete d.wpts?.[formN()]?.[b.dataset.wdrop]; tidy(d); dragKey = null; ctx.persist(); ctx.save(); ctx.rebuild(); };
