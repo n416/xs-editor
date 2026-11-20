@@ -27,7 +27,7 @@ import { initShare } from './v2-share.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
 import { makeWeaponBench } from './v2-weapon.js';
-import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, formDelayOf, formSpanOf, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
+import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, formDelayOf, formSpanOf, hasPurge, purgedDoc, FORM_WHEN, formWhenOf, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
@@ -633,15 +633,23 @@ let showPurged = false;
 let showRoman = false;
 function applyPurgeView() {
   const hide = it => !PE.active() && ((showPurged && it?.purge) || (showRoman && it?.roman?.m === 'd'));
-  groups.forEach((g, i) => { const v = !hide(items[i]); g.visible = v; for (const e of g.userData.extra.values()) e.visible = v; });
+  // （パーツエディタで「パージで外れる」を付けたブロック pc.purge も隠す。ポッチャさん 2026-11-20「パーツエディタの方でも、パージする設定ほしい」）
+  const off = showPurged && !PE.active();
+  groups.forEach((g, i) => {
+    const v = !hide(items[i]); g.visible = v;
+    for (const e of g.userData.extra.values()) e.visible = v;
+    for (const r of [g, ...g.userData.extra.values()]) r.traverse(o => { if (o.isMesh && o.userData.pc?.purge) o.visible = !off; });
+  });
 }
+/** パージで外れる物の数：置いたパーツ（item.purge）と、それ以外のパーツの中のブロック（pc.purge） */
+const purgeCount = () => { const ks = kept(); return { items: ks.filter(it => it.purge).length, blocks: ks.filter(it => !it.purge).reduce((n, it) => n + (byId[it.part]?.pieces ?? []).filter(pc => pc.purge).length, 0) }; };
 $('#bRoman').onclick = () => {
   showRoman = !showRoman; $('#bRoman').classList.toggle('on', showRoman); applyPurgeView();
   if (showRoman) { const ms = kept().filter(it => it.roman), d = ms.filter(it => it.roman.m === 'd').length; note(ms.length ? `武器を撃ち切った後の姿（外れる部品 ${d} 個を隠し、出る部品 ${ms.length - d} 個を出しています。どのスロットも撃ち切った姿）。もう一度押すと戻る` : '「ロマン砲変形」の印を付けた部品がありません（部品を選んで、右の欄の「ロマン砲変形」で付ける）', !ms.length); }
 };
 $('#bPurged').onclick = () => {
   showPurged = !showPurged; $('#bPurged').classList.toggle('on', showPurged); applyPurgeView();
-  if (showPurged) { const n = kept().filter(it => it.purge).length; note(n ? `パージで外れた後の姿（外れる部品 ${n} 個を隠しています）。もう一度押すと戻る` : '「パージで外れる」の印を付けた部品がありません（部品を選んで、右の欄のチェックで付ける）', !n); }
+  if (showPurged) { const c = purgeCount(), n = c.items + c.blocks; note(n ? `パージで外れた後の姿（外れる部品 ${c.items} 個${c.blocks ? `・パーツの中のブロック ${c.blocks} 個` : ''}を隠しています）。もう一度押すと戻る` : '「パージで外れる」の印を付けた部品がありません（部品を選んで、右の欄のチェックで付ける。パーツの中のブロックだけなら、パーツエディタの「ゲーム用」で）', !n); }
 };
 function rebuildMain() {
   applyKind();
@@ -696,7 +704,7 @@ function tick(now) {
   if (meshDirty) { meshDirty = false; rebuild(); }
   if (playing) moveFrame(now);
   flashTick(now);
-  if (formAnim) { showFormNow(); if (now - formAnim.t0 >= formSpanOf(items)) { formAnim = null; showFormNow(); } }
+  if (formAnim) { showFormNow(); if (now - formAnim.t0 >= formSpanOf(items, it => byId[it.part])) { formAnim = null; showFormNow(); } }
   shotTick(now);
   flameTick(now);
   resize(); orbit.update(); if (PE.active()) PE.tick(); renderer.render(scene, camera); requestAnimationFrame(tick);
@@ -1437,7 +1445,23 @@ function renderForms() {
     + (n < FORM_MAX ? '<button class="small" id="bFormAdd" title="形態を 1 つ足す（パーツエディタでブロックを選び、右の「形態」で、この形態での見た目を決める）">＋ 形態を足す</button>' : '');
   for (const b of bar.querySelectorAll('[data-form]')) b.onclick = () => switchForm(+b.dataset.form);
   if ($('#bFormAdd')) $('#bFormAdd').onclick = addForm;
+  fillFormWhen(n);
   fillItemForm();
+}
+// ゲームで形態 2 になる時（ポッチャさん 2026-11-20「形態変形状態をチャージ時、特殊システム発動、迫撃砲使用時などの条件が欲しい」、v2-forms.js FORM_WHEN）：
+// 形態が 2 つからの時に出す。選んだどれか 1 つでも当てはまる間、ゲームの自分のスキンが形態 2 になる。adj.formWhen に持つ
+function fillFormWhen(n) {
+  const box = $('#formWhen'); if (!box) return;
+  if (n < 2) { box.innerHTML = ''; return; }
+  const on = new Set(formWhenOf(adj));
+  box.innerHTML = '<div class="hint" style="margin-top:6px"><b>ゲームで形態 2 になる時</b>（自分のスキンで。選んだどれか 1 つでも当てはまる間。何も選ばなければ、ゲームでは形態 1 のまま）</div>'
+    + Object.entries(FORM_WHEN).map(([k, v]) => `<label class="chk"><input type="checkbox" data-fwhen="${k}" ${on.has(k) ? 'checked' : ''}>${v}</label>`).join('');
+  for (const el of box.querySelectorAll('[data-fwhen]')) el.onchange = () => {
+    const now = Object.keys(FORM_WHEN).filter(k => box.querySelector(`[data-fwhen="${k}"]`).checked);
+    if (now.length === 1 && now[0] === 'sys') delete adj.formWhen; else adj.formWhen = now;   // （今までどおりの ['sys'] は書かない）
+    save();
+    note(now.length ? `ゲームで形態 2 になる時：${now.map(k => FORM_WHEN[k]).join('・')}。次に「ゲーム用に書き出す」・みんなの機体からスキンにすると入る` : 'ゲームでは形態 2 にならない（形態 1 のまま）');
+  };
 }
 // ---- 置いたパーツ単体の形態（issue #810、テスター ポッチャさん「右枠のパーツ単体でも形態のエディットさせてほしい」）：
 // 右の「置いたパーツ」で選んだパーツ（最後に選んだ 1 つ）の、今の形態でのパーツ全体の見た目（出す・消す、ずらす、回す）。item.forms（v2-forms.js itemFormDelta）
@@ -1905,13 +1929,14 @@ async function exportGame0(id, onStep, opt = {}) {
   const X = await editorWorker();
   const w = await (await fetch(`./samples/weapons-${id[0] === 'b' ? 'b' : 'a'}.json`)).json();
   const own = kept().some(it => byId[it.part]?.free && byId[it.part].pieces.some(pc => !pc.blockout && isHeldPart(pc)));   // 自由な機体が自分の武器を持っている
-  const held = own || clawHands() ? [] : w.parts, purges = kept().some(it => it.purge);
+  const held = own || clawHands() ? [] : w.parts, purges = hasPurge(unitDoc());   // （置いたパーツの item.purge と、パーツエディタのブロックの pc.purge）
   // パージで外れる部品・ロマン砲変形の部品（撃ち切ると外れる・出る）があれば、先にそれを除いた体の骨・床を測る
   // （外れる・出る部品は床・関節を決めない：xsengine.js buildGameModel の opt.body。アルトゴッジョの前腕のハンドミサイルユニットは足より下まで垂れる）
   let body = null;
   if (purges || kept().some(it => it.roman)) {
     X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
-    await X.applyUnit(structuredClone({ ...unitDoc(), items: kept().filter(it => !it.purge && !it.roman) }), { weaponHand: w.hand_r });
+    const bare = purgedDoc(unitDoc());
+    await X.applyUnit({ ...bare, items: bare.items.filter(it => !it.roman) }, { weaponHand: w.hand_r });
     body = (await X.exportNow(id, true, { height: true })).frame;
   }
   X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
@@ -1922,14 +1947,14 @@ async function exportGame0(id, onStep, opt = {}) {
   let purged = null;
   if (purges) {
     X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
-    await X.applyUnit(structuredClone({ ...unitDoc(), items: kept().filter(it => !it.purge) }), { weaponHand: w.hand_r });
+    await X.applyUnit(purgedDoc(unitDoc()), { weaponHand: w.hand_r });
     purged = (await X.exportNow(id, true, { frame })).glb;
   }
   let form = null;
   if (opt.form > 1) {
     X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
     await X.applyUnit(bakeForm(unitDoc(), opt.form, blockBox, { shape: true }), { weaponHand: w.hand_r });
-    form = (await X.exportNow(id, true, { frame })).glb;
+    form = (await X.exportNow(id, true, { frame, formWhen: formWhenOf(adj) })).glb;   // （ゲームで形態 2 になる時：模型の xs 節の extras）
   }
   return { ...out, purged, form, floating: chk.floating, loose: chk.loose, depths: chk.depths, weapons: applied.weapons, own };
 }
@@ -1975,7 +2000,7 @@ $('#bGame').onclick = async () => {
       + `つながり ${r.floating.length ? `✗ 離れている部品 ${r.floating.length} 組` : '✓'} ／ 関節 ${r.loose.length ? `✗ ${r.loose.length} 個の動きで外れる・めり込む` : '✓'}<br>`
       + `三角形 ${r.report.tris.map((t, i) => `${t.toLocaleString()} ${ok(t, GAME_LIMIT[i])}`).join(' / ')}（近く・中・遠く）、描画 ${r.report.calls[0]} 回 ${ok(r.report.calls[0], 5)}、骨 ${r.report.bones.length} 本<br>`
       + `炎の出る噴射口 ${r.report.jets} 個（${r.report.ownJets ? '置いた噴射口' : '部品の噴射口'}）、盾 ${r.report.shield ? `あり（三角形 ${r.report.shield.tris.toLocaleString()}）` : 'なし（ゲームのいつもの盾）'}<br>`
-      + (r.purged ? `パージで外れた姿 ${id}_purged.glb も書き出しました（「パージで外れる」の部品 ${kept().filter(it => it.purge).length} 個を除いた姿。ゲームでパージできる機体で、外れた後の姿に使う）<br>` : '')
+      + (r.purged ? `パージで外れた姿 ${id}_purged.glb も書き出しました（「パージで外れる」の部品 ${purgeCount().items} 個${purgeCount().blocks ? `・ブロック ${purgeCount().blocks} 個` : ''}を除いた姿。ゲームでパージできる機体で、外れた後の姿に使う）<br>` : '')
       + (r.form ? `形態 2 の姿 ${id}_form2.glb も書き出しました（ゲームの自分のスキンで ${id}.glb と一緒に選ぶと、AXIS の間・飛行形態の間その姿になる）<br>` : '')
       + skinStepsHtml(id, { purged: !!r.purged, form: !!r.form, bad: r.floating.length > 0 || r.loose.length > 0 })
       + [...r.floating.slice(0, 4).map(f => '離れている：' + esc(f)), ...r.loose.slice(0, 4).map(esc)].map(t => `<span style="color:var(--warn)">${t}</span><br>`).join('')
@@ -2670,7 +2695,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '0cbb214';
+const BUILD = 'b088db5';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

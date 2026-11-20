@@ -14,8 +14,11 @@ export const FORM_MS = 700;
 export const FORM_DELAY_MAX = 3000;
 /** 置いたパーツ it の移る時の遅れ（ミリ秒） */
 export const formDelayOf = it => Math.max(0, Math.min(FORM_DELAY_MAX, Math.round(+it?.formDelay || 0)));
-/** 置いたパーツの並びの、切り替えにかかる時間（いちばん遅いパーツが移り終えるまで。ミリ秒） */
-export const formSpanOf = items => FORM_MS + Math.max(0, ...items.map(formDelayOf));
+// ブロックごとの「移る時の遅れ」（テスター ポッチャさん 2026-11-20 #色々なツールへの要望「パーツエディタのほうでも遅延が欲しい」）：
+//   pc.formDelay（ミリ秒、0〜FORM_DELAY_MAX）。パーツエディタでブロックに付ける。置いたパーツの遅れ（item.formDelay）の後に、さらにこの分だけ待つ。
+//   置いたパーツの遅れと同じく、エディタとみんなの機体の中の切り替えだけ（ゲームの形態 2 への移り方は模型ごと 1 つ：client/src/models.ts axisMorph）
+/** 置いたパーツの並びの、切り替えにかかる時間（いちばん遅いパーツ・ブロックが移り終えるまで。ミリ秒）。defOf(it)：置いたパーツのパーツ（ブロックの遅れを数える） */
+export const formSpanOf = (items, defOf = () => null) => FORM_MS + Math.max(0, ...items.map(it => formDelayOf(it) + Math.max(0, ...(defOf(it)?.pieces ?? []).map(formDelayOf))));
 const D = Math.PI / 180;
 
 /** ブロック pc の形態 n の見た目（形態 1 と同じなら null） */
@@ -86,10 +89,11 @@ export function keepBase(o) { o.userData.fb = { p: o.position.clone(), q: o.quat
  * 形態 1 のまま（from = to = 1）なら、覚えた置き方と塗りの材質に戻すだけ
  */
 export function showForms(roots, from, to, t, baseMat, opAt = null) {
-  const k = ease(Math.min(1, Math.max(0, t)));
   for (const root of roots) root.traverse(o => {
     if (!o.isMesh || !o.userData.pc) return;
     const fb = o.userData.fb ?? (keepBase(o), o.userData.fb), pc = o.userData.pc;
+    // （ブロックの遅れ pc.formDelay：その分だけ遅れて移る）
+    const k = ease(Math.min(1, Math.max(0, t - formDelayOf(pc) / FORM_MS)));
     // 形態ごとの塗りの透明度（issue #863、paint.js opacityAt）：opAt(o, n) は形態 n の不透明度（null＝不透明）。形態 1 と違う所だけ変える
     const live = !!opAt && !(from === 1 && to === 1), o1 = live ? opAt(o, 1) : null;
     const oa = live ? opAt(o, from) : null, ob = live ? opAt(o, to) : null, opDiff = live && (oa !== o1 || ob !== o1);
@@ -191,3 +195,36 @@ export function bakeForm(doc, n, boxOf, opt = {}) {
   }
   return out;
 }
+
+// パージで外れるブロック（テスター ポッチャさん 2026-11-20 #色々なツールへの要望「パーツエディタの方でも、パージする設定ほしい」）：
+//   pc.purge = true。パーツエディタでブロックに付ける。置いたパーツの「パージで外れる」（item.purge、issue #745）と同じく、
+//   ゲーム用に書き出す時のパージで外れた姿（<id>_purged.glb）からは除かれ、「パージ後を見る」で隠れる
+/** 機体の文書 doc（unitDoc() の物）に、パージで外れる物（置いたパーツ item.purge・ブロック pc.purge）があるか */
+export const hasPurge = doc => (doc.items ?? []).some(it => it.purge) || Object.values(doc.userParts ?? {}).some(d => (d?.pieces ?? []).some(pc => pc.purge));
+/**
+ * パージで外れた後の機体の文書：doc の写しから、置いたパーツの item.purge と、自分のパーツのブロックの pc.purge を除く。
+ * 足すブロックが 1 つも残らないパーツは、そのパーツを置いた物ごと除く（ブロックの印は自分のパーツにだけ付く：カタログのパーツは写しを作って直す）
+ */
+export function purgedDoc(doc) {
+  const out = structuredClone(doc), gone = new Set();
+  for (const [id, def] of Object.entries(out.userParts ?? {})) {
+    if (!Array.isArray(def?.pieces) || !def.pieces.some(pc => pc.purge)) continue;
+    def.pieces = def.pieces.filter(pc => !pc.purge);
+    if (!def.pieces.some(pc => pc.op !== 'sub')) gone.add(id);
+  }
+  out.items = (out.items ?? []).filter(it => !it.purge && !gone.has(it.part));
+  return out;
+}
+
+// ゲームで形態 2 になる時（テスター ポッチャさん 2026-11-20 #色々なツールへの要望「形態変形状態をチャージ時、特殊システム発動、迫撃砲使用時などの条件が欲しい」）：
+//   adj.formWhen = ['sys', 'charge', 'mortar'] のうちの選んだ物（書いていなければ ['sys']：今までどおり AXIS の間・飛行形態の間だけ）。
+//   機体の文書の adj に持つ（みんなの機体の中央は adj の中の短い文字の並びをそのまま通す：server/central/models.ts cleanUnit）。
+//   ゲーム用に書き出す形態 2 の模型（<id>_form2.glb）の xs 節の extras に formWhen として書き、ゲームが自分のスキンで読む
+//   （client/src/models.ts createXsFromGltf → inst.formWhen、client/src/world.ts）。どれか 1 つでも当てはまる間、形態 2 になる
+export const FORM_WHEN = {
+  sys: '特殊システムの間（AXIS の発動中・飛行形態の間）',
+  charge: 'チャージ武器を溜めている間',
+  mortar: '迫撃砲を撃つ間（構えてから撃ち終えるまで。収束砲も）',
+};
+/** 機体の adj から、形態 2 になる時の並び（知らない物は除く。書いていなければ ['sys']） */
+export const formWhenOf = adj => (Array.isArray(adj?.formWhen) ? adj.formWhen.filter(k => k in FORM_WHEN) : ['sys']);

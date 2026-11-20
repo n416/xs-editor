@@ -4,7 +4,8 @@
 //   面で囲った形（凸）：角を動かす・辺と面を選んで動かす回す大きさを変える（issue #239）・Ctrl・Shift で角・辺・面をいくつも選んでまとめて（issue #242）・角を足す消す・辺を角にまとめる・辺の真ん中に角を足す（issue #313）・辺の面取り
 //   押し出し          ：正面・側面・上面の断面を描く、厚み・テーパー・面取り・角の面取り・傾き・盛り上がり
 //   回転体            ：断面（右半分）を描く、分割数・角の面取り
-// どのブロックにも：足す／引く（上に並ぶブロックを削る）、左右ミラー、繰り返し、位置・大きさの数値、色の役、当たり判定なし。
+// どのブロックにも：足す／引く（上に並ぶブロックを削る）、左右ミラー、繰り返し、位置・大きさの数値、色の役、当たり判定なし、パージで外れる（pc.purge）、
+// 形態の移る時の遅れ（pc.formDelay）。後の 2 つはポッチャさん 2026-11-20 #色々なツールへの要望（v2-forms.js purgedDoc・formSpanOf）。
 // ブロックは Ctrl・Shift を押しながら押す（3D でも左の一覧でも）といくつも選べて、まとめて動かす・回す・大きさを変える（issue #313）。
 // 元に戻す・やり直す（Ctrl+Z / Ctrl+Y）は、パーツエディタを開いてからの操作を 1 つずつ。
 // 直すのはいつも「自分のパーツ」（id が u· で始まる。カタログのパーツを開くと、写しを作ってそれを直す。元は変わらない）。
@@ -16,12 +17,14 @@ import { ROLE_LABEL, ROLE_COLOR, GLOW_ROLES, roleOf } from './paint.js';
 import { KIND_LABEL, BLOCK0, kindOf, isSub, soloGeo, boxOf, pointsOf, roundCorners, latheLoop, tfMatrix, loftSecs } from './partgeo.js';
 import { BONE_CHOICES, PIVOT_CHOICES, groupOfPart, pivotOfPart, isGlowPart, isTrackedSet } from './freeparts.js';
 import { profileEditor } from './v2-profile.js';
-import { FORM_MAX, formOf, setForm } from './v2-forms.js';
+import { FORM_DELAY_MAX, FORM_MAX, formDelayOf, formOf, setForm } from './v2-forms.js';
 
 /** 「武器の口」（issue #144）：その武器の弾・ビームが、このブロックの真ん中から出る（ゲーム用に書き出した形で。xsengine.js MOUTH_NODE）。武器の種類と強さは機体の種別で決まる */
 export const MOUTH_CHOICES = { '': 'なし（名前に「銃口」「ビームの口」があればそこ）', muzzle: '手に持つ武器の銃口', arm: '腕の武器の口（ビーム・腕の銃）', head: '頭の機関砲の口', chest: '胸の武器の口', belly: '腹の武器の口', shoulder: '肩の砲・ロケットの口', back: 'ミサイルの発射口（背中・肩当て）', shield: '盾の武器の口' };
 const mouthRow = pc => `<div class="row"><label>武器の口</label><select id="peMouth">${Object.entries(MOUTH_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.mouth ?? '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select><button id="peFire" class="small" title="選んだ口から、試しにビームを撃って見せる（このブロックの真ん中から機体の前へ）">試し撃ち</button></div>
   <div class="hint">その種類の武器を撃つと、弾やビームがこのブロックの真ん中から出る（ゲーム用に書き出した形で）。決まるのは出る場所だけで、武器の種類と強さは機体の種別で決まる。左右のある口（腕・頭・肩・ミサイル）は、ブロックが機体のどちら側にあるかで左右が決まる</div>`;
+/** 「パージで外れる」（ブロックの印 pc.purge。v2-forms.js purgedDoc）：check は右の欄のチェックの作り方 */
+const purgeRow = check => check('パージで外れる（増加装甲の機体のスキンで、パージした後の姿から除く）', 'purge', 'ゲームでパージした時に、このブロックだけが外れる（増加装甲を付けて出る XS のスキンで使う。ほかの XS では何も起きない）。置いたパーツを丸ごと外すのは、右の「置いたパーツ」の「パージで外れる」。外れた後の姿は、パーツエディタを閉じて 3D の上の「パージ後を見る」で見られる');
 /** 「色の役」の選択肢。塗らないブロック（武器の飾りの役 keep・光って当たりの無いブロック・透けるブロック）は「塗らない」を選んだ形で出す。
  *  前はどの役も選ばれていない形で、画面には先頭の「主装甲」が出て、そこで「主装甲」を選んでも変わった事にならず色が変わらなかった
  *  （テスター アズキトギさん 2026-11-18「「武器の飾り」…だけ色が変わらない」、issue #949） */
@@ -640,7 +643,10 @@ export function initPartEdit(ctx) {
   function formsHtml(pc, n) {
     const fN = ctx.form(), fAll = ctx.forms(), fv = formOf(pc, fN) ?? {}, many = n > 1;
     const html = ['<h2>形態（変形の見た目）</h2>', `<div class="seg">${Array.from({ length: fAll }, (_, i) => `<button data-form="${i + 1}" class="${i + 1 === fN ? 'on' : ''}">形態 ${i + 1}</button>`).join('')}${fAll < FORM_MAX ? '<button id="peFormAdd" title="形態を 1 つ足す">＋</button>' : ''}</div>`];
-    if (fN === 1) html.push(`<div class="hint">形態 1 はいつもの形（ゲーム用に書き出す形）。形態 2 からを選ぶと、その形態での${many ? `選んだ ${n} 個のブロック` : 'このブロック'}の見た目（出す・消す、色、位置と向き）を決められる。エディタとみんなの機体の中だけで、戦場では変形しない</div>`);
+    // 移る時の遅れ（pc.formDelay）：形態が 2 つからの時に出す。秒で見せ、ミリ秒で持つ。置いたパーツの「遅れ」の後に、さらにこの分待つ
+    if (fAll > 1) html.push(`<div class="row"><label>遅れ（秒）</label><input type="number" id="peFDelay" min="0" max="${FORM_DELAY_MAX / 1000}" step="0.05" value="${formDelayOf(pc) / 1000}" title="形態を切り替えた時、${many ? 'このブロックたち' : 'このブロック'}が動き出すまでの秒（0〜${FORM_DELAY_MAX / 1000}）"></div>`,
+      `<div class="hint">遅れ：形態を切り替えた時、${many ? `選んだ ${n} 個のブロック` : 'このブロック'}がこの秒数だけ待ってから動く。ブロックごとに変えると、順に変形して見える。行きも帰りも同じ。置いたパーツの「遅れ」があれば、その後にさらに待つ</div>`);
+    if (fN === 1) html.push(`<div class="hint">形態 1 はいつもの形（ゲーム用に書き出す形）。形態 2 からを選ぶと、その形態での${many ? `選んだ ${n} 個のブロック` : 'このブロック'}の見た目（出す・消す、色、位置と向き）を決められる。戦場では、自分のスキンが機体の「形態」の「ゲームで形態 2 になる時」の間だけ形態 2 になる</div>`);
     else {
       const p = fv.p ?? [0, 0, 0], r = fv.r ?? [0, 0, 0];
       if (many) html.push(`<div class="hint">選んだ ${n} 個のブロック（引くブロックは除く）に、まとめて掛ける。数字は「${esc(pc.name)}」の値。ずらす・回すは、変えた分だけどのブロックにも足す（ブロックどうしの違いはそのまま）</div>`);
@@ -667,6 +673,11 @@ export function initPartEdit(ctx) {
     };
     for (const el of E.right.querySelectorAll('[data-form]')) el.onclick = () => { ctx.setForm(+el.dataset.form); renderRight(); };
     if ($('#peFormAdd')) $('#peFormAdd').onclick = () => { ctx.addForm(); renderRight(); };
+    if ($('#peFDelay')) $('#peFDelay').onchange = e => {
+      const ms = formDelayOf({ formDelay: (+e.target.value || 0) * 1000 });
+      for (const p of pcs) { if (ms) p.formDelay = ms; else delete p.formDelay; }
+      e.target.value = ms / 1000; commit();
+    };
     if (!$('#peFHide')) return;
     $('#peFHide').onchange = e => { apply(() => ({ hide: e.target.checked || null })); commit(); };
     $('#peFColorOn').onchange = e => { apply(() => ({ color: e.target.checked ? $('#peFColor').value : null })); commit(); };
@@ -834,6 +845,7 @@ export function initPartEdit(ctx) {
       bind('noHit', () => !!pc.noHit, v => { pc.noHit = v; });
       bind('noHeight', () => !!pc.noHeight, v => { pc.noHeight = v; });
       bind('blockout', () => !!pc.blockout, v => { pc.blockout = v; });
+      bind('purge', () => !!pc.purge, v => { if (v) pc.purge = true; else delete pc.purge; });
       // 質感（機体エディタの部品だけ。カタログ型のパーツは色の役で決まる）
       bind('metal', () => pc.metal ?? 0.55, v => { pc.metal = Math.max(0, Math.min(1, v)); });
       bind('rough', () => pc.rough ?? 0.38, v => { pc.rough = Math.max(0.02, Math.min(1, v)); });
@@ -841,11 +853,12 @@ export function initPartEdit(ctx) {
       html.push('<h2>ゲーム用</h2>',
         `<div class="row"><label>付く骨</label><select id="peBone">${Object.entries(BONE_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.bone ?? 'auto') === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + autoB : ''}</option>`).join('')}</select></div>`,
         `<div class="row"><label>回転の中心</label><select id="pePivot">${Object.entries(PIVOT_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.pivot ?? 'auto') === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + autoP : ''}</option>`).join('')}</select></div>`,
-        check('発光する（目・センサーなど）', 'glow'), check('当たり判定なし（関節チェックでめり込みを見ない）', 'noHit'), check('全高に数えない（頭より高い翼・背中の装備）', 'noHeight'), check('あたり（下書き。書き出さない）', 'blockout'), mouthRow(pc),
+        check('発光する（目・センサーなど）', 'glow'), check('当たり判定なし（関節チェックでめり込みを見ない）', 'noHit'), check('全高に数えない（頭より高い翼・背中の装備）', 'noHeight'), check('あたり（下書き。書き出さない）', 'blockout'), purgeRow(check), mouthRow(pc),
         '<div class="hint">左右のある骨（腕・脚など）は、形の真ん中が機体のどちら側にあるかで左右が決まる</div>');
     } else if (!sub) {
       bind('noHit', () => !!pc.noHit, v => { if (v) pc.noHit = true; else delete pc.noHit; });
-      html.push('<h2>ゲーム用</h2>', check('当たり判定なし（関節チェックでめり込みを見ない。動力パイプ・光）', 'noHit'), mouthRow(pc), `<div class="hint">付く骨：${pc.bone ?? '（部位の既定）'}${pc.hinge ? '・蝶番あり' : ''}。光らせるには、色の役を「発光」に</div>`);
+      bind('purge', () => !!pc.purge, v => { if (v) pc.purge = true; else delete pc.purge; });
+      html.push('<h2>ゲーム用</h2>', check('当たり判定なし（関節チェックでめり込みを見ない。動力パイプ・光）', 'noHit'), purgeRow(check), mouthRow(pc), `<div class="hint">付く骨：${pc.bone ?? '（部位の既定）'}${pc.hinge ? '・蝶番あり' : ''}。光らせるには、色の役を「発光」に</div>`);
     }
     // 形態（変形の見た目、v2-forms.js）：形態 2 からの、このブロックの見た目
     if (!sub) html.push(formsHtml(pc, 1));
