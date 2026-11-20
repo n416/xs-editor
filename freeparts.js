@@ -94,6 +94,15 @@ export const atRest = it => it.mov.every(v => Math.abs(v) < 1e-9) && it.rot.ever
  *   動かしてある：形を三角形にして、置き方を掛ける（shapes(def) = partgeo.js の freeShapes。1 個ずつ：ミラーの写しは反対側の骨に付く）
  */
 export function freeParts(def, it, shapes) {
+  const out = freePartsOf(def, it, shapes);
+  // 手持ちの武器（「武器」のタブ、def.tab = 'weapon'）の部品は、名前によらず全部「手の武器」（gun）：書き出しで gun・bazooka の節に入り、ゲームが
+  // 格闘・投げる時・武器のスキンを出す時に隠す。骨を決めていない部品は前腕に付ける（名前に「銃」の付く部品と同じ）。2026-11-21 までは名前で決めていて、
+  // 「斧・柄」のような部品は体の形（胴の骨）に焼き込まれ、ゲームで武器のスキンや格闘の形を出しても消えずに重なっていた
+  // （issue 1047 [テスター もちゅなさん 2026-11-20「元の見た目が消えず重なってしまいます」]）
+  if (def.tab !== 'weapon') return out;
+  return out.map(p => ({ ...p, gun: true, ...(!p.bone || p.bone === 'auto' ? { bone: 'fore' } : {}) }));
+}
+function freePartsOf(def, it, shapes) {
   const tracked = isTrackedSet(def.pieces);
   // 機体エディタに無い形（断面をつなぐ形・蛇腹）は、置いたままでも三角形で渡す（写しごとに 1 個）
   // 陰をつなぐ凸の形（smooth のある hull）も三角形で渡す：面の式のまま渡すと、書き出しが面ごとに平らに作り直す
