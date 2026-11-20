@@ -2153,7 +2153,8 @@ $('#bWeaponGlb').onclick = async () => {
   if (busy()) return;
   const box = $('#gameOut'), it = kept().find(x => byId[x.part]?.tab === 'weapon'), def = it && byId[it.part];
   if (!def) { box.textContent = '武器を持っていません。左の「武器」のタブで、書き出す武器を持たせてください'; return; }
-  const shape = ($('#weaponShape').value.trim() || def.shape || '').replace(/[^a-z0-9_]/gi, '').toLowerCase();
+  // （空なら「武器を作る」の元の武器 def.wbase：ゲームの設定の「自分の武器のスキン」がファイルの名前からその形に入れる、issue 1020）
+  const shape = ($('#weaponShape').value.trim() || def.wbase || def.shape || '').replace(/[^a-z0-9_]/gi, '').toLowerCase();
   if (!shape) { box.textContent = '形の名前（半角の英数字と _。例 heat_axe）を入れてください。ゲームの武器のデータの「held」と同じ名前'; return; }
   const file = `w_${def.faction === 'a' || def.faction === 'b' ? def.faction : $('#gameId').value[0] === 'b' ? 'b' : 'a'}_${shape}.glb`;   // （陣営は「武器を作る」の陣営、無ければ書き出しの機体の陣営）
   box.textContent = '書き出しています…';
@@ -2163,7 +2164,8 @@ $('#bWeaponGlb').onclick = async () => {
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type: 'model/gltf-binary' })); a.download = file; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     box.innerHTML = `<b>${file} を書き出しました</b>（${(u8.length / 1024).toFixed(0)} KB）<br>握る所から先まで ${p.len.toFixed(2)} m・後ろへ ${p.behind.toFixed(2)} m、三角形 ${p.tris.toLocaleString()}、描画 ${p.calls} 回${p.muzzle ? '、弾の出る所あり' : ''}<br>`
         + (p.form2 ? (p.form2.ok ? '形態 2（変形）：動きとして入りました<br>' : `<span style="color:var(--warn)">形態 2（変形）：動きにできませんでした（${p.form2.why}）。削る部品が形態 2 で動くと、形が変わって動きにできません</span><br>`) : '')
-      + `<span class="hint">ゲームに入れるのは、作品を「みんなの機体」に投稿して採用された時（運営が tools/sharewpn.ts で取り込む）。public/models/${file} に置くと、その形の名前の武器が手に持つ形になる</span>`;
+      + `<span class="hint">自分の画面だけで使うには：ゲームの設定の「自分のスキン」→「自分の武器のスキン」の「武器の .glb を選ぶ」でこのファイルを入れる（形の名前 ${shape} の武器が、次の出撃から自分の XS の手でこの見た目になる。ほかの人には見えない。当たり・性能・弾の出る所は今の武器のまま）。`
+      + `みんなのゲームに入れるのは、作品を「みんなの機体」に投稿して採用された時（運営が tools/sharewpn.ts で取り込む）</span>`;
   } catch (e) { box.textContent = '書き出せませんでした：' + (e?.message ?? e); }
 };
 /** ふつうの .glb：今の形（立った姿勢）を、骨なしで書き出す */
@@ -2695,7 +2697,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'b088db5';
+const BUILD = '489f693';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
