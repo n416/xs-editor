@@ -27,7 +27,7 @@ import { initShare } from './v2-share.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
 import { makeWeaponBench } from './v2-weapon.js';
-import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, formDelayOf, formSpanOf, hasPurge, purgedDoc, FORM_WHEN, formWhenOf, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
+import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, formDelayOf, formSpanOf, hasPurge, purgedDoc, FORM_WHEN, formWhenOf, FORM_KIND, formKindOf, setFormKind, flyTilt, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
@@ -122,7 +122,9 @@ const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(1.2, 2.6
 const fill = new THREE.DirectionalLight(0x8fb3ff, 0.5); fill.position.set(-1.5, 1.2, -1); scene.add(fill);
 const grid = new THREE.GridHelper(2, 20, 0x2c3038, 0x22252b); scene.add(grid);
 const guideGroup = new THREE.Group(); scene.add(guideGroup);   // 艦のガイド（ゲームで決まっている大きさと場所。書き出さない）
-const root = new THREE.Group(); scene.add(root);
+const root = new THREE.Group();
+// （空を飛ぶ形を「ゲームの向きで見る」時だけ、描く間だけ前へ倒す組：issue 1036、v2-forms.js flyTilt。描き終えたら元に戻すので、ほかの計算はいつも立った形）
+const flyGroup = new THREE.Group(); scene.add(flyGroup); flyGroup.add(root);
 const gizmo = new TransformControls(camera, canvas);
 gizmo.setSize(0.8);
 // 「武器を作る」の欄（v2-weapon.js）：持っている武器の点（握り・銃口・刃の根元・刃の先）・元の武器の点線の箱・武器だけを見る
@@ -707,7 +709,9 @@ function tick(now) {
   if (formAnim) { showFormNow(); if (now - formAnim.t0 >= formSpanOf(items, it => byId[it.part])) { formAnim = null; showFormNow(); } }
   shotTick(now);
   flameTick(now);
-  resize(); orbit.update(); if (PE.active()) PE.tick(); renderer.render(scene, camera); requestAnimationFrame(tick);
+  resize(); orbit.update(); if (PE.active()) PE.tick();
+  const tilted = tiltForView(); renderer.render(scene, camera); if (tilted) untilt();
+  requestAnimationFrame(tick);
 }
 
 // ---- クリックで選ぶ・キー ----
@@ -1420,7 +1424,7 @@ function formOp(o, n) {
   return opacityAt(pc, paint, n);
 }
 function showFormNow() {
-  const v = formAnim ? { from: formAnim.from, to: formAnim.to, el: performance.now() - formAnim.t0 } : { from: formNow, to: formNow, el: Infinity };
+  const v = formView();
   // （置いたパーツごとに、その遅れを引いた途中の見た目：issue #813）
   groups.forEach((g, i) => showForms([g, ...g.userData.extra.values()], v.from, v.to, (v.el - formDelayOf(items[i])) / FORM_MS, formMat, formOp));
   placeItemForms(v);
@@ -1430,14 +1434,71 @@ function placeItemForms(v) {
   itemView = v;
   groups.forEach((g, i) => { if (items[i] && (items[i].forms || g.userData.fdelta)) applyToGroup(items[i], g); });
 }
+/** 今の形態の途中：{ from, to, el（移り始めてからのミリ秒） }。「変形の途中」のつまみ（formScrub）を動かしている間は、形態 1 → 見ている形態のその時 */
+function formView() {
+  if (formScrub != null) return { from: 1, to: scrubTo(), el: formScrub * formSpan() };
+  return formAnim ? { from: formAnim.from, to: formAnim.to, el: performance.now() - formAnim.t0 } : { from: formNow, to: formNow, el: Infinity };
+}
+const formSpan = () => formSpanOf(items, it => byId[it.part]);
+/** 「変形の途中」のつまみの行き先：見ている形態（形態 1 の時は形態 2） */
+const scrubTo = () => (formNow > 1 ? formNow : Math.min(2, formCount()));
+// ---- 変形の種類と、変形の途中を見る（issue 1036、v2-forms.js FORM_KIND）----
+// formScrub：「変形の途中」のつまみ（0〜1、null は動かしていない）。gameTilt：空を飛ぶ形を、ゲームと同じに前へ倒して見る
+let formScrub = null, gameTilt = true, tiltMid = 0;
+/** 形態の途中 v での、空を飛ぶ形への倒れ（0 立った〜1 腹ばい）。ゲームは模型の変形と同じ間に倒れる（world.ts の tiltP） */
+function flyK(v) {
+  const a = formKindOf(adj, v.from) === 'fly' ? 1 : 0, b = formKindOf(adj, v.to) === 'fly' ? 1 : 0;
+  if (a === b) return a;
+  return a + (b - a) * Math.min(1, Math.max(0, v.el / formSpan()));
+}
+/** 描く前に倒す（倒した時 true）。体の真ん中は、立った形の足の裏から頭の上までの半分（ゲームは RULES.unitHeight / 2） */
+function tiltForView() {
+  if (!gameTilt || shipNow || PE.active() || !adj.formKind) return false;
+  const k = flyK(formView());
+  if (k <= 0) { tiltMid = 0; return false; }   // （立った形に戻った：次に倒す時、今の形の高さを測り直す）
+  if (!tiltMid) { root.updateMatrixWorld(true); const b = new THREE.Box3().setFromObject(root); tiltMid = b.isEmpty() ? 1 : Math.max(0.1, b.max.y / 2); }
+  const t = flyTilt(k, tiltMid);
+  flyGroup.rotation.x = t.rx; flyGroup.position.set(0, t.y, t.z); flyGroup.updateMatrixWorld(true);
+  return true;
+}
+function untilt() { flyGroup.rotation.x = 0; flyGroup.position.set(0, 0, 0); flyGroup.updateMatrixWorld(true); }
+/** 変形の種類・ゲームの向きで見る・変形の途中のつまみ（形態が 2 つからの時） */
+function fillFormKind(n) {
+  const box = $('#formKind'); if (!box) return;
+  if (n < 2) { box.innerHTML = ''; return; }
+  const kinds = Array.from({ length: n - 1 }, (_, i) => i + 2).map(f => {
+    const k = formKindOf(adj, f) ?? '';
+    return `<div class="row"><label style="width:auto">形態 ${f} の種類</label><select data-fkind="${f}"><option value="" ${k ? '' : 'selected'}>種類なし（見た目だけ）</option>${Object.entries(FORM_KIND).map(([v, t]) => `<option value="${v}" ${k === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`;
+  }).join('');
+  const span = formSpan() / 1000, to = scrubTo(), t = formScrub ?? 1;
+  const warn = formKindOf(adj, 2) === 'fly' && !formWhenOf(adj).includes('sys') ? '<div class="hint warn">形態 2 が空を飛ぶ形なのに、下の「ゲームで形態 2 になる時」に「特殊システムの間（…飛行形態の間）」が入っていない：ゲームの飛行形態でこの姿にならない</div>' : '';
+  box.innerHTML = '<div class="hint" style="margin-top:6px"><b>変形の種類</b>（空を飛ぶ形の形態 2 は、ゲームの変形できる XS の自分のスキンで、飛行形態の姿になる。ゲームは模型ごと体の真ん中を軸に前へ倒すので、空を飛ぶ形は立ったまま作る：脚をそろえて下へ、腕は頭の上へ、翼を広げる、など。地上を走る形は、ゲームではまだ使わない）</div>'
+    + kinds + warn
+    + `<label class="chk"><input type="checkbox" id="formTilt" ${gameTilt ? 'checked' : ''}>空を飛ぶ形を、ゲームの向きで見る（体の真ん中を軸に前へ倒す。見た目だけで、置き方のデータは立った形のまま）</label>`
+    + `<div class="row"><label style="width:auto">変形の途中</label><input type="range" id="formScrub" min="0" max="1000" value="${Math.round(t * 1000)}"><span id="formScrubV" class="hint">${formScrub == null ? '' : `${(t * span).toFixed(2)} / ${span.toFixed(2)} 秒`}</span></div>`
+    + `<div class="bar"><button class="small" id="bFormPlay" title="形態 1 から形態 ${to} へ、ゲームと同じ速さで動かして見る">形態 1 → ${to} を動かして見る</button></div>`;
+  for (const el of box.querySelectorAll('[data-fkind]')) el.onchange = () => {
+    setFormKind(adj, +el.dataset.fkind, el.value || null); tiltMid = 0; save(); fillFormKind(formCount());
+    note(el.value ? `形態 ${el.dataset.fkind}：${FORM_KIND[el.value]}。次に「ゲーム用に書き出す」・みんなの機体からスキンにすると模型に入る` : `形態 ${el.dataset.fkind}：種類なし`);
+  };
+  $('#formTilt').onchange = () => { gameTilt = $('#formTilt').checked; };
+  $('#formScrub').oninput = () => {
+    formAnim = null; formScrub = +$('#formScrub').value / 1000;
+    $('#formScrubV').textContent = `形態 1 → ${scrubTo()}：${(formScrub * span).toFixed(2)} / ${span.toFixed(2)} 秒`;
+    showFormNow();
+  };
+  $('#bFormPlay').onclick = () => { formScrub = null; const n2 = scrubTo(); formNow = 1; formAnim = null; switchForm(n2); };
+}
 function switchForm(n) {
   n = Math.max(1, Math.min(formCount(), n));
+  if (formScrub != null) { formScrub = null; formAnim = null; if (n === formNow) { showFormNow(); renderForms(); return; } }
   if (n === formNow && !formAnim) return;
+
   formAnim = { from: formNow, to: n, t0: performance.now() }; formNow = n;
   renderForms(); showPaint();   // （色の欄の透明度は、今の形態の値）
 }
 function addForm() { if (formCount() >= FORM_MAX) return; formAdded = formCount() + 1; switchForm(formAdded); }
-function resetForms() { formNow = 1; formAdded = 1; formAnim = null; renderForms(); showPaint(); }
+function resetForms() { formNow = 1; formAdded = 1; formAnim = null; formScrub = null; tiltMid = 0; renderForms(); showPaint(); }
 function renderForms() {
   const bar = $('#formBar'); if (!bar) return;
   const n = formCount();
@@ -1447,6 +1508,7 @@ function renderForms() {
   for (const b of bar.querySelectorAll('[data-form]')) b.onclick = () => switchForm(+b.dataset.form);
   if ($('#bFormAdd')) $('#bFormAdd').onclick = addForm;
   fillFormWhen(n);
+  fillFormKind(n);
   fillItemForm();
 }
 // ゲームで形態 2 になる時（ポッチャさん 2026-11-20「形態変形状態をチャージ時、特殊システム発動、迫撃砲使用時などの条件が欲しい」、v2-forms.js FORM_WHEN）：
@@ -1460,7 +1522,7 @@ function fillFormWhen(n) {
   for (const el of box.querySelectorAll('[data-fwhen]')) el.onchange = () => {
     const now = Object.keys(FORM_WHEN).filter(k => box.querySelector(`[data-fwhen="${k}"]`).checked);
     if (now.length === 1 && now[0] === 'sys') delete adj.formWhen; else adj.formWhen = now;   // （今までどおりの ['sys'] は書かない）
-    save();
+    save(); fillFormKind(formCount());
     note(now.length ? `ゲームで形態 2 になる時：${now.map(k => FORM_WHEN[k]).join('・')}。次に「ゲーム用に書き出す」・みんなの機体からスキンにすると入る` : 'ゲームでは形態 2 にならない（形態 1 のまま）');
   };
 }
@@ -2021,7 +2083,7 @@ async function exportGame0(id, onStep, opt = {}) {
   if (opt.form > 1) {
     X.load({ parts: held, ai: '', role: id.replace(/^[ab]_/, '') });
     await X.applyUnit(bakeForm(unitDoc(), opt.form, blockBox, { shape: true }), { weaponHand: w.hand_r });
-    form = (await X.exportNow(id, true, { frame, formWhen: formWhenOf(adj) })).glb;   // （ゲームで形態 2 になる時：模型の xs 節の extras）
+    form = (await X.exportNow(id, true, { frame, formWhen: formWhenOf(adj), formKind: formKindOf(adj, 2) })).glb;   // （変形の種類：issue 1036。ゲームはまだ読まない）   // （ゲームで形態 2 になる時：模型の xs 節の extras）
   }
   return { ...out, purged, form, floating: chk.floating, loose: chk.loose, depths: chk.depths, weapons: applied.weapons, own };
 }
@@ -2764,7 +2826,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '8ea45fa';
+const BUILD = 'd8ca00c';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

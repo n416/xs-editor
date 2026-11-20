@@ -228,3 +228,34 @@ export const FORM_WHEN = {
 };
 /** 機体の adj から、形態 2 になる時の並び（知らない物は除く。書いていなければ ['sys']） */
 export const formWhenOf = adj => (Array.isArray(adj?.formWhen) ? adj.formWhen.filter(k => k in FORM_WHEN) : ['sys']);
+
+// 変形の種類（issue 1036、モデレーター Hotaru さん 2026-11-20 #要望用「変形機体がほしいです！地走でも空中でもいいです！」、
+// 依頼主「これは作るのであれば、まずXSエディタからです。」）：形態 n（2 から）に「空を飛ぶ形」「地上を走る形」の種類を付ける。
+//   adj.formKind = { [n]: 'fly' | 'run' }（書いていない形態は種類なし）。機体の文書の adj に持ち（みんなの機体の中央は adj の短い文字をそのまま通す）、
+//   ゲーム用に書き出す形態 2 の模型（<id>_form2.glb）の xs 節の extras に formKind として書く。ゲームはまだ読まない（後でゲームの動き方を作る時に読む）。
+//   今のゲームの可変機構（shared/data.ts TRANSFORM：人型 ⇔ 飛行形態）では、変形できる XS の自分のスキンの形態 2 が飛行形態の姿になる
+//   （client/src/world.ts、issue 932）。その時ゲームは模型ごと体の真ん中を軸に前へ倒す（client/src/models.ts tiltFly）ので、
+//   空を飛ぶ形は「立ったまま」作る：エディタの「ゲームの向きで見る」が、同じ倒し方（flyTilt）で見せる
+export const FORM_KIND = {
+  fly: '空を飛ぶ形（ゲームの飛行形態の姿）',
+  run: '地上を走る形（ゲームではまだ使わない）',
+};
+/** 機体の adj から、形態 n の変形の種類（'fly' | 'run'、無ければ null） */
+export const formKindOf = (adj, n) => { const k = adj?.formKind?.[n]; return k in FORM_KIND ? k : null; };
+/** 形態 n の変形の種類を書き換える（null で消す。どの形態にも無くなったら adj.formKind ごと消す） */
+export function setFormKind(adj, n, kind) {
+  const all = { ...(adj.formKind ?? {}) };
+  if (kind in FORM_KIND && n > 1) all[n] = kind; else delete all[n];
+  if (Object.keys(all).length) adj.formKind = all; else delete adj.formKind;
+}
+/** 種類の無い形態を除いた adj.formKind（形態の数 count より大きい形態の分も除く。保存・書き出しの前に） */
+export const formKindsIn = (adj, count) => Object.fromEntries(Object.entries(adj?.formKind ?? {}).filter(([n, k]) => +n > 1 && +n <= count && k in FORM_KIND));
+/**
+ * 空を飛ぶ形の倒れ：client/src/models.ts tiltFly と同じ式（体の真ん中 mid を軸に前へ 90°、k 0..1 をなめらかに。昇りの角度は 0）。
+ * エディタの前は +z（ゲームへは y の回りに 180° 回して書き出す：xsengine.js toGame）ので、ゲームの −z への倒れを +z へ写す。
+ * { rx：x 軸の回り（ラジアン）, y, z：組をずらす量 }。mid は足の裏から体の真ん中までの高さ（ゲームは RULES.unitHeight / 2）
+ */
+export function flyTilt(k, mid) {
+  const kk = Math.min(1, Math.max(0, k)), th = (Math.PI / 2) * (kk * kk * (3 - 2 * kk));
+  return { rx: th, y: mid - mid * Math.cos(th), z: -mid * Math.sin(th) };   // （体の真ん中 (0, mid, 0) が動かない）
+}
