@@ -33,6 +33,21 @@ const roleRows = (pc, d) => {
   return (keep ? `<option value="keep" ${now === 'keep' ? 'selected' : ''}>${d?.deco ? '塗らない（武器の色のまま）' : '塗らない（ブロックの色のまま）'}</option>` : '')
     + Object.entries(ROLE_LABEL).map(([k, v]) => `<option value="${k}" ${now === k ? 'selected' : ''}>${v}</option>`).join('');
 };
+/** 自由なパーツ（def.free）のブロックの「色の役」（issue 1021、WonD さん 2026-11-20「パーツエディタ上で追加したブロックに対して、主装甲や副装甲などの機体全体の塗りから触れる色は指定できないんでしょうか」）。
+ *  役を書いたブロック（pc.role）は機体の塗りの色になる（paint.js roleOf・v2.js material・unitparts.js の自由な部品の塗り）。「塗らない」は今までどおりブロックの色と「陣営色で塗る」。
+ *  役を選んだ間は、ブロックの色・陣営色・光るかどうかは役が決める（光る役なら光る）。「塗らない」に戻すと、役を選ぶ前の光るかどうかに戻る（pc.keepGlow に控える） */
+const freeRoleOf = pc => (pc.role && pc.role !== 'keep' && ROLE_LABEL[pc.role] ? pc.role : 'keep');
+const freeRoleRows = pc => { const now = freeRoleOf(pc); return `<option value="keep" ${now === 'keep' ? 'selected' : ''}>塗らない（ブロックの色のまま）</option>` + Object.entries(ROLE_LABEL).map(([k, v]) => `<option value="${k}" ${now === k ? 'selected' : ''}>${v}</option>`).join(''); };
+export function setFreeRole(pc, r) {
+  if (r === 'keep' || !ROLE_LABEL[r]) {
+    if (freeRoleOf(pc) === 'keep') { delete pc.role; return; }
+    delete pc.role;
+    if ('keepGlow' in pc) { if (pc.keepGlow == null) delete pc.glow; else pc.glow = pc.keepGlow; delete pc.keepGlow; }
+    return;
+  }
+  if (freeRoleOf(pc) === 'keep') pc.keepGlow = pc.glow ?? null;
+  pc.role = r; pc.glow = GLOW_ROLES.has(r);
+}
 const r5 = v => Math.round(v * 1e5) / 1e5, r12 = v => Math.round(v * 1e12) / 1e12, r4 = v => Math.round(v * 1e4) / 1e4, r1 = v => Math.round(v * 10) / 10;
 const fmt = v => String(+(+v).toFixed(4));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -746,7 +761,7 @@ export function initPartEdit(ctx) {
     html.push(`<h2>選んだブロック <i style="font-style:normal;font-weight:400">${KIND_LABEL[kind]}</i></h2>
       <div class="row"><label>名前</label><input type="text" id="peBlockName" value="${esc(pc.name)}"></div>
       <div class="row"><label>はたらき</label><div class="seg" style="flex:1"><button data-op="add" class="${sub ? '' : 'on'}" title="形を足す">＋ 足す</button><button data-op="sub" class="${sub ? 'on' : ''}" title="自分より上に並ぶブロックを、この形で削る">− 引く</button></div></div>
-      ${sub ? '' : free ? `<div class="row"><label>色</label><input type="color" id="peColor" value="${/^#[0-9a-f]{6}$/i.test(pc.color ?? '') ? pc.color : '#c3c9d2'}" style="width:48px;height:24px;padding:0"><label class="chk" style="width:auto;flex:1"><input type="checkbox" id="peTeam" ${pc.team ? 'checked' : ''}>陣営色で塗る</label></div>`
+      ${sub ? '' : free ? `<div class="row"><label>色の役</label><select id="peFreeRole">${freeRoleRows(pc)}</select></div>` + (freeRoleOf(pc) !== 'keep' ? `<div class="hint">色は機体の塗りの「${ROLE_LABEL[freeRoleOf(pc)]}」の色（塗りの欄で変えると、このブロックも変わる）。ブロックの色・陣営色で塗るは「塗らない」を選んだ時に使う</div>` : `<div class="row"><label>色</label><input type="color" id="peColor" value="${/^#[0-9a-f]{6}$/i.test(pc.color ?? '') ? pc.color : '#c3c9d2'}" style="width:48px;height:24px;padding:0"><label class="chk" style="width:auto;flex:1"><input type="checkbox" id="peTeam" ${pc.team ? 'checked' : ''}>陣営色で塗る</label></div><div class="hint">色の役（主装甲・副装甲など）を選ぶと、このブロックは機体の塗りの色になる（塗りの欄で変えると付いて変わる）</div>`)
         : `<div class="row"><label>色の役</label><select id="peRole">${roleRows(pc, d)}</select></div>`}`);
     // 位置と大きさ
     html.push('<h2>位置と大きさ</h2>');
@@ -869,6 +884,7 @@ export function initPartEdit(ctx) {
     $('#peBlockName').onchange = () => { commit(); renderLeft(); };
     for (const el of E.right.querySelectorAll('[data-op]')) el.onclick = () => { if ((el.dataset.op === 'sub') === sub) return; if (el.dataset.op === 'sub') { if (d.pieces.filter(p => !isSub(p)).length <= 1) { ctx.note('足すブロックが 1 個も残らなくなります', true); return; } pc.op = 'sub'; } else delete pc.op; changed(true); };
     if ($('#peColor')) { $('#peColor').oninput = e => { pc.color = e.target.value; ctx.repaint(); dimOthers(); }; $('#peColor').onchange = () => { commit(); renderLeft(); }; $('#peTeam').onchange = e => { pc.team = e.target.checked; commit(); }; }
+    if ($('#peFreeRole')) $('#peFreeRole').onchange = e => { setFreeRole(pc, e.target.value); ctx.rebuild(); dimOthers(); commit(); renderLeft(); renderRight(); };
     if ($('#peBone')) { $('#peBone').onchange = e => { pc.bone = e.target.value; changed(true); }; $('#pePivot').onchange = e => { pc.pivot = e.target.value; changed(true); }; }
     if ($('#peMouth')) { $('#peMouth').onchange = e => { if (e.target.value) pc.mouth = e.target.value; else delete pc.mouth; commit(); }; $('#peFire').onclick = () => ctx.testFire(pc); }
     if ($('#peBake')) $('#peBake').onclick = bakeTf;

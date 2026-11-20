@@ -1571,7 +1571,7 @@ const PE = initPartEdit({
   rebuild: () => rebuild(), restPose: () => setPose([]),
   /** 形態（v2-forms.js）：今の形態・数・切り替える・足す・ブロックの見た目を変えた後にかけ直す。武器の口の試し撃ち */
   form: () => formNow, forms: () => formCount(), setForm: n => switchForm(n), addForm: () => addForm(), showForms: () => { renderForms(); showFormNow(); }, testFire: pc => testFire(pc), repaint: () => applyPaint(), refreshCatalog: () => renderCatalog(),
-  colorOf: (pc, def) => (def?.free ? pc.color ?? '#c3c9d2' : colorOf(pc, def?.cat ?? '', paint)),
+  colorOf: (pc, def) => (def?.free && !pc.role ? pc.color ?? '#c3c9d2' : colorOf(pc, def?.cat ?? '', paint)),   // （自由なパーツでも役を書いたブロックは塗りの色。issue 1021）
   /** パーツ def のブロックの形が変わった：置いてあるメッシュを新しい形に付け替える */
   regeo: def => {
     let redo = false, n = 0;
@@ -2697,7 +2697,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '489f693';
+const BUILD = '39ba441';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

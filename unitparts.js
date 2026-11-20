@@ -133,7 +133,7 @@ export function unitParts(doc, { shaped = false } = {}) {
   const body = bodyParts(items.filter(it => !isHead(it.part)), adj, null);
   // 体の色：bodyParts の部品は、置いたパーツの順・ブロックの順に並ぶ
   let n = 0;
-  for (const it of items.filter(x => !isHead(x.part))) { const def = byId[it.part]; if (def.free) { for (const p of freeParts(def, it, freeShapes)) { if (p.role) Object.assign(body.parts[n], paintOf(p, def)); n++; } continue; }   /* 自由な部品は役を書いたブロックだけ塗る */ for (const pc of def.pieces) if (!isSub(pc)) Object.assign(body.parts[n++], paintOf(pc, def)); }
+  for (const it of items.filter(x => !isHead(x.part))) { const def = byId[it.part]; if (def.free) { for (const p of freeParts(def, it, freeShapes)) { if (p.role && p.role !== 'keep') Object.assign(body.parts[n], { team: false }, paintOf(p, def)); n++; } continue; }   /* 自由な部品は役を書いたブロックだけ塗る（役のある間は、ブロックの「陣営色で塗る」は使わない：役が色を決める。issue 1021） */ for (const pc of def.pieces) if (!isSub(pc)) Object.assign(body.parts[n++], paintOf(pc, def)); }
   const nW = items.filter(held).reduce((a, it) => a + freeParts(byId[it.part], it, freeShapes).length, 0);
   const parts = [...body.parts.slice(0, nW), ...head, ...body.parts.slice(nW)];
   // 噴射口・炎の点（parts/back/jetshield.js）：エディタの中だけのブロック（editorOnly：向きの矢印、炎の点の口）は書き出さない（あたりと同じ扱い）。
