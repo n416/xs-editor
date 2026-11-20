@@ -54,6 +54,35 @@ export const JET_POINT = {
   ],
 };
 
+// 煙・火花の点 fxpoint（「煙・火花」の欄の「＋ 煙を足す」「＋ 火花を足す」が置く。issue 1024、モデレーター なおぴおさん 2026-11-20 #要望用
+// 「煙や火花のエフェクトを発生させるアイテムを追加してほしい」「それらを作動させる条件付け(移動中、ブースト中、特定の形態中など)」）：形の無い点。
+// 原点から −z の向きへ、煙か火花を出す。種類・量・大きさ・出す時は置いたパーツの item.fx（v2.js fxOf）。書き出しはここに骨 fx_<n> を置き
+// （xsengine.js）、ゲームは自分のスキンでだけ、そこから出す（client/src/models.ts fxPts、world.ts）。エディタでは口の輪と矢印だけ（書き出さない）
+const FX_ARROW = [
+  hull('向きの矢印の軸', [...ring(0.008, -0.01, 4, 0), ...ring(0.008, -0.2, 4, 0)], { ...P, color: '#9fd4ff', glow: true, opacity: 0.95, editorOnly: true }),
+  hull('向きの矢印の先', [...ring(0.03, -0.2, 4, 0), [0, 0, -0.29]], { ...P, color: '#9fd4ff', glow: true, opacity: 0.95, editorOnly: true }),
+];
+export const FX_POINT = {
+  id: 'fxpoint', name: '煙・火花の点', cat: '噴射口', size: [0.12, 0.12, 0.3], fx: true,
+  pieces: [
+    hull('煙・火花の点の口', [...ring(JET_R * 0.9, 0.006), ...ring(JET_R, 0)], { ...P, color: '#9fd4ff', glow: true, opacity: 0.8, editorOnly: true }),
+    ...FX_ARROW,
+  ],
+};
+
+// 置いたパーツの item.fx = { k: 種類, w: 出す時, n: 量（1 秒に出す数）, s: 大きさ（倍） }。書いていない所は下の既定 [独自]
+export const FX_KINDS = { smoke: '煙', spark: '火花' };
+// 出す時（どれか 1 つでも当てはまる間に出す）：ずっと・移動中（地面でも空中でも、横へ 3 m/s より速い）・ブースト中（噴射の炎が出ている間：
+// ダッシュ・上昇・回避）・形態 2 の間（自分のスキンの形態 2 になっている間：「ゲームで形態 2 になる時」のとおり）。境の値は client/src/world.ts FX_MOVE など
+export const FX_WHEN = { always: 'ずっと', move: '移動中', boost: 'ブースト中', form2: '形態 2 の間' };
+export const FX_N = [1, 20], FX_S = [0.3, 3];   // 量・大きさの幅
+export function fxOf(it) {
+  const f = it?.fx ?? {}, k = f.k in FX_KINDS ? f.k : 'smoke';
+  const w = Array.isArray(f.w) ? f.w.filter(x => x in FX_WHEN) : [];
+  const clamp = (v, [a, b], d) => (Number.isFinite(v) ? Math.min(b, Math.max(a, v)) : d);
+  return { k, w: w.length ? w : ['always'], n: Math.round(clamp(f.n, FX_N, k === 'spark' ? 10 : 6)), s: Math.round(clamp(f.s, FX_S, 1) * 100) / 100 };
+}
+
 const H = 8 / 6, W = 4.6 / 6, T = 0.42 / 6;   // 高さ・幅・厚み（エディタの単位）
 const KEEL = 0.16;                          // 左右の半分を後ろへ反らせる角度（rad。ゲームの盾の 1 つと同じ）
 const BULGE = 0.018;                        // 外の面の上下の真ん中の膨らみ

@@ -12,12 +12,12 @@ import { rotOfFrame } from './kit.js';
 import mass from './mass.js';   // 厚い塊のバックパック
 import radome from './radome.js';   // レドーム（レーダー機の背中の円盤、ナイティ）
 import f1, { sample as f1sample } from './f1.js';   // 取り込んだ部品（組 f1。tools/partimport.mjs が書く）
-import { JET, JET_POINT, SHIELD_BASE } from './jetshield.js';
+import { JET, JET_POINT, FX_POINT, SHIELD_BASE } from './jetshield.js';
 export const BACK = [packs, gear, wings, wingear, fx, mass, radome, f1].flat();
 export const backById = Object.fromEntries(BACK.map(p => [p.id, p]));
-// 噴射口・炎の点・盾の土台（jetshield.js）：Ver2 だけの物。BACK（前の組み立て画面・ランダムも使う）には入れず、Ver2 の背中のタブに噴射口を足す
-for (const d of [JET, JET_POINT, SHIELD_BASE]) backById[d.id] = d;
-export { JET, JET_POINT };
+// 噴射口・炎の点・煙・火花の点・盾の土台（jetshield.js）：Ver2 だけの物。BACK（前の組み立て画面・ランダムも使う）には入れず、Ver2 の背中のタブに噴射口を足す
+for (const d of [JET, JET_POINT, FX_POINT, SHIELD_BASE]) backById[d.id] = d;
+export { JET, JET_POINT, FX_POINT };
 export { FX_CAT, FX_COLORS };
 
 export const CHEST_AT = [0, 2.1, 0], WING_AT = [0.11, 2.5, -0.19], AURA_AT = [0, 2.5, -0.67], SPINE_AT = [0, 2.5, -0.27];

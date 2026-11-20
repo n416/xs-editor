@@ -7,7 +7,7 @@ import { byId, halfOf as halfOf0, bodyParts, ADJ0 } from './bodyparts.js';
 import { LOWER, lowerById } from './parts/lower/index.js';
 import { UPPER, upperById } from './parts/upper/index.js';
 import { BACK, backById } from './parts/back/index.js';
-import { JET_R } from './parts/back/jetshield.js';
+import { JET_R, fxOf } from './parts/back/jetshield.js';
 import { ARM, armById } from './parts/arm/index.js';
 import { LEG, legById } from './parts/leg/index.js';
 import { PARTS as HEAD_RAW, byId as headRawById } from './xsasm-parts.js';
@@ -149,10 +149,17 @@ export function unitParts(doc, { shaped = false } = {}) {
       if (p.editorOnly || jet === 'point') { p.blockout = true; p.noHeight = true; }
       if (!firstOf.has(p.src)) { firstOf.add(p.src); p.jet = { r: JET_R, ...(jet === 'point' ? { point: true } : {}) }; }
     }
+    // 煙・火花の点（jetshield.js の fxpoint、issue 1024）：形は書き出さない（あたり）。最初のブロック（原点が点、−z が出す向き）に印 fx
+    // （種類・出す時・量・大きさ。xsengine.js が骨 fx_<n> にする）
+    const fx = !!byId[it.part]?.fx;
+    if (fx) {
+      p.blockout = true; p.noHeight = true;
+      if (!firstOf.has(p.src)) { firstOf.add(p.src); p.fx = fxOf(it); }
+    }
     delete p.editorOnly;
     // ロマン砲変形（issue #795）：その武器スロットを撃ち切ると外れる・出る部品。書き出す形の頂点の印 roman（xsengine.js romanCode）になる
     if (it.roman && it.roman.s >= 1 && it.roman.s <= 3) p.roman = it.roman.s * 2 + (it.roman.m === 's' ? 1 : 0);
-    if (jet) continue;
+    if (jet || fx) continue;
     if (it.bone === 'shield') { p.blockout = true; p.shield = true; p.noHeight = true; p.bone = 'shield'; p.pivot = 'none'; }
   }
   return { parts, anchors: body.anchors, head: head.length > 0 || items.some(it => byId[it.part]?.free) };

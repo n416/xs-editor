@@ -285,6 +285,18 @@
     <label class="chk" title="置いた噴射口と炎の点から、炎の見本を出す（エディタの中だけ。形態を切り替えると、形態ごとの「炎を出さない」も見える）"><input type="checkbox" id="jetFlameOn">炎の見本を出す（置いた噴射口・炎の点）</label>
     <div class="hint">選んで、つまみか「位置・回転・拡大」で動かす（回すと矢印も回る。拡大で炎の太さ）。形態 2 からで炎を止めるのは、右の「置いたパーツ」の「形態」の「炎を出さない」。増やすのは「複製」「反対側にも」、消すのは一覧の × か「外す」。腕・脚には「付ける骨」</div>
   </details>
+  <details class="asm" id="fxBox">
+    <summary>煙・火花<span>煙や火花を出す点と、出す時</span></summary>
+    <div id="fxInfo" class="hint"></div>
+    <div id="fxList" class="items" style="margin-top:4px"></div>
+    <div id="fxSel" hidden style="margin-top:4px">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0"><span>種類</span><select id="fxKind"></select><span title="1 秒に出す数（1〜20）">量</span><input type="number" min="1" max="20" step="1" id="fxN" style="width:52px"><span>/秒</span><span title="煙の玉の大きさ・火花の飛ぶ勢い（0.3〜3 倍）">大きさ</span><input type="number" min="0.3" max="3" step="0.1" id="fxS" style="width:56px">倍</div>
+      <div style="margin:2px 0"><span>出す時</span> <span id="fxWhen"></span></div>
+      <div style="display:flex;align-items:center;gap:4px;margin:2px 0"><span title="0° が真後ろ。+ で機体の左（+x）へ、− で右へ">向き 左右</span><input type="number" step="1" id="fxYaw" style="width:64px">°<span style="margin-left:10px" title="0° が水平。− で下へ、+ で上へ">上下</span><input type="number" step="1" id="fxPitch" style="width:64px">°</div>
+    </div>
+    <div class="bar"><button id="bFxSmoke" class="acc small" title="煙を出す点を 1 つ、胴の後ろに置く。水色の矢印が出す向き">＋ 煙を足す</button><button id="bFxSpark" class="small" title="火花を出す点を 1 つ、胴の後ろに置く。水色の矢印が出す向き">＋ 火花を足す</button></div>
+    <div class="hint">ゲームでは自分のスキンだけに出る（ほかの人の画面には出ない）。出す時は、選んだどれか 1 つでも当てはまる間。点は 8 個まで書き出す。選んで、つまみか「位置」で動かし、向きは上の角度か水色の矢印をドラッグ。腕・脚には「付ける骨」</div>
+  </details>
   <details class="asm" id="shieldBox">
     <summary>盾<span>戦闘で左手に持つ盾の見た目</span></summary>
     <div class="hint">付ける骨を「盾」にした部品が、ゲームで盾を持つ XS の盾の見た目になる（その XS の盾の高さに合わせて縮める・広げる）。見た目だけで、当たり判定・耐久は変わらない。盾を持たない XS には出ない。自分の画面（スキン）だけで、ほかの人の画面ではいつもの盾</div>
@@ -378,6 +390,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=39ba441"></script>
+<script type="module" src="./v2.js?v=c36d71e"></script>
 </body>
 </html>

@@ -38,7 +38,7 @@ import { hull2, pushAngle, bandedOutlines } from './skirtpush.js';
 import { fitTiltBoth, tilted, TILT_GRID } from './kneetilt.js';
 import { autoFix } from './v2-autofix.js';
 import { P, XH, XL, YH, YL, ZH, ZL, box } from './xsasm-lib.js';
-import { JET_R, JET } from './parts/back/jetshield.js';
+import { JET_R, JET, FX_KINDS, FX_WHEN, FX_N, FX_S, fxOf } from './parts/back/jetshield.js';
 import { byId, register, boneOf as boneOf0, SIDED, sideOf, hasLink as hasLinkIn, bodyParts, fitItem, kneeAxesOf, SEG, ADJ0 } from './bodyparts.js';
 
 const $ = s => document.querySelector(s);
@@ -930,6 +930,7 @@ function renderList() {
   $('#bGroup').hidden = !many || oneGroup; $('#bUngroup').hidden = !grouped;
   showBoneBar();   // 骨ごとに選ぶ（issue #1008）
   renderJetShield();
+  renderFx();
 }
 const FIELDS = { mx: ['mov', 0], my: ['mov', 1], mz: ['mov', 2], rx: ['rot', 0], ry: ['rot', 1], rz: ['rot', 2], sx: ['scal', 0], sy: ['scal', 1], sz: ['scal', 2] };
 function fillFields() {
@@ -1764,7 +1765,7 @@ const stepNote = (out, what) => (done, total) => { out.textContent = `${what}（
 // （関数と var：組み立ての初めの描き直し（renderList）からも呼ばれる）
 function isJet(it) { return !!byId[it?.part]?.jet; }
 function isJetPoint(it) { return byId[it?.part]?.jet === 'point'; }
-function canShield(it) { return !!it && !isHead(it.part) && !isJet(it); }   // （頭の部品は頭の座標で持つので、盾にできない）
+function canShield(it) { return !!it && !isHead(it.part) && !isJet(it) && !isFx(it); }   // （頭の部品は頭の座標で持つので、盾にできない）
 // 書き出しの道具（xsengine.js）は 1 つの機体しか持てない：書き出しと、部品の噴射口の数えを 1 つずつ順に
 let engineQ = Promise.resolve();
 const onEngine = fn => { const r = engineQ.then(fn, fn); engineQ = r.catch(() => {}); return r; };
@@ -1887,7 +1888,7 @@ for (const id of ['jetYaw', 'jetPitch']) $('#' + id).oninput = () => {
 // 当たる所。当たらなければ線のいちばん近い所）。掴むのは矢印（口はつまみと重なる）。押すだけ（動かさない）なら今までどおり選ぶ
 let jetDrag = null;
 canvas.addEventListener('pointerdown', e => {
-  if (PE.active() || gizmo.dragging || e.button !== 0 || selected < 0 || !isJet(items[selected]) || !groups[selected]) return;
+  if (PE.active() || gizmo.dragging || e.button !== 0 || selected < 0 || !(isJet(items[selected]) || isFx(items[selected])) || !groups[selected]) return;
   const r = canvas.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
   // (掴むのは矢印：口はつまみの真ん中と重なるので、つまみに譲る)
@@ -1909,7 +1910,7 @@ canvas.addEventListener('pointermove', e => {
   setJetAngles(jetDrag.i, Math.atan2(d.x, -d.z) / D, Math.asin(Math.max(-1, Math.min(1, d.y))) / D);
   fillFields();
 }, true);
-const endJetDrag = e => { if (!jetDrag || e.pointerId !== jetDrag.id) return; jetDrag = null; save(); renderJetShield(); };
+const endJetDrag = e => { if (!jetDrag || e.pointerId !== jetDrag.id) return; jetDrag = null; save(); renderJetShield(); renderFx(); };
 canvas.addEventListener('pointerup', endJetDrag, true);
 canvas.addEventListener('pointercancel', endJetDrag, true);
 $('#bJetAdd').onclick = addJet;
@@ -1921,6 +1922,72 @@ $('#bShieldOn').onclick = () => setShield(true);
 $('#bShieldOff').onclick = () => setShield(false);
 $('#shieldBox').ontoggle = renderJetShield;
 $('#shieldGuideOn').onchange = renderJetShield;
+
+// 煙・火花の点（parts/back/jetshield.js の fxpoint。issue 1024、モデレーター なおぴおさん 2026-11-20 #要望用「煙や火花のエフェクトを発生させる
+// アイテムを追加してほしい」「それらを作動させる条件付け(移動中、ブースト中、特定の形態中など)を出来るようにしてほしい」）：形の無い点。
+// 置いたパーツの item.fx = { k: 種類, w: 出す時, n: 量, s: 大きさ }（jetshield.js fxOf）。向きは噴射口と同じく回転（rot）で、角度の欄と矢印のドラッグ。
+// 書き出しは骨 fx_<n>（xsengine.js）、ゲームは自分のスキンだけで出す（client/src/models.ts fxPts、world.ts）
+function isFx(it) { return !!byId[it?.part]?.fx; }
+function addFx(k) {
+  if (busy()) return;
+  const box = new THREE.Box3();
+  items.forEach((it, i) => { if (!isJet(it) && !isFx(it) && groups[i] && holderOf(it) === torsoJ.inner) box.expandByObject(groups[i]); });
+  const n = items.filter(isFx).length, side = n % 2 ? -1 : 1;
+  const at = box.isEmpty() ? [0, 2.25, -0.3] : [0, box.getCenter(new THREE.Vector3()).y + 0.1, box.min.z - 0.02];
+  addItems([{ part: 'fxpoint', mov: [round(side * (0.08 + 0.04 * Math.floor(n / 2)), 4), round(at[1], 4), round(at[2], 4)], rot: [-20, 0, 0], scal: [1, 1, 1], fx: fxOf({ fx: { k } }) }]); pickLast(1);
+  note(`${FX_KINDS[k]}を出す点を 1 つ足しました。水色の矢印が出す向き。種類・量・大きさ・出す時は「煙・火花」の欄で`);
+}
+function setFx(patch) {
+  const it = items[selected]; if (!isFx(it)) return;
+  it.fx = fxOf({ fx: { ...fxOf(it), ...patch } }); save(); renderFx();
+}
+function renderFx() {
+  const fl = $('#fxList'); if (!fl) return;
+  const own = items.map((it, i) => [it, i]).filter(([it]) => isFx(it));
+  fl.innerHTML = '';
+  own.forEach(([it, i], k) => {
+    const f = fxOf(it), d = document.createElement('div'); d.className = picked.includes(i) ? 'sel' : '';
+    const b = it.bone ? BONE_PICK.find(([x]) => x === it.bone)?.[1] ?? it.bone : '胴', side = ['arm', 'fore', 'leg', 'shin', 'foot'].includes(it.bone) ? (sideOf(it) === 'l' ? '・左' : '・右') : '';
+    d.innerHTML = `<span>${FX_KINDS[f.k]} ${k + 1}（${b}${side}、${f.w.map(w => FX_WHEN[w]).join('・')}）</span><b class="x" title="外す">×</b>`;
+    d.onclick = e => { if (e.target.classList.contains('x')) { items.splice(i, 1); selected = -1; picked = []; rebuild(); save(); return; } selectOne(i); };
+    fl.appendChild(d);
+  });
+  fl.hidden = !own.length;
+  $('#fxInfo').innerHTML = own.length ? `煙・火花の点 <b>${own.length} 個</b>${own.length > 8 ? '（ゲームに書き出すのは先に置いた 8 個まで）' : ''}。水色の矢印が出す向き` : 'まだありません。下のボタンで、煙か火花を出す点を置く';
+  const it = items[selected], on = selected >= 0 && isFx(it) && picked.length <= 1;
+  $('#fxSel').hidden = !on;
+  if (!on) return;
+  const f = fxOf(it), ks = $('#fxKind');
+  if (!ks.options.length) ks.innerHTML = Object.entries(FX_KINDS).map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  ks.value = f.k;
+  if (document.activeElement !== $('#fxN')) $('#fxN').value = f.n;
+  if (document.activeElement !== $('#fxS')) $('#fxS').value = f.s;
+  const wb = $('#fxWhen');
+  if (!wb.children.length) wb.innerHTML = Object.entries(FX_WHEN).map(([v, t]) => `<label class="chk" style="display:inline-flex;margin-right:6px"><input type="checkbox" data-w="${v}">${t}</label>`).join('');
+  for (const c of wb.querySelectorAll('input')) c.checked = f.w.includes(c.dataset.w);
+  const [y, p] = jetAngles(it);
+  if (document.activeElement !== $('#fxYaw')) $('#fxYaw').value = y;
+  if (document.activeElement !== $('#fxPitch')) $('#fxPitch').value = p;
+}
+$('#bFxSmoke').onclick = () => addFx('smoke');
+$('#bFxSpark').onclick = () => addFx('spark');
+$('#fxBox').ontoggle = renderFx;
+$('#fxKind').onchange = e => setFx({ k: e.target.value });
+$('#fxN').onchange = e => setFx({ n: parseFloat(e.target.value) });
+$('#fxS').onchange = e => setFx({ s: parseFloat(e.target.value) });
+$('#fxWhen').onchange = e => {
+  // （「ずっと」はほかを含むので、ずっとを入れるとほかは外れ、ほかを入れるとずっとは外れる。1 つも選ばないと、ずっと）
+  const t = e.target?.dataset?.w;
+  if (t && e.target.checked) for (const c of $('#fxWhen').querySelectorAll('input')) if (c !== e.target && (t === 'always' || c.dataset.w === 'always')) c.checked = false;
+  const w = [...$('#fxWhen').querySelectorAll('input:checked')].map(c => c.dataset.w);
+  setFx({ w: w.length ? w : ['always'] });
+};
+for (const id of ['fxYaw', 'fxPitch']) $('#' + id).oninput = () => {
+  if (selected < 0 || !isFx(items[selected])) return;
+  const y = parseFloat($('#fxYaw').value), p = parseFloat($('#fxPitch').value);
+  if (!Number.isFinite(y) || !Number.isFinite(p)) return;
+  setJetAngles(selected, y, p); fillFields(); save();
+};
 
 // opt.form（2〜）：その形態の形（v2-forms.js bakeForm。色は形態 1 のまま：三角形の並びを変えない）も、形態 1 と同じ骨・床・高さで書き出す（out.form）。
 // ゲームで能力の間だけ姿を替える機体（client/src/models.ts axisMorph、AXIS の間のブルーフェイト1号機）の、替えた後の模型
@@ -2697,7 +2764,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '39ba441';
+const BUILD = 'c36d71e';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

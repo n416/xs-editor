@@ -56,6 +56,8 @@ export const DEFAULTS = {
   jet: null,               // Ver2's nozzle part or flame point (parts/back/jetshield.js): { r: the mouth's radius, point: a flame point with no
                            //     shape (a blockout) }; its mouth at the part's origin, blowing along its -z. A flame comes out of each (nozzlesOf);
                            //     with a flame point among them, from these alone (the parts named 噴射口 no longer)
+  fx: null,                // Ver2's smoke / spark point (parts/back/jetshield.js fxpoint, issue 1024): { k, w, n, s } (fxOf); a blockout at
+                           //     the point, blowing along its -z. Exported as a bone fx_<n> with these in its extras (buildGameModel)
   shield: false,           // a part of the shield's look (Ver2: a part on the bone 盾; a blockout): exported as the node `shield` (buildGameModel)
   roman: 0,                // ロマン砲変形 (Ver2's item.roman, issue #795): weapon slot × 2, + 1 when it shows only once that slot is spent (else it comes
                            //     off then); 0 none. The game model's vertices carry it (_ROMAN; client/src/roman.ts)
@@ -640,6 +642,16 @@ function nozzlesOf(pieces) {
     const sc = new THREE.Vector3().setFromMatrixScale(M), r = (p.jet.r ?? 0.06) * (Math.abs(sc.x) + Math.abs(sc.y)) / 2;
     return { pos, dir, r, bone: sided(boneGroupOf(p), pos.x, pos.z), name: p.name, own: true };
   }), ...(own.some(p => p.jet.point) ? [] : autoNozzles(pieces))].sort((a, b) => b.r - a.r);
+}
+// Ver2's smoke / spark points (issue 1024): each with its place, the way it gives off (its -z) and what (p.fx). At most FX_MAX go
+// into the game model, the first placed first (the game reads no more) [独自]
+export const FX_MAX = 8;
+function fxPointsOf() {
+  return parts.filter(p => p.fx && p.op === 'add').map(p => {
+    p.proxy.updateMatrixWorld();
+    const M = p.proxy.matrixWorld, pos = new THREE.Vector3().applyMatrix4(M), dir = new THREE.Vector3(0, 0, -1).transformDirection(M);
+    return { pos, dir, fx: { ...p.fx, w: p.fx.w.slice() }, bone: sided(boneGroupOf(p), pos.x, pos.z) };
+  });
 }
 function autoNozzles(pieces) {
   const groups = new Map();
@@ -1395,6 +1407,16 @@ function buildGameModel(opt = {}) {
     n.userData.r = Math.round(z.r * 1e4) / 1e4;
     bones[z.bone].add(n);
   });
+  // smoke / spark points (Ver2's 煙・火花の点, issue 1024): a bone at each, its -Y the way the smoke or sparks go out (as a nozzle's),
+  // what it gives off in its extras: k kind, w when, n a second, s size (client/src/models.ts reads them on an own skin only)
+  const fxList = fxPointsOf().filter(z => bones[z.bone]).slice(0, FX_MAX);
+  fxList.forEach((z, i) => {
+    const n = new THREE.Bone(); n.name = 'fx_' + i;
+    n.position.copy(toGame(z.pos, floor).sub(toGame(at[z.bone], floor)));
+    n.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), new THREE.Vector3(-z.dir.x, z.dir.y, -z.dir.z));
+    Object.assign(n.userData, z.fx);
+    bones[z.bone].add(n);
+  });
   // ankles: how far they can turn goes into the model (the foot bones' extras; client/src/models.ts reads it)
   const ankle = bones.foot_l || bones.foot_r ? safeAnkle(lods[0], at, H) : null;
   ankleNow = ankle;
@@ -1584,7 +1606,7 @@ function buildGameModel(opt = {}) {
     root.add(node);
     report.shield = { tris: Math.round(tris), height: box.max.y - box.min.y };
   }
-  report.jets = jetList.length; report.ownJets = jetList.some(z => z.own);
+  report.jets = jetList.length; report.ownJets = jetList.some(z => z.own); report.fx = fxList.length;
   report.attach = Object.keys(attach).filter(k => attach[k]);
   report.height = whole.max.y - whole.min.y;
   return { root, report, frame };
