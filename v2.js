@@ -1499,6 +1499,8 @@ function switchForm(n) {
 
   formAnim = { from: formNow, to: n, t0: performance.now() }; formNow = n;
   renderForms(); showPaint();   // （色の欄の透明度は、今の形態の値）
+  // （「武器を作る」の欄の「点（形態 n）」と点の印も、今の形態の物に描き直す：前は機体を組み直すまで前の形態のまま、issue 1051。パーツエディタの間は描かない：rebuild と同じ）
+  if (!PE.active()) bench?.afterRebuild();
 }
 function addForm() { if (formCount() >= FORM_MAX) return; formAdded = formCount() + 1; switchForm(formAdded); }
 function resetForms() { formNow = 1; formAdded = 1; formAnim = null; formScrub = null; tiltMid = 0; renderForms(); showPaint(); }
@@ -2829,7 +2831,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '7b71f70';
+const BUILD = 'ed5a579';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
