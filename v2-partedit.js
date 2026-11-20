@@ -769,7 +769,19 @@ export function initPartEdit(ctx) {
       const c = b.getCenter(new THREE.Vector3()).toArray(), sz = size.toArray();
       [0, 1, 2].forEach(a => bind('c' + a, () => c[a], v => { const b2 = boxOf(pc), c2 = b2.getCenter(new THREE.Vector3()).toArray(), to = c2.slice(); to[a] = v; hullTo(pc, c2, [1, 1, 1], to); }));
       [0, 1, 2].forEach(a => bind('z' + a, () => sz[a], v => { if (!(v > 1e-4)) return; const b2 = boxOf(pc), c2 = b2.getCenter(new THREE.Vector3()).toArray(), s2 = b2.getSize(new THREE.Vector3()).toArray(), k = [1, 1, 1]; k[a] = v / Math.max(1e-6, s2[a]); hullTo(pc, c2, k, c2); }));
-      html.push(row3('中心', ['c0', 'c1', 'c2'], step), row3('大きさ', ['z0', 'z1', 'z2'], step), '<div class="hint">3 つの欄は 左右・上下・前後（パーツの座標）。回すのは 3D のつまみ（E）で</div>');
+      // 回転（issue 1035）：面で囲った形は向きを角に焼き込んで持つので、欄は「この欄を開いてから回した角度」。
+      // 打つたびに、前の角度からの差だけを、いまの中心のまわりに掛ける（間に中心・大きさを変えても崩れない）
+      const rot = [0, 0, 0], D2R = Math.PI / 180;
+      [0, 1, 2].forEach(a => bind('t' + a, () => rot[a], v => {
+        const next = rot.slice(); next[a] = v;
+        const Ro = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rot[0] * D2R, rot[1] * D2R, rot[2] * D2R, 'XYZ'));
+        const Rn = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(next[0] * D2R, next[1] * D2R, next[2] * D2R, 'XYZ'));
+        const M = Rn.multiply(Ro.invert()), c2 = boxOf(pc).getCenter(new THREE.Vector3());
+        const pl = planesOf(cornersOf(pc.planes).map(p => new THREE.Vector3(...p).sub(c2).applyMatrix4(M).add(c2).toArray()));
+        if (pl) { pc.planes = pl; rot[a] = v; }
+      }));
+      html.push(row3('中心', ['c0', 'c1', 'c2'], step), row3('大きさ', ['z0', 'z1', 'z2'], step), row3('回転', ['t0', 't1', 't2'], 5),
+        '<div class="hint">3 つの欄は 左右・上下・前後（パーツの座標）。回転は度で、x・y・z の軸の回りに、ブロックの真ん中で回す。この形は向きを角に焼き込んで持つので、回転の欄は今の向きからの角度（ほかのブロックを選ぶ・つまみで動かすと 0 に戻る）。3D のつまみ（E）でも回せる</div>');
     } else {
       const tf = (pc.tf ??= { p: [0, 0, 0], r: [0, 0, 0], s: [1, 1, 1] });
       for (const [k, n] of [['p', 'p'], ['r', 'r'], ['s', 's']]) [0, 1, 2].forEach(a => bind(n + a, () => tf[k][a], v => { if (k === 's' && Math.abs(v) < 1e-4) return; pc.tf[k][a] = v; }));
