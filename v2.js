@@ -39,7 +39,7 @@ import { fitTiltBoth, tilted, TILT_GRID } from './kneetilt.js';
 import { autoFix } from './v2-autofix.js';
 import { P, XH, XL, YH, YL, ZH, ZL, box } from './xsasm-lib.js';
 import { JET_R, JET, FX_KINDS, FX_WHEN, FX_N, FX_S, fxOf } from './parts/back/jetshield.js';
-import { byId, register, boneOf as boneOf0, SIDED, sideOf, hasLink as hasLinkIn, bodyParts, fitItem, kneeAxesOf, SEG, ADJ0 } from './bodyparts.js';
+import { byId, register, boneOf as boneOf0, SIDED, sideOf, hasLink as hasLinkIn, bodyParts, fitItem, jointsOf, kneeAxesOf, SEG, ADJ0 } from './bodyparts.js';
 
 const $ = s => document.querySelector(s);
 const D = Math.PI / 180;
@@ -1079,8 +1079,9 @@ function showAdj() {
 for (const [k, id] of SEG_ADJ) $('#' + id).oninput = () => { adj[k] = +$('#' + id).value / 100; showAdj(); rebuild(); save(); };
 $('#adjHeadK').oninput = () => { adj.headK = +$('#adjHeadK').value / 100; showAdj(); rebuild(); save(); };
 $('#bAdjReset').onclick = () => { for (const [k] of SEG_ADJ) adj[k] = 0; adj.headK = 1; showAdj(); rebuild(); save(); };
-for (const [k, id] of [['up', 'adjUp'], ['sh', 'adjSh'], ['shY', 'adjShY']]) $('#' + id).oninput = () => {
-  const v = +$('#' + id).value / 100, d = v - adj[k];
+/** 上半身の上下・肩の左右・肩の高さを v にする：前の値との差だけ、置いた部品を動かす */
+function moveAdj(k, v) {
+  const d = v - adj[k];
   adj[k] = v;
   for (const it of items) {
     if (!withUpper(it.part)) continue;
@@ -1089,8 +1090,39 @@ for (const [k, id] of [['up', 'adjUp'], ['sh', 'adjSh'], ['shY', 'adjShY']]) $('
     else if (k === 'shY' && sh) it.mov[1] = round(it.mov[1] + d, 4);
     else if (k === 'sh' && sh) it.mov[0] = round(it.mov[0] + Math.sign(it.mov[0] || 1) * d, 4);
   }
-  showAdj(); rebuild(); save();
-};
+}
+for (const [k, id] of [['up', 'adjUp'], ['sh', 'adjSh'], ['shY', 'adjShY']]) $('#' + id).oninput = () => { moveAdj(k, +$('#' + id).value / 100); showAdj(); rebuild(); save(); };
+/**
+ * 体型の雛形：ゲームの XS の関節の位置に合わせる（テスターの声 2026-11-21「ニャーノの肩の位置は今の寸法の調整で設定できる位置よりも下にある」、依頼主「対応してあげて」）。
+ * ニャーノ（GIO の支援機。ゲームの形は機体エディタの部品でできた「自由な機体」1 つで、カタログの骨格と違う）の関節を、ゲームの模型
+ * public/models/b_support_04.glb の骨の位置で測った値（エディタの単位。足の裏が 0、全高 3.01）[独自: 測った値]：
+ *   肩 x 0.50・y 2.199、首の付け根（head）y 2.199、ひざ y 1.059、足首 y 0.309、股関節 y 1.434、ひじ 1.769、右手 1.394。
+ * 脚・腕の長さは、カタログの骨格でその位置になる値（npx tsx out/nyano/probe.ts で書き出して確かめた：太もも −5・すね −12 で ひざの下の軸 0.89〜上の軸 1.10・股関節 1.43、
+ * 上腕 −17・前腕 −12 で 肩→ひじ 0.43・ひじ→手 0.37）。肩と首は、その長さにしてから今の機体の肩関節・首の位置を測って、差だけ動かす
+ * （肩関節は jointsOf と同じ所、首はゲーム用の書き出しの頭の骨と同じ所：neckBaseY）。
+ * 合わせられない所：股の幅（ニャーノ 0.27・カタログ 0.175）、腕・脚が外へ開く角度（ニャーノのひじ・足首は肩・股関節より外）、腹の回る中心（ニャーノ 1.40・カタログ 2.0）
+ */
+const BODY_TYPES = { nyano: { thigh: -0.05, shin: -0.12, upperArm: -0.17, foreArm: -0.12, shoulder: [0.5, 2.199], neckBase: 2.199 } };
+/** 首の付け根の高さ（表示している形で。脚の長さで体が上がった分も入る）。ゲーム用の書き出しの頭の骨と同じ決め方（xsengine.js jointPositions）：
+ *  頭の回る中心のブロック（回転の中心が「頭」か、名前が「首」。カタログの首では「段」）があればその中心、無ければ頭のパーツのいちばん下。頭が無ければ null */
+function neckBaseY() {
+  root.updateMatrixWorld(true);
+  const neck = new THREE.Box3(), all = new THREE.Box3();
+  const pivotHead = pc => pc.pivot === 'head' || ((!pc.pivot || pc.pivot === 'auto') && pc.name === '首');
+  items.forEach((it, i) => { if (!groups[i]) return; groups[i].traverse(o => { if (!o.isMesh || !o.userData.pc) return; if (isHead(it.part)) all.expandByObject(o); if (pivotHead(o.userData.pc)) neck.expandByObject(o); }); });
+  return !neck.isEmpty() ? (neck.min.y + neck.max.y) / 2 : all.isEmpty() ? null : all.min.y;
+}
+function applyBodyType(T) {
+  for (const k of ['thigh', 'shin', 'upperArm', 'foreArm']) adj[k] = T[k];
+  const lift = adj.thigh + adj.shin, J = jointsOf(items, adj).arm_l;
+  moveAdj('sh', round(adj.sh + T.shoulder[0] - Math.abs(J[0]), 4));
+  moveAdj('shY', round(adj.shY + T.shoulder[1] - lift - J[1], 4));
+  rebuild();
+  const y = neckBaseY();
+  if (y !== null) { adj.neck = round(adj.neck + T.neckBase - y, 4); rebuild(); }
+  showAdj(); save();
+}
+$('#bBodyNyano').onclick = () => applyBodyType(BODY_TYPES.nyano);
 
 // ---- カタログ（部品ごとに小さな絵）。押すと決まった所に置く（左右の対は両側に） ----
 // 押すたびに増やす（頭の組み立てと同じ）。「同じ部位は入れ替える」を入れると、同じ部位の部品を消してから置く。
@@ -2833,7 +2865,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'd19b74c';
+const BUILD = '8fd7c3c';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
@@ -2988,7 +3020,7 @@ save();
 showUnitName();
 requestAnimationFrame(tick);
 // 確かめるための出口（画面の外から、置いた部品と視点を見る）
-window.__asm = { exportWeaponGlb, weaponDoc, ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, selectOne, picked: () => picked, pivot, groupPicked, ungroupPicked, userParts, byId };
+window.__asm = { bodyType: { apply: k => applyBodyType(BODY_TYPES[k]), neckBaseY, adj: () => adj }, exportWeaponGlb, weaponDoc, ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, unitDoc: () => unitDoc(), pe: PE, gizmo, select, selectOne, picked: () => picked, pivot, groupPicked, ungroupPicked, userParts, byId };
 // ?unit=<機体ファイル（この画面からの相対パス）>：開いたときにその機体を読み込む（試作を見せる用。&save=<名前> を付けると「つづきから」の保存を別の場所にする）
 {
   const u = new URLSearchParams(location.search).get('unit');
