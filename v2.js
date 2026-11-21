@@ -2266,7 +2266,9 @@ async function runAutoFix(id, box) {
 // 縮めて残す：同じ並びの三角形）を xsengine.js buildWeapon の opt.form2 に渡し、模型の中の動き（モーフ）と点 muzzle_2・blade_tip_2・grip_2 になる
 /** 武器の文書 { parts, hand_r, points, form2 }（samples/w_<陣営>_<形の名前>.json と同じ形。tools/exportweapon.ts・tools/sharewpn.ts もこれを使う） */
 function weaponDoc(def) {
-  const doc = d => ({ items: [{ part: d.id, mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] }], adj: { ...ADJ0 }, paint: null, userParts: {} });
+  // 塗りは今の機体の塗り（機体の「書き出す」と同じ）：役で塗るブロック（発光など）を、エディタに見えている色で出す。
+  // 2026-11-21 までは塗り無し（paint: null）で、役のブロックがブロック自身の色（白など）で出て、ゲームで発光が白くなっていた（issue 1066）
+  const doc = d => ({ items: [{ part: d.id, mov: [0, 0, 0], rot: [0, 0, 0], scal: [1, 1, 1] }], adj: { ...ADJ0 }, paint, userParts: {} });
   const { parts } = unitParts(doc(def), { shaped: true });
   const wp = bench?.pointsOf(def) ?? {};
   let form2 = null;
@@ -2831,7 +2833,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'ed5a579';
+const BUILD = '296ce1f';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
