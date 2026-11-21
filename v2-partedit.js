@@ -48,6 +48,28 @@ export function setFreeRole(pc, r) {
   if (freeRoleOf(pc) === 'keep') pc.keepGlow = pc.glow ?? null;
   pc.role = r; pc.glow = GLOW_ROLES.has(r);
 }
+/** ブロックの今の「色の役」（右の欄の選択肢で選ばれている物）。d.free は自由なパーツ */
+const roleNow = (pc, d) => (d?.free ? freeRoleOf(pc) : roleOf(pc) ?? 'keep');
+const roleLabel = r => (r === 'keep' ? '塗らない' : ROLE_LABEL[r] ?? r);
+/** 「塗らない」を選べるブロックか（roleRows の「塗らない」が出る物と同じ） */
+const keepable = (pc, d) => !!d?.free || roleNow(pc, d) === 'keep' || 'role' in pc;
+/** ブロック pc の「色の役」を r にする（右の欄の peRole・peFreeRole と、いくつも選んだ時の peRoles が使う） */
+function applyRole(pc, r, d) {
+  if (d?.free) { setFreeRole(pc, r); return; }
+  // （役を書いたブロックは役も：武器の飾りの写しは役 keep のままで、選んだ役が塗りの色にならなかった。テスター 静流りおさん 2026-11-08）
+  // （役を持つブロック＝武器の飾り：色は書き換えない。役が色を決め、「塗らない」に戻すと武器の色に戻る。issue #949）
+  if (r === 'keep') { if ('role' in pc) pc.role = 'keep'; }
+  else if ('role' in pc) { pc.role = r; pc.glow = GLOW_ROLES.has(r); }   // （飾りの光るかどうかは名前からも決まるので、消さずに false）
+  else { pc.color = ROLE_COLOR[r]; if (GLOW_ROLES.has(r)) pc.glow = true; else delete pc.glow; }
+}
+/** いくつも選んだブロック pcs の「色の役」の選択肢（issue 1077、Wijick さん 2026-11-21 #色々なツールへの要望「ブースターの色の役などを 1 つずつ変えるのが大変」）。
+ *  役がそろっていればその役、ばらばらなら「（いろいろ）」が選ばれた形。「塗らない」は、選べるブロックが 1 つでもあれば出す */
+const rolesRows = (pcs, d) => {
+  const now = new Set(pcs.map(p => roleNow(p, d))), one = now.size === 1 ? [...now][0] : null;
+  return (one ? '' : `<option value="" selected disabled>（いろいろ）</option>`)
+    + (pcs.some(p => keepable(p, d)) ? `<option value="keep" ${one === 'keep' ? 'selected' : ''}>${d?.deco ? '塗らない（武器の色のまま）' : '塗らない（ブロックの色のまま）'}</option>` : '')
+    + Object.entries(ROLE_LABEL).map(([k, v]) => `<option value="${k}" ${one === k ? 'selected' : ''}>${v}</option>`).join('');
+};
 const r5 = v => Math.round(v * 1e5) / 1e5, r12 = v => Math.round(v * 1e12) / 1e12, r4 = v => Math.round(v * 1e4) / 1e4, r1 = v => Math.round(v * 10) / 10;
 const fmt = v => String(+(+v).toFixed(4));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -442,6 +464,16 @@ export function initPartEdit(ctx) {
     st.mode = 'block'; st.corner = st.face = st.edge = -1; st.more = [];
     refresh(); flashBlock();
   }
+  /** pc と同じ「色の役」のブロック（足す物）をぜんぶ選ぶ（issue 1077）。add なら今の選びに足す。pc が最後に選んだ物（st.sel）になる */
+  function selectSameRole(pc, add = false) {
+    const d = st.def, r = roleNow(pc, d), at = d.pieces.indexOf(pc);
+    const same = d.pieces.map((p, i) => i).filter(i => !isSub(d.pieces[i]) && kindOf(d.pieces[i]) !== 'mesh' && roleNow(d.pieces[i], d) === r);
+    const keep = add ? blocksOf() : [];
+    clearSel();
+    st.blocks = [...new Set([...keep, ...same])].filter(i => i !== at); st.sel = at; st.mode = 'block';
+    refresh(); flashBlock();
+    ctx.note(`「${roleLabel(r)}」のブロック ${same.length} 個を選びました`);
+  }
   /** 押した角・辺・面 k を選ぶ。add（Ctrl・Shift）なら選び足す。もう選んでいれば、選ぶのをやめる */
   function choose(k, add) {
     const f = st.mode, list = selOf();
@@ -726,6 +758,21 @@ export function initPartEdit(ctx) {
       const pcs = blocksOf().map(i => st.def.pieces[i]).filter(p => !isSub(p));
       if (pcs.length) {
         const show = pcs.includes(pc) ? pc : pcs[pcs.length - 1];
+        // 色の役：選んだブロック（足す物だけ、取り込んだ形を除く）をまとめて同じ役に（issue 1077）。元に戻すは 1 回で全部戻る
+        const rp = pcs.filter(p => kindOf(p) !== 'mesh'), rs = rp.includes(show) ? show : rp[rp.length - 1];
+        if (rp.length) {
+          E.right.insertAdjacentHTML('beforeend', `<h2>色の役</h2>
+            <div class="row"><label>色の役</label><select id="peRoles">${rolesRows(rp, d)}</select></div>
+            <div class="pebar"><button id="peSameRole" class="small" title="このパーツの中で、「${esc(roleLabel(roleNow(rs, d)))}」のブロック（足す物）をぜんぶ選ぶ。Ctrl か Shift を押しながら押すと、選び足す">「${esc(roleLabel(roleNow(rs, d)))}」をぜんぶ選ぶ</button></div>
+            <div class="hint">選んだブロック ${rp.length} 個${rp.length < nBlocks ? '（引くブロック・取り込んだ形を除く）' : ''}を、まとめて選んだ役にする（↶ 1 回で戻る）</div>`);
+          $('#peRoles').onchange = e => {
+            const r = e.target.value; if (!r) return;
+            for (const p of rp) if (r !== 'keep' || keepable(p, d)) applyRole(p, r, d);
+            if (d.free) ctx.rebuild(); else ctx.repaint();
+            dimOthers(); commit(); renderLeft(); renderRight();
+          };
+          $('#peSameRole').onclick = e => selectSameRole(rs, e.ctrlKey || e.shiftKey || e.metaKey);
+        }
         E.right.insertAdjacentHTML('beforeend', formsHtml(show, pcs.length));
         wireForms(pcs, show);
       }
@@ -762,7 +809,8 @@ export function initPartEdit(ctx) {
       <div class="row"><label>名前</label><input type="text" id="peBlockName" value="${esc(pc.name)}"></div>
       <div class="row"><label>はたらき</label><div class="seg" style="flex:1"><button data-op="add" class="${sub ? '' : 'on'}" title="形を足す">＋ 足す</button><button data-op="sub" class="${sub ? 'on' : ''}" title="自分より上に並ぶブロックを、この形で削る">− 引く</button></div></div>
       ${sub ? '' : free ? `<div class="row"><label>色の役</label><select id="peFreeRole">${freeRoleRows(pc)}</select></div>` + (freeRoleOf(pc) !== 'keep' ? `<div class="hint">色は機体の塗りの「${ROLE_LABEL[freeRoleOf(pc)]}」の色（塗りの欄で変えると、このブロックも変わる）。ブロックの色・陣営色で塗るは「塗らない」を選んだ時に使う</div>` : `<div class="row"><label>色</label><input type="color" id="peColor" value="${/^#[0-9a-f]{6}$/i.test(pc.color ?? '') ? pc.color : '#c3c9d2'}" style="width:48px;height:24px;padding:0"><label class="chk" style="width:auto;flex:1"><input type="checkbox" id="peTeam" ${pc.team ? 'checked' : ''}>陣営色で塗る</label></div><div class="hint">色の役（主装甲・副装甲など）を選ぶと、このブロックは機体の塗りの色になる（塗りの欄で変えると付いて変わる）</div>`)
-        : `<div class="row"><label>色の役</label><select id="peRole">${roleRows(pc, d)}</select></div>`}`);
+        : `<div class="row"><label>色の役</label><select id="peRole">${roleRows(pc, d)}</select></div>`}
+      ${sub ? '' : `<div class="pebar"><button id="peSameRole" class="small" title="このパーツの中で、「${esc(roleLabel(roleNow(pc, d)))}」のブロック（足す物）をぜんぶ選び、色の役をまとめて替えられるようにする。Ctrl か Shift を押しながら押すと、選び足す（issue 1077）">「${esc(roleLabel(roleNow(pc, d)))}」をぜんぶ選ぶ</button></div>`}`);
     // 位置と大きさ
     html.push('<h2>位置と大きさ</h2>');
     if (hullEdit(pc)) {
@@ -902,15 +950,12 @@ export function initPartEdit(ctx) {
     if ($('#peBake')) $('#peBake').onclick = bakeTf;
     if (!sub) wireForms([pc], pc);
     if ($('#peBlend')) $('#peBlend').onchange = e => { if (e.target.value) pc.blendTo = e.target.value; else delete pc.blendTo; commit(); };
-    // （役を書いたブロックは役も：武器の飾りの写しは役 keep のままで、選んだ役が塗りの色にならなかった。テスター 静流りおさん 2026-11-08）
-    // （役を持つブロック＝武器の飾り：色は書き換えない。役が色を決め、「塗らない」に戻すと武器の色に戻る。issue #949）
+    // （役の決め方は applyRole：武器の飾りの役・issue #949 の扱いもそこ）
     if ($('#peRole')) $('#peRole').onchange = e => {
-      const r = e.target.value;
-      if (r === 'keep') { if ('role' in pc) pc.role = 'keep'; }
-      else if ('role' in pc) { pc.role = r; pc.glow = GLOW_ROLES.has(r); }   // （飾りの光るかどうかは名前からも決まるので、消さずに false）
-      else { pc.color = ROLE_COLOR[r]; if (GLOW_ROLES.has(r)) pc.glow = true; else delete pc.glow; }
+      applyRole(pc, e.target.value, d);
       ctx.repaint(); dimOthers(); commit(); renderLeft();
     };
+    if ($('#peSameRole')) $('#peSameRole').onclick = e => selectSameRole(pc, e.ctrlKey || e.shiftKey || e.metaKey);
     for (const el of E.right.querySelectorAll('[data-f]')) {
       el.oninput = () => { const v = parseFloat(el.value); if (!Number.isFinite(v)) return; binds[el.dataset.f].set(v); for (const o of E.right.querySelectorAll(`[data-f="${el.dataset.f}"]`)) if (o !== el) o.value = el.type === 'range' ? fmt(v) : v; live(); prof?.draw(); };
       el.onchange = () => { if (st.keepCorner) { reselectCorner(st.keepCorner); st.keepCorner = null; } commit(); refresh(false); };
