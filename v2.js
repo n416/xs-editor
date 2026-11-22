@@ -2839,7 +2839,7 @@ if (SKIN_MODEL && window.parent !== window) (async () => {
   const q = new URLSearchParams(location.search), as = q.get('as') ?? '', to = q.get('reply') ?? '';
   const send = (m, tr) => { try { window.parent.postMessage(m, /^https?:\/\/[^/]+$/.test(to) ? to : '*', tr); } catch { /* the game's page went */ } };
   try {
-    if (!/^[ab]_(raid|heavy|support|sniper|artillery_leg)$/.test(as)) throw new Error('この種別の機体は書き出せません。');
+    if (!/^[ab]_(raid|heavy|support|sniper|artillery_leg|artillery)$/.test(as)) throw new Error('この種別の機体は書き出せません。');
     const r = await (await fetch(`${SHARE.central}/api/models/${encodeURIComponent(SKIN_MODEL)}`)).json();
     const title = String(r.model?.title ?? '');
     if (r.unit) openDoc(r.unit, title);
@@ -2866,7 +2866,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'e78cc33';
+const BUILD = 'bdcd044';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
