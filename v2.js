@@ -29,7 +29,7 @@ import { initPartEdit } from './v2-partedit.js';
 import { makeWeaponBench } from './v2-weapon.js';
 import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, formDelayOf, formSpanOf, hasPurge, purgedDoc, FORM_WHEN, formWhenOf, FORM_KIND, formKindOf, setFormKind, flyTilt, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
-import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest } from './freeparts.js';
+import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest, markTurret } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
 import { DEFAULT_PAINT, ROLE_LABEL, GLOW_ROLES, colorOf, opacityOf, opacityAt, roleAlphaAt, setFormAlpha, paintFormsUsed, loadPaint, randomPalette, randomVivid, hexToHsl } from './paint.js';
 import { buildHull, hullReach } from './hull.js';
@@ -259,6 +259,7 @@ const draftMat = new THREE.MeshStandardMaterial({ color: 0x5fa8ff, transparent: 
 function freeGroup(item, index, def) {
   const g = new THREE.Group();
   g.userData.index = index; g.userData.hinges = []; g.userData.extra = new Map();
+  markTurret(def);   // （大砲のブロックは付け根から先がまるごと砲：freeparts.js markTurret）
   const tracked = isTrackedSet(def.pieces);
   const put = (key, m) => {
     if (key === 'hips' || item.bone === 'shield') { g.add(m); return; }   // （盾にした部品は、ブロックの骨によらず全部が盾の入れ物へ）
@@ -2865,7 +2866,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '8fd7c3c';
+const BUILD = 'e78cc33';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

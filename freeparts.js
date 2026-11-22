@@ -34,14 +34,47 @@ const JOINT_PARENT = { arm: 'torso', fore: 'arm', leg: 'hips', shin: 'leg', foot
 const GUN_RE = /ライフル|銃|マガジン|マズル/, BAZOOKA_RE = /バズーカ/, CANNON_RE = /大砲|キャノン|砲身/, GLOW_RE = /目|センサー|バイザー|アイ/, TRACK_RE = /キャタピラ|履帯/;
 /** 回転の中心になる部品か（どの関節の）。ならなければ null */
 export const pivotOfPart = p => {
+  const t = TURRET.get(p);
+  if (t) return t.pivot;
+  return pivotOfPiece(p);
+};
+const pivotOfPiece = p => {
   if (p.pivot && p.pivot !== 'auto') return p.pivot === 'none' ? null : p.pivot;
   for (const [g, re] of PIVOT_RULES) if (re.test(p.name ?? '')) return g;
   return null;
 };
+// ---- 大砲のブロック（砲塔） ----
+// カタログの分類が「大砲」の自分のパーツ（肩の砲など）で、大砲の付け根（台座・基部・砲架）の部品があれば、そのブロックは付け根から先がまるごと砲：
+//   骨を決めていない部品はぜんぶ大砲の骨（cannon：ゲームが迫撃砲・収束砲で起こす所）に付き、回転の中心は名前が付け根の部品だけ。
+//   骨を決めた部品（砲のアームなど、胴に付ける物）はそのまま。付け根の部品は今までどおり胴の側（回転の中心）。
+// それまでは名前で 1 個ずつ決めていて、「六角柱」「箱」「ピストン」「蛇腹」のような名前の部品は胴に残り、砲身だけが起きてずれた。
+// また「回転の中心：大砲（付け根）」を砲の部品ぜんぶに付けた作品では、その部品が全部胴の側（関節の動かない側）になって砲が少しも動かず、
+// 回転の中心も砲身の途中になっていた [作者 しゃりんさん 2026-11-22 #不具合報告用「迫撃砲、収束砲仕様時に、「砲身のみ」が可動し、台座や細かいパーツなどがその場に固定されて
+// ズレてしまっています」「そもそも砲塔が全く可動していません。こちらも砲塔の基部から稼働するようにしてほしいです」]
+const TURRET_BASE_RE = /(大砲|キャノン|砲).*(付け根|台座|基部)|砲架/;
+const TURRET = new WeakMap();   // 部品 → { bone, pivot }（大砲のブロックの中の決まり。markTurret が入れる）
+/** 大砲のブロックの部品の骨・回転の中心を決める（ブロックが変わっても呼び直せば入れ直す） */
+export function markTurret(def) {
+  if (!def || !Array.isArray(def.pieces)) return;
+  for (const p of def.pieces) TURRET.delete(p);
+  if (!def.free || def.cat !== '大砲') return;
+  const isBase = p => TURRET_BASE_RE.test(p.name ?? '') && (!p.pivot || p.pivot === 'auto' || p.pivot === 'cannon');
+  if (!def.pieces.some(isBase)) return;
+  for (const p of def.pieces) {
+    const own = p.bone && p.bone !== 'auto' ? p.bone : null, pv = pivotOfPiece(p);
+    if (isBase(p)) TURRET.set(p, { bone: own ?? JOINT_PARENT.cannon, pivot: 'cannon' });
+    else if (pv && pv !== 'cannon') continue;   // ほかの関節の中心（そのまま）
+    else TURRET.set(p, { bone: own ?? 'cannon', pivot: null });
+  }
+}
+/** 大砲のブロックの部品なら、書き出す部品に骨・回転の中心を書き込む（機体エディタの書き出しは名前で決め直すので、決まった値で渡す） */
+const turretFix = (pc, part) => { const t = TURRET.get(pc); return t ? Object.assign(part, { bone: t.bone, pivot: t.pivot ?? 'none' }) : part; };
 /** キャタピラの機体か（脚の骨が無い：脚の部品は腰に付く） */
 export const isTrackedSet = pieces => pieces.some(p => (p.op ?? 'add') === 'add' && !p.blockout && TRACK_RE.test(p.name ?? ''));
 /** 部品が付く骨の組（head・torso・hips・arm・elbow・fore・leg・knee・shin・foot・cannon・wing・skirt） */
 export const groupOfPart = (p, tracked = false) => {
+  const t = TURRET.get(p);
+  if (t) return t.bone;
   let g = 'torso';
   const pv = pivotOfPart(p), name = p.name ?? '';
   if (p.bone && p.bone !== 'auto') g = p.bone;
@@ -103,17 +136,18 @@ export function freeParts(def, it, shapes) {
   return out.map(p => ({ ...p, gun: true, ...(!p.bone || p.bone === 'auto' ? { bone: 'fore' } : {}) }));
 }
 function freePartsOf(def, it, shapes) {
+  markTurret(def);
   const tracked = isTrackedSet(def.pieces);
   // 機体エディタに無い形（断面をつなぐ形・蛇腹）は、置いたままでも三角形で渡す（写しごとに 1 個）
   // 陰をつなぐ凸の形（smooth のある hull）も三角形で渡す：面の式のまま渡すと、書き出しが面ごとに平らに作り直す
   const smoothHull = pc => (pc.kind ?? 'hull') === 'hull' && pc.smooth > 0;
   const native = pc => ['hull', 'extrude', 'lathe', 'mesh', 'tri'].includes(pc.kind ?? 'hull') && !smoothHull(pc);
-  if (atRest(it) && def.pieces.every(native)) return def.pieces.map(partOf);
+  if (atRest(it) && def.pieces.every(native)) return def.pieces.map(pc => turretFix(pc, partOf(pc)));
   // 機体エディタに無い形を三角形にして渡す（mov：置いた位置。写しごとに 1 個）
   const asTris = (mov) => {
     const tri = new Map(); for (const s of shapes(def)) if (!native(s.pc)) (tri.get(s.pc) ?? tri.set(s.pc, []).get(s.pc)).push(s.shape);
-    return def.pieces.flatMap(pc => (native(pc) ? [(p => { p.pos = p.pos.map((v, k) => v + mov[k]); return p; })(partOf(pc))]
-      : (tri.get(pc) ?? []).map(shape => { const { tf, pos, pts, planes, side, top, secs, ...rest } = pc; return { ...structuredClone(rest), ...shape, pos: mov.slice(), rot: [0, 0, 0], scl: [1, 1, 1] }; })));
+    return def.pieces.flatMap(pc => (native(pc) ? [(p => { p.pos = p.pos.map((v, k) => v + mov[k]); return turretFix(pc, p); })(partOf(pc))]
+      : (tri.get(pc) ?? []).map(shape => { const { tf, pos, pts, planes, side, top, secs, ...rest } = pc; return turretFix(pc, { ...structuredClone(rest), ...shape, pos: mov.slice(), rot: [0, 0, 0], scl: [1, 1, 1] }); })));
   };
   if (atRest(it)) return asTris([0, 0, 0]);
   // 動かしただけ（回していない・拡大していない）：元の部品の並びのまま、位置だけ足す（手に持たせた武器。形の作り方・遠くの形の簡略化が元のまま残る）。

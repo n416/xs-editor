@@ -15,7 +15,7 @@ import { buildHull, hullReach, movePlanes } from './hull.js';
 import { planesFromPoints } from './xsasm-lib.js';
 import { ROLE_LABEL, ROLE_COLOR, GLOW_ROLES, roleOf } from './paint.js';
 import { KIND_LABEL, BLOCK0, kindOf, isSub, soloGeo, boxOf, pointsOf, roundCorners, latheLoop, tfMatrix, loftSecs } from './partgeo.js';
-import { BONE_CHOICES, PIVOT_CHOICES, groupOfPart, pivotOfPart, isGlowPart, isTrackedSet } from './freeparts.js';
+import { BONE_CHOICES, PIVOT_CHOICES, groupOfPart, pivotOfPart, isGlowPart, isTrackedSet, markTurret } from './freeparts.js';
 import { profileEditor } from './v2-profile.js';
 import { FORM_DELAY_MAX, FORM_MAX, formDelayOf, formOf, setForm } from './v2-forms.js';
 
@@ -915,7 +915,10 @@ export function initPartEdit(ctx) {
     html.push('<h2>ミラー・繰り返し</h2>', check('左右ミラー（パーツの真ん中 x = 0 で反転した写しも作る）', 'mirror'), slider('個数', 'n', 1, 16, 1), row3('間隔', ['a0', 'a1', 'a2'], step));
     if (!sub && free) {
       // 自由な部品（機体エディタの形式）：付く骨・回転の中心・光る・当たり判定・全高
-      const tracked = isTrackedSet(d.pieces), autoB = BONE_CHOICES[groupOfPart({ ...pc, bone: 'auto' }, tracked)], autoP = PIVOT_CHOICES[pivotOfPart({ ...pc, pivot: 'auto' }) ?? 'none'];
+      // （「自動」で何になるか：大砲のブロックは付け根から先がまるごと砲なので、その部品を「自動」にしたブロックで決め直して見る。freeparts.js markTurret）
+      const probe = k => { const q = { ...pc, [k]: 'auto' }; markTurret({ ...d, pieces: d.pieces.map(x => (x === pc ? q : x)) }); return q; };
+      const tracked = isTrackedSet(d.pieces), autoB = BONE_CHOICES[groupOfPart(probe('bone'), tracked)], autoP = PIVOT_CHOICES[pivotOfPart(probe('pivot')) ?? 'none'];
+      markTurret(d);
       bind('glow', () => !!isGlowPart(pc), v => { pc.glow = v; });
       bind('noHit', () => !!pc.noHit, v => { pc.noHit = v; });
       bind('noHeight', () => !!pc.noHeight, v => { pc.noHeight = v; });
