@@ -1952,6 +1952,25 @@ export const XS = {
   attach: () => { const n = attachFloating(); for (const p of parts) p.pos = p.proxy.position.toArray(); return n; },
   /** the nozzles the loaded model's parts have (named 噴射口…; not the flame points set by hand) in editor space, the largest first:
    *  [{ pos, dir, r, bone (the game's bone: torso, forearm_l, ...) }]. Ver2's 噴射口 panel turns them into flame points it can move */
+  /** where a cutting piece of one placed part of Ver2 cuts a piece of another placed part (what the export did till 2026-11-23, rebuild):
+   *  [{ cutter, victim, srcCutter, srcVictim }] for the pairs whose cut changes the victim's shape. tools/crosscuttest.ts reads it */
+  crossCuts: () => {
+    const out = [];
+    for (const s of parts.filter(p => p.op === 'sub' && !p.blockout && p.src != null)) {
+      const k = parts.indexOf(s), sg = worldGeometries(s);
+      for (const p of parts.filter(q => q.op === 'add' && !q.blockout && q.kind !== 'mesh' && q.src != null && q.src !== s.src && parts.indexOf(q) < k)) {
+        for (const g of worldGeometries(p)) {
+          const hit = sg.filter(c => g.boundingBox.intersectsBox(c.boundingBox));
+          if (!hit.length) continue;
+          const a = new Brush(g); a.updateMatrixWorld();
+          let cut = false;
+          for (const c of hit) { const b = new Brush(c); b.updateMatrixWorld(); const r = evaluator.evaluate(a, b, INTERSECTION); const n = r.geometry.attributes.position?.count ?? 0; r.geometry.dispose(); if (n > 0) { cut = true; break; } }
+          if (cut) { out.push({ cutter: s.name, victim: p.name, srcCutter: s.src, srcVictim: p.src }); break; }
+        }
+      }
+    }
+    return out;
+  },
   partNozzles: () => { rebuild(); return autoNozzles(lodPieces(0)).map(z => ({ pos: z.pos.toArray(), dir: z.dir.toArray(), r: z.r, bone: z.bone })); },
   /** the poses and the game's moves a look can show */
   poses: () => [...Object.keys(POSES), ...Object.keys(MOVES)],
