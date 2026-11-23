@@ -2831,9 +2831,15 @@ const IMPORT_SAMPLES = ['./samples/wings-import.json'];
 const postText = v => typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>"'`]/g, '').slice(0, 120)
   : Array.isArray(v) ? v.map(postText) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, postText(x)])) : v;
 const postDoc = () => { const d = postText(structuredClone(unitDoc())); delete d.name; return d; };
+const xsRole = () => { const r = $('#gameId').value.replace(/^[ab]_/, ''); return ROLES[r] ? r : ''; };
+/** 武器だけの作品（置いたパーツが手持ちの武器だけ、「武器を作る」）ならその武器の作ったパーツ、違えば null */
+const weaponOnly = () => { const only = kept(); return only.length && only.every(it => byId[it.part]?.tab === 'weapon') ? byId[only[0].part] : null; };
 const SHARE = initShare({
-  busy, okToLeave, kinds: ROLES, doc: postDoc, name: () => unitName, thumb: () => unitThumb(),
-  role: () => { const r = $('#gameId').value.replace(/^[ab]_/, ''); return ROLES[r] ? r : ''; },
+  busy, okToLeave, kinds: { ...ROLES, weapon: '武器' }, doc: postDoc, name: () => unitName, thumb: () => unitThumb(),
+  // 武器だけの作品（置いたパーツが手持ちの武器だけ、「武器を作る」）は用途「weapon」で出す：みんなの機体の「武器」のタブに並び、
+  // ゲームの「みんなの機体からスキンを選ぶ」（XS のスキン）には出ない（issue 1102）
+  role: () => weaponOnly() ? 'weapon' : xsRole(),
+  xsRole: () => xsRole(),
   problem: () => {
     if (shipKind()) return '艦は「みんなの機体」にはまだ投稿できません。';
     if (!kept().length) return 'パーツが無いので投稿できません。';
@@ -2845,7 +2851,7 @@ const SHARE = initShare({
   // つながりと関節（「チェックだけする」と同じ調べ方）
   check: async onStep => {
     // 武器だけの作品（置いたパーツが手持ちの武器だけ、「武器を作る」）：機体のつながり・関節ではなく、武器として書き出して点と形態 2 を見る
-    const only = kept(), wdef = only.length && only.every(it => byId[it.part]?.tab === 'weapon') ? byId[only[0].part] : null;
+    const wdef = weaponOnly();
     if (wdef) {
       const r = await onEngine(() => exportWeaponGlb(wdef, 'check')), p = r.report;
       const lines = [`武器だけの作品として調べました：握りから先まで ${p.len.toFixed(2)} m・三角形 ${p.tris.toLocaleString()}`,
@@ -2902,7 +2908,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '25230fe';
+const BUILD = '62ca265';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

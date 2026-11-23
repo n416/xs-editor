@@ -4,7 +4,7 @@
 // 機体エディタ 1 から投稿された機体（部品の並び）は、「機体エディタの部品でできた機体」として開く。
 // ctx（v2.js が渡す）：{ busy(), okToLeave(what), doc() 今の機体の JSON, name() 今の機体の名前, problem() 投稿できない理由（無ければ ''）,
 //   check(onStep) → Promise<{ ok, text }> つながりと関節（onStep(done, total)：進み具合）, role() 用途（raid など）, thumb() 小さな絵（JPEG の data URL）,
-//   openUnit(doc, title) Ver2 の機体を開く, openScene(parts, title, role, ai) 機体エディタ 1 の機体を開く, kinds 用途の名前 }
+//   openUnit(doc, title) Ver2 の機体を開く, xsRole() 機体の種別の用途（武器だけの作品でも。前のサーバーへの出し直し用）, openScene(parts, title, role, ai) 機体エディタ 1 の機体を開く, kinds 用途の名前 }
 const CENTRAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? (new URLSearchParams(location.search).get('central') || 'http://localhost:8787') : 'https://ex-online-central.tobira-sys.workers.dev';
 const TOKEN_KEY = 'xs_token';
 const PROVIDER_NAMES = { google: 'Google', discord: 'Discord' };
@@ -45,10 +45,10 @@ const HTML = `<div class="box">
   <div class="bar2" id="shAuth"></div>
   <div class="bar2"><input type="text" id="shTitle" placeholder="機体名（40 文字まで）" maxlength="40"><input type="text" id="shAi" placeholder="使った AI（なければ空欄）" maxlength="40"><button id="shUpload" class="acc" title="今の機体を、だれでも見られる所に出す（つながりと関節を調べて、問題があれば知らせる。問題があっても投稿はできる）">今の機体を投稿</button></div>
   <div class="hint" id="shCheck" hidden></div>
-  <div class="bar2 tabs2"><button data-tab="rank" class="on">月間ランキング</button><select id="shMonth"></select><button data-tab="new">新着</button><button data-tab="likes">イイネ順</button><button data-tab="mine">自分の機体</button></div>
+  <div class="bar2 tabs2"><button data-tab="rank" class="on">月間ランキング</button><select id="shMonth"></select><button data-tab="new">新着</button><button data-tab="likes">イイネ順</button><button data-tab="weapon" title="武器だけの作品（「武器を作る」で作った手持ちの武器だけを投稿した物）。新しい順">武器</button><button data-tab="mine">自分の機体</button></div>
   <div class="grid" id="shGrid"></div>
   <div class="foot"><span class="hint" id="shNote"></span><button id="shMore" hidden>もっと見る</button></div>
-  <p class="hint">投稿・イイネには XS オンラインのアカウントに Google か Discord でログインする。月間ランキングは、その月に集まったイイネの数で並べる（日本時間）。原作の固有名詞を使った機体名や、ふさわしくない機体は通報してください。ゲームでは、設定の「自分のスキン」→「みんなの機体から選ぶ」で、ここの機体をそのまま自分の XS のスキンにできる（ファイルの書き出しは要らない）。</p>
+  <p class="hint">投稿・イイネには XS オンラインのアカウントに Google か Discord でログインする。月間ランキングは、その月に集まったイイネの数で並べる（日本時間）。原作の固有名詞を使った機体名や、ふさわしくない機体は通報してください。ゲームでは、設定の「自分のスキン」→「みんなの機体から選ぶ」で、ここの機体をそのまま自分の XS のスキンにできる（ファイルの書き出しは要らない）。<br>手持ちの武器だけを置いた作品（「武器を作る」）は、投稿すると「武器」のタブに並ぶ（機体の一覧とゲームの XS のスキンの一覧には出ない）。開いて「持っている武器だけを書き出す」で .glb にすると、ゲームの設定の「自分の武器のスキン」に入れられる。</p>
 </div>`;
 
 export function initShare(ctx) {
@@ -69,6 +69,16 @@ export function initShare(ctx) {
     if (!res.ok) throw new Error(data.error ?? `エラー (${res.status})`);
     return data;
   }
+  // 投稿・上書き：用途 weapon（武器だけの作品、issue 1102）を知らない前のサーバーが断ったら、機体の種別の用途で出し直す（前と同じ扱い）
+  async function sendModel(path, method, body) {
+    try { return await central(path, method, body); }
+    catch (e) {
+      if (body.role !== 'weapon' || !/用途が正しくありません/.test(e.message)) throw e;
+      return central(path, method, { ...body, role: ctx.xsRole() });
+    }
+  }
+  // そのタブに出す物か（?kind を知らない前のサーバーは全部を返すので、ここでも分ける）：「武器」は武器だけ、機体のタブは機体だけ、自分の機体は両方
+  const fits = m => share.tab === 'mine' || (share.tab === 'weapon') === (m.role === 'weapon');
   const sNote = (t, warn) => { const n = $('#shNote'); n.textContent = t; n.style.color = warn ? 'var(--warn)' : ''; };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   const close = () => { box.hidden = true; };
@@ -166,26 +176,29 @@ export function initShare(ctx) {
         // ランキングに出るのは、その月にイイネの付いた機体だけ。今月は、その後ろにほかの機体を新しい順で続ける（イイネの無い機体も見つけられる）
         const thisMonth = $('#shMonth').selectedIndex === 0;
         if (!append) {
-          const r = await central(`/api/models/ranking?month=${$('#shMonth').value}`);
+          const r = await central(`/api/models/ranking?month=${$('#shMonth').value}&kind=xs`);
           if (late()) return;
-          for (const m of r.models) grid.appendChild(card(m));
+          for (const m of r.models.filter(fits)) grid.appendChild(card(m));
           share.ranked = new Set(r.models.map(m => m.id)); share.restShown = false;
           if (!thisMonth) { sNote(r.models.length ? '' : 'この月のイイネはありません。'); return; }
         }
-        const n = await central(`/api/models?sort=new&page=${share.page}`);
+        const n = await central(`/api/models?sort=new&page=${share.page}&kind=xs`);
         if (late()) return;
-        const rest = n.models.filter(m => !share.ranked.has(m.id));
+        const rest = n.models.filter(m => !share.ranked.has(m.id) && fits(m));
         if (rest.length && !share.restShown) { grid.appendChild(el('div', 'sep', share.ranked.size ? 'ランキング外の機体（新しい順）' : '今月はまだイイネがありません。新しい順に並べています')); share.restShown = true; }
         for (const m of rest) grid.appendChild(card(m));
         $('#shMore').hidden = !n.more;
         sNote(grid.children.length ? '' : 'まだ機体がありません。');
         return;
       }
-      const r = await central(`/api/models?sort=${share.tab === 'likes' ? 'likes' : 'new'}&page=${share.page}${share.tab === 'mine' ? '&mine=1' : ''}`);
+      // （機体のタブは機体だけ、「武器」のタブは武器だけの作品だけ、「自分の機体」は両方：issue 1102。?kind を知らない前のサーバーは全部を返す）
+      const kind = share.tab === 'weapon' ? '&kind=weapon' : share.tab === 'mine' ? '' : '&kind=xs';
+      const r = await central(`/api/models?sort=${share.tab === 'likes' ? 'likes' : 'new'}&page=${share.page}${share.tab === 'mine' ? '&mine=1' : ''}${kind}`);
       if (late()) return;
-      for (const m of r.models) grid.appendChild(card(m));
+      const shown = r.models.filter(fits);
+      for (const m of shown) grid.appendChild(card(m));
       $('#shMore').hidden = !r.more;
-      sNote(r.models.length || append ? '' : 'まだ機体がありません。');
+      sNote(shown.length || append ? '' : share.tab === 'weapon' ? 'まだ武器がありません。' : 'まだ機体がありません。');
     } catch (e) { if (late()) return; sNote(e.message === '見つかりません。' ? 'みんなの機体は準備中です（サーバーがまだ対応していません）。' : e.message, true); }
   }
   $('#shMore').onclick = () => { share.page++; loadShare(true); };
@@ -215,7 +228,8 @@ export function initShare(ctx) {
     c.append(th, el('div', 'nm', m.title));
     c.appendChild(el('div', 'meta', `${m.author} ・ ${new Date(m.created_at).toLocaleDateString('ja-JP')} ・ ${m.part_count} 部品` + (ctx.kinds[m.role] ? ` ・ ${ctx.kinds[m.role]}` : '') + (m.month_likes ? ` ・ この月 ${m.month_likes} イイネ` : '')));
     // the accounts wearing it as their own skin in the game (issue #259 の 3; a central before it sends none, and nothing is shown)
-    if (typeof m.use_count === 'number') c.appendChild(el('div', 'meta uses', `スキンに使っている人：${m.use_count}人`));
+    // （武器だけの作品は XS のスキンにならないので出さない、issue 1102）
+    if (typeof m.use_count === 'number' && m.role !== 'weapon') c.appendChild(el('div', 'meta uses', `スキンに使っている人：${m.use_count}人`));
     if (m.ai) c.appendChild(el('div', 'meta', `AI: ${m.ai}`));
     if (m.hidden) c.appendChild(el('div', 'meta warn', '通報により非表示中（管理者が確認します）'));
     const btns = el('div', 'btns');
@@ -234,7 +248,7 @@ export function initShare(ctx) {
       button('上書き', async () => {
         const body = await ready('上書き');
         if (!body || !confirm(`「${m.title}」を今の機体で上書きしますか？`)) return;
-        try { await central(`/api/models/${m.id}`, 'PUT', body); await loadShare(); sNote(`「${m.title}」を上書きしました。${share.checkNote ?? ''}`, !!share.checkNote); }
+        try { await sendModel(`/api/models/${m.id}`, 'PUT', body); await loadShare(); sNote(`「${m.title}」を上書きしました。${share.checkNote ?? ''}`, !!share.checkNote); }
         catch (e) { sNote(OLD_SERVER.test(e.message) ? 'サーバーが、機体エディタ Ver2 の機体の投稿にまだ対応していません（サーバーの更新待ち）。' : e.message, true); }
       });
       button('削除', async () => {
@@ -271,7 +285,7 @@ export function initShare(ctx) {
     const body = await ready('投稿');
     if (!body || !confirm(`「${title}」を公開します。\nだれでも見られるようになります。よろしいですか？`)) return;
     try {
-      await central('/api/models', 'POST', { title, ...body });
+      await sendModel('/api/models', 'POST', { title, ...body });
       $('#shTitle').value = '';
       await setTab('mine');
       sNote(`「${title}」を投稿しました。${share.checkNote ?? ''}`, !!share.checkNote);
