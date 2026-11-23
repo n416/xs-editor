@@ -2894,7 +2894,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '1099453';
+const BUILD = '15c645f';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
@@ -3049,7 +3049,7 @@ save();
 showUnitName();
 requestAnimationFrame(tick);
 // 確かめるための出口（画面の外から、置いた部品と視点を見る）
-window.__asm = { bodyType: { apply: k => applyBodyType(BODY_TYPES[k]), neckBaseY, adj: () => adj }, exportWeaponGlb, weaponDoc, ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, crossCuts: async () => { const X = await editorWorker(); await X.applyUnit(structuredClone(unitDoc())); return X.crossCuts(); }, unitDoc: () => unitDoc(), pe: PE, gizmo, select, selectOne, picked: () => picked, pivot, groupPicked, ungroupPicked, userParts, byId };
+window.__asm = { bodyType: { apply: k => applyBodyType(BODY_TYPES[k]), neckBaseY, adj: () => adj }, exportWeaponGlb, weaponDoc, ship: { kind: () => shipKind(), open: openShip, exportShip, guides: () => guideGroup.children.length, shipPart }, saves: { store: Store, stored, readSaves, saveUnit, openFile, dirty, name: () => unitName, id: () => saveId, openE1, takeHead, e1Sources, importGlb }, MESHES, renderer, scene, camera, orbit, root, items: () => items, groups: () => groups, paint: () => paint, editorParts, exportGame, crossCuts: async () => { const X = await editorWorker(); await X.applyUnit(structuredClone(unitDoc())); return X.crossCuts(); }, reCuts: async () => { const X = await editorWorker(); await X.applyUnit(structuredClone(unitDoc())); return X.reCuts(); }, unitDoc: () => unitDoc(), pe: PE, gizmo, select, selectOne, picked: () => picked, pivot, groupPicked, ungroupPicked, userParts, byId };
 // ?unit=<機体ファイル（この画面からの相対パス）>：開いたときにその機体を読み込む（試作を見せる用。&save=<名前> を付けると「つづきから」の保存を別の場所にする）
 {
   const u = new URLSearchParams(location.search).get('unit');

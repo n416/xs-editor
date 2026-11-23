@@ -382,7 +382,7 @@ export function shapesOf(def) {
     if (isPlain(pc) && !(pc.smooth > 0) && !cuttersOf(def, pc).length) return { pc, shape: { planes: pc.planes.map(p => p.slice()) } };   // smooth のある凸の形は、陰をつないだ面の向きごと三角形で渡す（面の式だと書き出しが面ごとに平らに作り直す）
     const g = geoOf(def, pc), low = merge(instances(pc, 1));
     const shape = { kind: 'tri', planes: null, tris: Array.from(g.attributes.position.array, r5), nors: Array.from(g.attributes.normal.array, r5), trisLow: Array.from(low.attributes.position.array, r5),
-      op: 'add', mirror: false, arrayCount: 1, bevel: 0, corner: 0, side: null, top: null, blend: blendOf(pc) };
+      op: 'add', mirror: false, arrayCount: 1, bevel: 0, corner: 0, side: null, top: null, blend: blendOf(pc), precut: true };   // (precut：この部品の削る形でもう削った三角形。書き出し（xsengine.js rebuild）がもう一度削ると、削った面が削る形の面に重なって欠ける [テスター WonD さん 2026-11-23「まだニャーノの口が少し欠けてました」])
     low.dispose();
     return { pc, shape };
   });
@@ -392,7 +392,7 @@ export function freeShapes(def) {
   return def.pieces.filter(drawn).flatMap(pc => {
     const low = instances(pc, 1);
     const out = instGeosOf(def, pc).map((g, k) => ({ pc, shape: { kind: 'tri', tris: Array.from(g.attributes.position.array, r5), nors: Array.from(g.attributes.normal.array, r5), trisLow: Array.from((low[k] ?? g).attributes.position.array, r5),
-      op: 'add', mirror: false, arrayCount: 1, bevel: 0, corner: 0, blend: blendOf(pc) } }));
+      op: 'add', mirror: false, arrayCount: 1, bevel: 0, corner: 0, blend: blendOf(pc), precut: true } }));   // (precut：上の shapesOf と同じ)
     for (const g of low) g.dispose();
     return out;
   });

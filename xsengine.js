@@ -1971,6 +1971,32 @@ export const XS = {
     }
     return out;
   },
+  /** the pieces of Ver2 already cut by their own part's cutters (kind 'tri') that the export cut again with those cutters till 2026-11-23
+   *  (partgeo.js did not mark them precut): [{ piece, src, before, after }] for the pieces whose triangles that second cut changes
+   *  (the cut faces lie on the cutters' faces: ニャーノ's mouth came out broken [テスター WonD さん 2026-11-23]). tools/crosscuttest.ts reads it */
+  reCuts: () => {
+    const out = [];
+    const subs = parts.filter(p => p.op === 'sub' && !p.blockout && p.src != null).map(s => ({ s, k: parts.indexOf(s), g: worldGeometries(s) }));
+    for (const p of parts.filter(q => q.op === 'add' && !q.blockout && q.kind === 'tri' && q.src != null)) {
+      const i = parts.indexOf(p);
+      for (const g of worldGeometries(p)) {
+        let brush = new Brush(g); brush.updateMatrixWorld();
+        const before = g.attributes.position.count;
+        let touched = false;
+        for (const { s, k, g: sg } of subs) {
+          if (k < i || s.src !== p.src) continue;
+          for (const c of sg) {
+            if (!g.boundingBox.intersectsBox(c.boundingBox)) continue;
+            const b = new Brush(c); b.updateMatrixWorld();
+            const next = evaluator.evaluate(brush, b, SUBTRACTION); brush = next; touched = true;
+          }
+        }
+        const after = brush.geometry.attributes.position?.count ?? 0;
+        if (touched && after !== before) { out.push({ piece: p.name, src: p.src, before: before / 3, after: after / 3 }); break; }
+      }
+    }
+    return out;
+  },
   partNozzles: () => { rebuild(); return autoNozzles(lodPieces(0)).map(z => ({ pos: z.pos.toArray(), dir: z.dir.toArray(), r: z.r, bone: z.bone })); },
   /** the poses and the game's moves a look can show */
   poses: () => [...Object.keys(POSES), ...Object.keys(MOVES)],
