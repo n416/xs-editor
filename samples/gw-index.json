@@ -1,0 +1,383 @@
+{
+ "note": "ゲームの武器の模型そのまま（tools/gameweaponparts.ts が作る。手で書き換えない）。file は samples/gw/<file>.glb、v は模型の中身の印（エディタの形の id に入る：模型を作り直すと、ブラウザにしまった前の形を使わない）",
+ "weapons": [
+  {
+   "file": "w_a_aqua_gun",
+   "v": "8150f121",
+   "name": "アクア・ジェムの銃（連合）",
+   "shape": "aqua_gun",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_aqua_heavy_bazooka",
+   "v": "fe25bf84",
+   "name": "エクサス・マリーンのバズーカ（連合）",
+   "shape": "aqua_heavy_bazooka",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_aqua_heavy_gun",
+   "v": "a50159de",
+   "name": "エクサス・マリーンの銃（連合）",
+   "shape": "aqua_heavy_gun",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_artillery_gun",
+   "v": "80fe754e",
+   "name": "量産型エクスタンクの銃（連合）",
+   "shape": "artillery_gun",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_artillery_leg_gun",
+   "v": "207be200",
+   "name": "ジェム・キャノンの銃（連合）",
+   "shape": "artillery_leg_gun",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_beam_pistol",
+   "v": "f5e2b4d8",
+   "name": "ハンド・ビームガン（連合）",
+   "shape": "beam_pistol",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_bullpup_gun",
+   "v": "e2b42176",
+   "name": "支援型90mmサブマシンガン（連合）",
+   "shape": "bullpup_gun",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_burst_sniper",
+   "v": "56b5cc26",
+   "name": "炸裂式スナイパーライフル（連合）",
+   "shape": "burst_sniper",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_cold_gun",
+   "v": "fd648c6f",
+   "name": "寒冷地マシンガン（連合）",
+   "shape": "cold_gun",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_field_beam_rifle",
+   "v": "21c3a059",
+   "name": "陸戦型ビーム・ライフル（連合）",
+   "shape": "field_beam_rifle",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_grenade_launcher",
+   "v": "f81f3edb",
+   "name": "グレネード・ランチャー（連合）",
+   "shape": "grenade_launcher",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_heavy_bazooka",
+   "v": "5586a410",
+   "name": "ハイパーバズーカ重撃型タイプ（連合）",
+   "shape": "heavy_bazooka",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_heavy_gun",
+   "v": "7044bd88",
+   "name": "初期型ジェムの銃（連合）",
+   "shape": "heavy_gun",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_land_charge_rifle",
+   "v": "eda12d40",
+   "name": "陸戦型チャージ・ライフル（連合）",
+   "shape": "land_charge_rifle",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_late_bazooka",
+   "v": "7201485b",
+   "name": "ハイ・バズーカ後期型（連合）",
+   "shape": "late_bazooka",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_light_bazooka",
+   "v": "63e68010",
+   "name": "120mmバズーカ（連合）",
+   "shape": "light_bazooka",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_long_beam_rifle",
+   "v": "0dbbd816",
+   "name": "照射ビームライフルM（連合）",
+   "shape": "long_beam_rifle",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_long_cannon",
+   "v": "18c18035",
+   "name": "180mmキャノン（連合）",
+   "shape": "long_cannon",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_prism_rifle",
+   "v": "c307ef2b",
+   "name": "偏光ビームライフル（連合）",
+   "shape": "prism_rifle",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_proto_beam_rifle",
+   "v": "09f8bbf5",
+   "name": "試作ビーム・ライフル（連合）",
+   "shape": "proto_beam_rifle",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_raid_bazooka",
+   "v": "c217357c",
+   "name": "ジェムのバズーカ（連合）",
+   "shape": "raid_bazooka",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_raid_gun",
+   "v": "0c82234f",
+   "name": "ジェムの銃（連合）",
+   "shape": "raid_gun",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_rocket_bazooka",
+   "v": "90823af0",
+   "name": "バルザッコ式ロケット・バズーカ（連合）",
+   "shape": "rocket_bazooka",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_rocket_launcher",
+   "v": "b8b1761a",
+   "name": "チャージロケット・ランチャー（連合）",
+   "shape": "rocket_launcher",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_sniper_gun",
+   "v": "feb868dc",
+   "name": "ジェム・スナイパーの銃（連合）",
+   "shape": "sniper_gun",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_special_beam_rifle",
+   "v": "b745e6c3",
+   "name": "専用ビームライフル（連合）",
+   "shape": "special_beam_rifle",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_special_charge_rifle",
+   "v": "baf89ac0",
+   "name": "専用チャージ・ビーム・ライフル（連合）",
+   "shape": "special_charge_rifle",
+   "faction": "a"
+  },
+  {
+   "file": "w_a_support_gun",
+   "v": "9b1d1a43",
+   "name": "ジェム・トレーナーの銃（連合）",
+   "shape": "support_gun",
+   "faction": "a"
+  },
+  {
+   "file": "w_b_anti_ship_rifle",
+   "v": "3b2c10de",
+   "name": "135mm対艦ライフル（GIO）",
+   "shape": "anti_ship_rifle",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_aqua_gun",
+   "v": "c2875d9a",
+   "name": "ゴッジョの銃（GIO）",
+   "shape": "aqua_gun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_aqua_heavy_bazooka",
+   "v": "8464e8d7",
+   "name": "ザッコ・マリンタイプのバズーカ（GIO）",
+   "shape": "aqua_heavy_bazooka",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_aqua_heavy_gun",
+   "v": "41f6abbf",
+   "name": "ザッコ・マリンタイプの銃（GIO）",
+   "shape": "aqua_heavy_gun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_artillery_gun",
+   "v": "b64a2ef7",
+   "name": "ザッコタンクの銃（GIO）",
+   "shape": "artillery_gun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_artillery_leg_gun",
+   "v": "3b8c1fdc",
+   "name": "ザッコキャノンの銃（GIO）",
+   "shape": "artillery_leg_gun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_beam_cannon",
+   "v": "28cf7d4e",
+   "name": "ビーム・カノン（GIO）",
+   "shape": "beam_cannon",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_charge_tube",
+   "v": "4802e7b8",
+   "name": "チャージ・バズーカtypeM（GIO）",
+   "shape": "charge_tube",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_faust",
+   "v": "5b6197f1",
+   "name": "シュツルム・ファウスト（GIO）",
+   "shape": "faust",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_gatling",
+   "v": "24a8d4dc",
+   "name": "3連装ガトリング砲（GIO）",
+   "shape": "gatling",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_giant_bazooka",
+   "v": "0225502b",
+   "name": "ジャイアント・バズ（GIO）",
+   "shape": "giant_bazooka",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_heat_sword",
+   "v": "28568e89",
+   "name": "ヒート・サーベル（GIO）",
+   "shape": "heat_sword",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_heavy_bazooka",
+   "v": "8464e8d7",
+   "name": "ハイパーバズーカ重撃型タイプ（GIO）",
+   "shape": "heavy_bazooka",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_heavy_gun",
+   "v": "41f6abbf",
+   "name": "ザッコIIJ型の銃（GIO）",
+   "shape": "heavy_gun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_light_gun",
+   "v": "fda3d524",
+   "name": "訓練用マシンガン（GIO）",
+   "shape": "light_gun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_raid_bazooka",
+   "v": "cd7525ad",
+   "name": "ザッコIのバズーカ（GIO）",
+   "shape": "raid_bazooka",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_raid_gun",
+   "v": "608934c5",
+   "name": "ザッコIの銃（GIO）",
+   "shape": "raid_gun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_raid_jg_bazooka",
+   "v": "1418edc2",
+   "name": "先行量産型ジェルグッチのバズーカ（GIO）",
+   "shape": "raid_jg_bazooka",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_raid_jg_gun",
+   "v": "5a259744",
+   "name": "先行量産型ジェルグッチの銃（GIO）",
+   "shape": "raid_jg_gun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_rapid_beam_rifle",
+   "v": "9568c4f7",
+   "name": "ビーム・ライフルFA型（GIO）",
+   "shape": "rapid_beam_rifle",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_shotgun",
+   "v": "9baa3517",
+   "name": "ショットガン（GIO）",
+   "shape": "shotgun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_smg",
+   "v": "b32a70e8",
+   "name": "MP-80マシンガン（GIO）",
+   "shape": "smg",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_sniper_gun",
+   "v": "85cc69bc",
+   "name": "ザッコI・スナイパータイプの銃（GIO）",
+   "shape": "sniper_gun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_support_bazooka",
+   "v": "6ed0d3d7",
+   "name": "陸戦型ザッコ用バズーカ（GIO）",
+   "shape": "support_bazooka",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_support_gun",
+   "v": "9e0a2af9",
+   "name": "ザッコ・ワーカーの銃（GIO）",
+   "shape": "support_gun",
+   "faction": "b"
+  },
+  {
+   "file": "w_b_top_cannon",
+   "v": "8f599888",
+   "name": "マジェラ・トップ砲（GIO）",
+   "shape": "top_cannon",
+   "faction": "b"
+  }
+ ]
+}

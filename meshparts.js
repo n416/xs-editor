@@ -97,6 +97,7 @@ export function ensureMeshes(ids) {
     if (!id || MESHES.has(id) || meshLoading.has(id)) continue;
     meshLoading.add(id);
     dbGet('mesh', id).then(async m => {
+      if (!m && id.startsWith(GW_PREFIX)) m = await gameWeaponMesh(id);   // （ゲームの武器の模型：この置き場に無ければ、模型から作って入れる）
       if (!m) return;
       const geo = meshGeo(m, m.index), lod1 = meshGeo(m, m.lod1), tex = await textureOf(m.texId);
       MESHES.set(id, { geo, lod1, base: geo, baseLod1: lod1, tex, texId: m.texId, darkUV: darkestSpot(tex) });
@@ -104,7 +105,56 @@ export function ensureMeshes(ids) {
     }).catch(() => {}).finally(() => meshLoading.delete(id));
   }
 }
-const MESH_PLACEHOLDER = new THREE.BoxGeometry(0.1, 0.1, 0.1).toNonIndexed();
+
+// ======== ゲームの武器の模型（issue 1101：samples/gw/w_<陣営>_<形の名前>.glb、tools/gameweaponparts.ts が写す） ========
+// 形の id は GW_PREFIX + ファイルの名前 + "." + 模型の中身の印（gw-index.json の v。模型を作り直すと id が変わり、しまった前の形を使わない）。模型のまま（形は変えない）、取り込んだ形のブロック 1 つにする：
+//   ・座標：武器の模型は m で握る所が原点、長さは −Z、機体の正面は +Y（tools/weaponshapes.ts）。パーツの座標は 1 が 6 m で、腕を下ろした姿勢の
+//     武器は下（−y）を向く：(x, y, z) → (−x, z, y) / 6（v2-weapon.js の点線の箱 toPart と同じ向き。回すだけで、裏返しにはならない）
+//   ・色：模型は頂点の色（COLOR_0 × 材質の色）。取り込んだ形はテクスチャ 1 枚で色を持つので、色ごとに 8×8 の升の色見本を作り、頂点の uv をその升の真ん中にする
+//   ・骨：全部の頂点を右の前腕（forearm_r）に重み 1 で付ける（手と一緒に動く 1 つの硬い形）
+//   ・光る所（weapon_glow_*）の光は持たない（形と色だけ）
+export const GW_PREFIX = 'gw1-';
+const GW_CELL = 8;   // （升の幅。遠くで縮めた時に隣の色が混ざりにくいように）
+async function gameWeaponMesh(id) {
+  try {
+    const file = id.slice(GW_PREFIX.length).split(".")[0];
+    if (!/^w_[ab]_[a-z0-9_]+$/.test(file)) return null;
+    const buf = await (await fetch(new URL(`./samples/gw/${file}.glb`, import.meta.url))).arrayBuffer();
+    const gltf = await new GLTFLoader().parseAsync(buf, '');
+    gltf.scene.updateMatrixWorld(true);
+    const pos = [], nor = [], cols = [], index = [], v = new THREE.Vector3(), n = new THREE.Vector3(), c = new THREE.Color(), nm = new THREE.Matrix3();
+    gltf.scene.traverse(o => {
+      if (!o.isMesh) return;
+      const g = o.geometry, P = g.attributes.position, N = g.attributes.normal, C = g.attributes.color, base = pos.length / 3;
+      const mc = (Array.isArray(o.material) ? o.material[0] : o.material)?.color ?? new THREE.Color(1, 1, 1);
+      nm.getNormalMatrix(o.matrixWorld);
+      for (let i = 0; i < P.count; i++) {
+        v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld);
+        pos.push(-v.x / 6, v.z / 6, v.y / 6);
+        if (N) { n.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nor.push(-n.x, n.z, n.y); } else nor.push(0, 1, 0);
+        if (C) c.setRGB(C.getX(i), C.getY(i), C.getZ(i)); else c.setRGB(1, 1, 1);
+        c.multiply(mc);
+        cols.push(c.getHexString(THREE.SRGBColorSpace));   // （頂点の色は linear。テクスチャは sRGB で読まれる）
+      }
+      if (g.index) for (let i = 0; i < g.index.count; i++) index.push(base + g.index.getX(i));
+      else for (let i = 0; i < P.count; i++) index.push(base + i);
+    });
+    if (!index.length) return null;
+    const pal = [...new Set(cols)], cv = new OffscreenCanvas(pal.length * GW_CELL, GW_CELL), x = cv.getContext('2d');
+    pal.forEach((h, k) => { x.fillStyle = '#' + h; x.fillRect(k * GW_CELL, 0, GW_CELL, GW_CELL); });
+    const uv = new Float32Array(cols.length * 2);
+    cols.forEach((h, i) => { uv[i * 2] = (pal.indexOf(h) + 0.5) / pal.length; uv[i * 2 + 1] = 0.5; });
+    const texId = id + '-tex';
+    await dbPut('tex', texId, await cv.convertToBlob({ type: 'image/png' }));
+    const fr = IMPORT_BONES.indexOf('forearm_r'), nv = pos.length / 3, skinI = new Uint16Array(nv * 4), skinW = new Float32Array(nv * 4);
+    for (let i = 0; i < nv; i++) { skinI[i * 4] = fr; skinW[i * 4] = 1; }
+    const tris = new Uint32Array(index);
+    const rec = { pos: new Float32Array(pos), nor: new Float32Array(nor), uv, index: tris, lod1: tris, texId, skinI, skinW };   // （武器は小さい：LOD1 も同じ三角形）
+    await dbPut('mesh', id, rec);
+    return rec;
+  } catch (e) { HOST.note?.(`武器の模型を読めません（${id}）：${e?.message ?? e}`, true); return null; }
+}
+const MESH_PLACEHOLDER =new THREE.BoxGeometry(0.1, 0.1, 0.1).toNonIndexed();
 export function meshGeometry(p) {
   const m = MESHES.get(p.mesh);
   if (!m) { ensureMeshes([p.mesh]); return MESH_PLACEHOLDER; }

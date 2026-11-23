@@ -30,7 +30,7 @@ import { makeWeaponBench } from './v2-weapon.js';
 import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, formDelayOf, formSpanOf, hasPurge, purgedDoc, FORM_WHEN, formWhenOf, FORM_KIND, formKindOf, setFormKind, flyTilt, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest, markTurret } from './freeparts.js';
-import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack } from './meshparts.js';
+import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack, GW_PREFIX } from './meshparts.js';
 import { DEFAULT_PAINT, ROLE_LABEL, GLOW_ROLES, colorOf, opacityOf, opacityAt, roleAlphaAt, setFormAlpha, paintFormsUsed, loadPaint, randomPalette, randomVivid, hexToHsl } from './paint.js';
 import { buildHull, hullReach } from './hull.js';
 import { makeSheet } from './xsbody.js';
@@ -222,7 +222,7 @@ const applyTf = (o, pc) => { const tf = pc.tf ?? {}, r = tf.r ?? [0, 0, 0]; o.po
 let meshDirty = false;
 setMeshHost({
   note: (t, w) => note(t, w),
-  loaded: id => { for (const def of FREE) for (const pc of def.pieces) if (pc.mesh === id && pc.joints) applyJoints(pc); meshDirty = true; },
+  loaded: id => { for (const def of FREE) for (const pc of def.pieces) if (pc.mesh === id && pc.joints) applyJoints(pc); meshDirty = true; redrawThumbs(id); },
   changed: () => { meshDirty = true; },
   closed: () => { persistUser(); meshDirty = true; if (PE.active()) PE.touch(); else save(); },
 });
@@ -1277,6 +1277,14 @@ function thumbnail(def, cv) {
   thumbScene.remove(g);
 }
 const catButtons = new Map();
+/** 形が読み込まれた：その形を使うカタログのボタンの絵を描き直す（ゲームの武器の模型 issue 1101 など、絵を描いた時にまだ形が無かった物は空の絵だった） */
+function redrawThumbs(meshId) {
+  for (const def of FREE) {
+    if (!def.pieces.some(pc => pc.mesh === meshId)) continue;
+    const cv = catButtons.get(def.id)?.querySelector('canvas');
+    if (cv?.isConnected) try { thumbnail(def, cv); } catch (e) { console.warn('thumbnail', def.id, e); }
+  }
+}
 // 左のタブ：部位ごとにカタログを出す
 const TABS = [['head', '頭', HEAD], ['upper', '上半身', UPPER], ['back', '背中', BACK], ['arm', '腕', ARM], ['lower', '下半身', LOWER], ['leg', '脚', LEG], ['weapon', '武器', []], ['free', '取り込み', []]];
 /** そのタブに並べるパーツ：頭のタブには「頭まるごと」（機体エディタの機体から取り出した頭）、取り込みのタブには自由な機体 */
@@ -2894,7 +2902,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '15c645f';
+const BUILD = '25230fe';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
@@ -3026,6 +3034,15 @@ for (const file of ['w_a_machine_gun', 'w_b_machine_gun', 'w_a_beam_rifle', 'w_a
     if (w.src?.pieces) registerUser({ ...w.src, id: `w·${file.slice(2)}`, name: w.name, cat: WEAPON_CAT, user: false, free: true, half: 'free', tab: 'weapon', hand: w.hand_r, shape: w.shape, faction: w.faction });
     else registerUser({ ...freeDef(`w·${file.slice(2)}`, w.name, w.parts, { tab: 'weapon', from: 'sample' }), cat: WEAPON_CAT, user: false, hand: w.hand_r, shape: w.shape, faction: w.faction });
   } catch (e) { console.warn('weapon', file, e); }
+}
+// ゲームにもうある武器の模型そのまま（issue 1101：samples/gw-index.json、tools/gameweaponparts.ts。上のブロックの形の元が無い物）。
+// 取り込んだ形のブロック 1 つ（形は選んだ時に模型から作る：meshparts.js gameWeaponMesh）。握る所が原点なので def.hand は [0, 0, 0]
+// （置くと seatWeapons が今の右手へ動かす。見本の武器 samples/w_*.json の hand_r と同じ）
+for (const w of (await fetch('./samples/gw-index.json').then(r => (r.ok ? r.json() : null), () => null).catch(() => null))?.weapons ?? []) {
+  const id = `w·gw·${w.file.slice(2)}`;
+  if (byId[id]) continue;
+  registerUser({ ...freeDef(id, w.name, [{ name: `${w.name}・模型`, kind: 'mesh', mesh: `${GW_PREFIX}${w.file}.${w.v}`, bone: 'fore', color: '#ffffff', metal: 0.4, rough: 0.5, pos: [0, 0, 0] }], { tab: 'weapon', from: 'game' }),
+    cat: WEAPON_CAT, user: false, hand: [0, 0, 0], shape: w.shape, faction: w.faction });
 }
 // 置き場（IndexedDB）を開く。前の置き場（localStorage）に残っていた機体・パーツは、ここで移る
 const stored = await Store.open();
