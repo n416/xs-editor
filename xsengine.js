@@ -255,10 +255,13 @@ function rebuild() {
   for (const o of [...resultGroup.children]) { o.geometry?.dispose(); resultGroup.remove(o); }
   for (const b of cutters) b.geometry.dispose();
   cutters = [];
-  // a cutting part only cuts the parts listed above it, so later parts (eyes in a recess) survive
+  // a cutting part only cuts the parts listed above it, so later parts (eyes in a recess) survive; and a cutting piece of a placed part of
+  // 機体エディタ Ver2 (part.src) cuts only its own placed part, as the editor draws it (partgeo.js cuttersOf: a part's cutters cut its own pieces).
+  // Till 2026-11-23 it cut every part listed above it: ニャーノ's chest's round hole cut its head, listed first [テスター WonD さん 2026-11-23 #不具合報告用
+  // 「ニャーノの新規モデルの頭部が、胴オブジェクトに置かれている丸穴ブロック（削る形）に削られてしまっています。」]
   for (const p of parts.filter(p => p.op === 'sub' && !p.blockout)) for (const g of worldGeometries(p)) {
     const b = new Brush(g); b.updateMatrixWorld();
-    b.userData.order = parts.indexOf(p); cutters.push(b);
+    b.userData.order = parts.indexOf(p); b.userData.src = p.src; cutters.push(b);
   }
   for (const p of parts.filter(p => p.op === 'add' && !p.blockout)) for (const g of worldGeometries(p)) {
     let geo = g;
@@ -266,6 +269,7 @@ function rebuild() {
       let brush = new Brush(g); brush.updateMatrixWorld();
       for (const sb of cutters) {
         if (sb.userData.order < parts.indexOf(p)) continue;
+        if (sb.userData.src != null && p.src != null && sb.userData.src !== p.src) continue;
         if (!g.boundingBox.intersectsBox(sb.geometry.boundingBox)) continue;
         const next = evaluator.evaluate(brush, sb, SUBTRACTION);
         if (brush.geometry !== g) brush.geometry.dispose();
