@@ -1382,7 +1382,7 @@ $('#bApply').onclick = () => {
     const list = Array.isArray(d) ? d : d.items;
     if (!Array.isArray(list)) throw new Error('機体の JSON の形が違います');
     if (busy()) return;
-    registerUnit(d); for (const def of Object.values(d.userParts ?? {})) if (def?.id && byId[def.id] === def) userParts[def.id] = def;
+    adoptUserParts(d); registerUnit(d); for (const def of Object.values(d.userParts ?? {})) if (def?.id && byId[def.id] === def) userParts[def.id] = def;
     persistUser(); renderCatalog();
     // 部位だけの JSON（half 付き）：その部位だけを入れ替える。色・寸法の調整は今のまま
     if (d.half) { replaceHalf(d.half, list.filter(it => halfOf(it.part) === d.half)); note(`${HALF_NAME[d.half] ?? d.half}だけ入れ替えました`); return; }
@@ -2398,11 +2398,39 @@ async function saveUnit(name, id = '') {
   note(`「${unitName}」を保存しました`);
   return true;
 }
+/** 開く機体の JSON の自分のパーツが、このブラウザの自分のパーツと同じ id で中身が違う時：ブラウザの方を残し、ファイルの方を空いている id
+ *  （同じ元の名前の次の番号）に付け替えて入れる（機体の items の part も付け替える）。パーツの id は作った人のブラウザごとの番号（u·元·n）で、
+ *  ほかの人の作品やゲームの見本と重なる。今までは開いた方に入れ替わり、自分のほかの機体のパーツが消えた [テスター WonD さん 2026-11-23
+ *  #色々なツールへの要望「機体エディタの一部パーツがニャーノの物に置き換わってしまいました…すね（ホバー）・脚部増加装甲」]。中身が同じならそのまま。
+ *  付け替えた数を返す */
+function adoptUserParts(d) {
+  const up = d?.userParts; if (!up) return 0;
+  const same = (a, b) => a.name === b.name && JSON.stringify(a.pieces) === JSON.stringify(b.pieces);
+  const moved = {};
+  for (const [key, def] of Object.entries(up)) {
+    if (!def?.id || !Array.isArray(def.pieces)) continue;
+    const had = byId[def.id];
+    if (!had || !had.user || had === def || same(had, def)) continue;
+    const base = def.id.replace(/·\d+$/, '');
+    // (前に同じ中身で付け替えて入れた自分のパーツがあれば、それを使う：開くたびに増えない)
+    const kept = Object.values(userParts).find((u) => u.id !== def.id && u.id.startsWith(`${base}·`) && same(u, def));
+    let n = 1, id = kept?.id;
+    if (!id) do id = `${base}·${n++}`; while (byId[id] || up[id] || Object.values(moved).includes(id));
+    moved[def.id] = id;
+    delete up[key]; up[id] = { ...def, id };
+  }
+  const ids = Object.keys(moved);
+  if (!ids.length) return 0;
+  const list = Array.isArray(d) ? d : d.items;
+  for (const it of list ?? []) if (moved[it.part]) it.part = moved[it.part];
+  note(`この機体の自分のパーツ ${ids.length} 個が、このブラウザの自分のパーツと同じ番号で中身が違ったので、ブラウザの方を残し、この機体の方を別の番号で入れました（${ids.map((i) => up[moved[i]].name).join('・')}）`);
+  return ids.length;
+}
 /** 機体の JSON（全身）を今の機体にする */
 function openDoc(d, name = '', id = '') {
   const list = Array.isArray(d) ? d : d.items;
   if (!Array.isArray(list)) throw new Error('機体の JSON の形が違います');
-  registerUnit(d); for (const def of Object.values(d.userParts ?? {})) if (def?.id && byId[def.id] === def) userParts[def.id] = def;
+  adoptUserParts(d); registerUnit(d); for (const def of Object.values(d.userParts ?? {})) if (def?.id && byId[def.id] === def) userParts[def.id] = def;
   persistUser(); renderCatalog(); showTab(tab);
   adj = { ...ADJ0, ...(d.adj ?? {}) };
   paint = loadPaint(d.paint); showPaint();
@@ -2418,7 +2446,7 @@ function saveFile(doc = unitDoc(), name = `${safeName(unitName)}.xsunit.json`) {
   note(`${name} を書き出しました（ブラウザのダウンロードの場所に入ります）`);
 }
 /** 機体の JSON に入っている自分のパーツを、カタログに入れる */
-function takeUserParts(d) { registerUnit(d); for (const def of Object.values(d.userParts ?? {})) if (def?.id && byId[def.id] === def) userParts[def.id] = def; persistUser(); renderCatalog(); showTab(tab); }
+function takeUserParts(d) { adoptUserParts(d); registerUnit(d); for (const def of Object.values(d.userParts ?? {})) if (def?.id && byId[def.id] === def) userParts[def.id] = def; persistUser(); renderCatalog(); showTab(tab); }
 /** ファイル（機体の JSON）を開く。部位だけの JSON なら、その部位だけ入れ替える */
 async function openFile(file) {
   if (busy()) return;
@@ -2866,7 +2894,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '038460c';
+const BUILD = '9368f03';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
