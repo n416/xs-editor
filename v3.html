@@ -75,7 +75,7 @@
 <div id="bar">
   <h1>リアルパーツエディタ</h1>
   <div class="grp"><button id="undoBtn" disabled title="Ctrl+Z">元に戻す</button><button id="redoBtn" disabled title="Ctrl+Y">やり直す</button></div>
-  <div class="grp"><span class="cap">見る</span><button data-v="iso">斜め</button><button data-v="front">正面</button><button data-v="top">上から</button><button data-v="side">横</button><button data-t="edges">稜</button></div>
+  <div class="grp"><span class="cap">見る</span><button data-v="iso">斜め</button><button data-v="front">正面</button><button data-v="top">上から</button><button data-v="side" title="左側（X の＋側）から見た真横">左横</button><button data-v="side2" title="右側（X のマイナス側）から見た真横">右横</button><button data-v="rear" title="真後ろから水平に">真後ろ</button><button data-t="edges">稜</button></div>
   <div class="grp"><button id="libBtn">保存した頭／体</button><button id="exportBtn">書き出し</button><button id="v2ExportBtn" title="今の頭の形を、機体エディタ Ver2 の頭（自分のパーツ ★）のファイルにする。Ver2 の「保存と読み込み」→「ファイルから開く」（または画面に落とす）で、頭だけ入れ替わる">Ver2 の頭として書き出し</button><button id="importBtn">読み込み</button><input id="importFile" type="file" accept=".json,application/json" style="display:none"></div>
   <div class="grp" id="samples"><span style="color:#aaa;align-self:center">見本</span><select id="sampleSel" class="txt"></select><button id="sampleOpen">開く</button></div>
   <div class="grp"><button id="v2Btn">Ver2 の機体</button></div>
@@ -3254,6 +3254,8 @@ function setView(v) {
   if (v === 'front') camera.position.set(t.x, t.y + 0.1, t.z + d);
   if (v === 'top') camera.position.set(t.x, t.y + d, t.z + 0.001);
   if (v === 'side') camera.position.set(t.x + d, t.y + 0.1, t.z);
+  if (v === 'side2') camera.position.set(t.x - d, t.y + 0.1, t.z);   // 右横・真後ろ（dousan さん 2026-11-25 #色々なツールへの要望）
+  if (v === 'rear') camera.position.set(t.x, t.y + 0.1, t.z - d);
   controls.target.copy(t); controls.update();
 }
 const PANEL_W = 380;

@@ -611,10 +611,11 @@ function moveFrame(now) {
 }
 
 // ---- 向き ----
-const VIEWS = { front: [0, 0, 1], side: [1, 0, 0], threeq: [0.75, 0.35, 1], top: [0, 1, 0.001], back: [-0.5, 0.25, -1], low: [0.6, -0.55, 1] };
+const VIEWS = { front: [0, 0, 1], side: [1, 0, 0], threeq: [0.75, 0.35, 1], top: [0, 1, 0.001], back: [-0.5, 0.25, -1], rear: [0, 0, -1], side2: [-1, 0, 0], low: [0.6, -0.55, 1] };   // rear・side2：真後ろ・逆の真横（dousan さん 2026-11-25 #色々なツールへの要望）
 let focus = null;   // パーツエディタを開いている間：{ c: 見る中心, dist: 距離 }（向きのボタンが、機体ではなくパーツを映す）
 function setView(k) { const d = new THREE.Vector3(...VIEWS[k]).normalize(), c = focus?.c ?? AT; camera.position.copy(c).addScaledVector(d, focus?.dist ?? viewDist); orbit.target.copy(c); orbit.update(); }
 document.querySelectorAll('[data-view]').forEach(b => { b.onclick = () => setView(b.dataset.view); });
+{ const el = document.getElementById('views'); new ResizeObserver(() => document.documentElement.style.setProperty('--viewsH', el.offsetHeight + 'px')).observe(el); }   // 視点のボタンが折り返したら、パーツエディタの道具の列をその下へ
 
 /** 頭の殻（部位「頭蓋」）の置いたパーツ。無ければ null */
 const headShell = () => headShellIn(items);
@@ -2908,7 +2909,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '89433b2';
+const BUILD = 'd5ebf81';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

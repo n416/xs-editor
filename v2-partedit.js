@@ -227,7 +227,7 @@ button.on { border-color: var(--acc); background: #2b4a6f; }
 #peRight .seg { display: flex; gap: 3px; }
 #peRight .seg button { flex: 1; }
 #peProfile { width: 100%; aspect-ratio: 1; background: #0f1114; border: 1px solid var(--line); border-radius: 4px; display: block; touch-action: none; }
-#peTools { position: absolute; left: 10px; top: 40px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; max-width: calc(100% - 20px); }
+#peTools { position: absolute; left: 10px; top: calc(var(--viewsH, 26px) + 14px); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; max-width: calc(100% - 20px); }
 #peTools .g { display: flex; gap: 3px; align-items: center; }
 #peTools .g > span { color: var(--dim); font-size: 11px; }
 `;
