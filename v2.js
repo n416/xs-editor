@@ -1193,7 +1193,7 @@ function placeFree(def) {
 }
 function place(def) {
   if (busy()) return;
-  if (def.jet) { addJet(); return; }   // 噴射口（背中のタブ）：胴の後ろへ 1 つ（「噴射口」の欄の「＋ 噴射口を足す」と同じ）
+  if (def.jet) { addJet(def); return; }   // 噴射口（背中のタブ）：胴の後ろへ 1 つ（「噴射口」の欄の「＋ 噴射口を足す」と同じ）。形を直した「噴射口（改）」はそれを置く（issue 1162）
   if (def.deco) { placeDeco(def); return; }
   if (def.free) { placeFree(def); return; }
   if (isHead(def.id)) { placeHeadPart(def); return; }
@@ -1900,13 +1900,14 @@ function jetCountSoon() {
   jetTimer = setTimeout(async () => { try { partJets = (await partNozzles()).length; } catch { partJets = null; } renderJetShield(); }, 700);
 }
 /** 噴射口の部品を 1 つ：胴の部品の後ろの面に、真ん中から少し横へ（足すたびに左右を替える）、後ろ下へ噴く向きで */
-function addJet() {
+/** 噴射口を胴の後ろへ 1 つ足す。def：置く噴射口（既定は元の「噴射口」。カタログの「★ 噴射口（改）」は自分のパーツを置く：issue 1162） */
+function addJet(def = byId.jet) {
   if (busy()) return;
   const box = new THREE.Box3();
   items.forEach((it, i) => { if (!isJet(it) && groups[i] && holderOf(it) === torsoJ.inner) box.expandByObject(groups[i]); });
   const n = items.filter(it => byId[it.part]?.jet === 'part').length, side = n % 2 ? -1 : 1;
   const at = box.isEmpty() ? [0, 2.25, -0.3] : [0, box.getCenter(new THREE.Vector3()).y + 0.05, box.min.z - 0.02];
-  addItems([{ part: 'jet', mov: [round(side * (0.1 + 0.04 * Math.floor(n / 2)), 4), round(at[1], 4), round(at[2], 4)], rot: [-45, 0, 0], scal: [1, 1, 1] }]); pickLast(1);
+  addItems([{ part: def.id, mov: [round(side * (0.1 + 0.04 * Math.floor(n / 2)), 4), round(at[1], 4), round(at[2], 4)], rot: [-45, 0, 0], scal: [1, 1, 1] }]); pickLast(1);
   note('噴射口を 1 つ足しました。オレンジの矢印が噴射の向き。つまみか「位置・回転・拡大」で動かす（回すと矢印も回る）');
 }
 async function addJetPoints() {
@@ -2022,7 +2023,7 @@ canvas.addEventListener('pointermove', e => {
 const endJetDrag = e => { if (!jetDrag || e.pointerId !== jetDrag.id) return; jetDrag = null; save(); renderJetShield(); renderFx(); };
 canvas.addEventListener('pointerup', endJetDrag, true);
 canvas.addEventListener('pointercancel', endJetDrag, true);
-$('#bJetAdd').onclick = addJet;
+$('#bJetAdd').onclick = () => addJet();
 $('#bJetReset').onclick = resetJets;
 $('#bJetPoints').onclick = addJetPoints;
 $('#jetBox').ontoggle = () => { jetCountSoon(); renderJetShield(); };
@@ -2909,7 +2910,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '96c7aa0';
+const BUILD = '3b2b5f9';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
