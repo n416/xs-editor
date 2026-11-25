@@ -25,11 +25,44 @@
 //   pos     ブロックの置き場所のずれ（カタログのパーツ。形には入れず、置く側が足す）
 // カタログのパーツの hull だけ・引くなしのブロックの形は、前と同じもの（buildHull の三角形そのまま）。
 import * as THREE from 'three';
-import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Brush, Evaluator, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
 import { buildHull, hullReach } from './hull.js';
 
 const D = Math.PI / 180;
+/**
+ * 折れ角 crease（ラジアン）より小さく折れる所だけ、陰をなめらかにつなぐ法線（three の toCreasedNormals と同じ決まり：
+ * 同じ位置の頂点で、自分の面と折れ角の内の面の向きを足して均す）。
+ * three の物は位置を 0.01 の升目でまとめて同じ頂点と見なすので、升目より細かく頂点が並ぶ小さい形（大きさ 0.1 の卵形で
+ * 断面の間が 0.01 を切る）では、離れた頂点の面まで混ざって陰が面ごとに切れていた [テスター WonD さん 2026-11-25「スムージング処理がうまくかからなくなっている」、issue 1161]。
+ * ここでは位置を 1e-5 に丸めて、同じ位置の頂点だけをまとめる。
+ */
+function toCreasedNormals(geo, crease) {
+  const g = geo.index ? geo.toNonIndexed() : geo, a = g.attributes.position, n = a.count, fc = n / 3, cd = Math.cos(crease);
+  const fn = new Float64Array(fc * 3), at = new Map(), key = new Array(n);
+  for (let f = 0; f < fc; f++) {
+    const i = f * 3, ax = a.getX(i), ay = a.getY(i), az = a.getZ(i);
+    const ux = a.getX(i + 1) - ax, uy = a.getY(i + 1) - ay, uz = a.getZ(i + 1) - az, vx = a.getX(i + 2) - ax, vy = a.getY(i + 2) - ay, vz = a.getZ(i + 2) - az;
+    const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx, l = Math.hypot(cx, cy, cz) || 1;
+    fn[f * 3] = cx / l; fn[f * 3 + 1] = cy / l; fn[f * 3 + 2] = cz / l;
+  }
+  for (let i = 0; i < n; i++) {
+    const k = `${Math.round(a.getX(i) * 1e5)},${Math.round(a.getY(i) * 1e5)},${Math.round(a.getZ(i) * 1e5)}`;
+    key[i] = k; (at.get(k) ?? at.set(k, []).get(k)).push(Math.floor(i / 3));
+  }
+  const out = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const f = Math.floor(i / 3), px = fn[f * 3], py = fn[f * 3 + 1], pz = fn[f * 3 + 2];
+    let sx = 0, sy = 0, sz = 0;
+    for (const o of new Set(at.get(key[i]))) {
+      const qx = fn[o * 3], qy = fn[o * 3 + 1], qz = fn[o * 3 + 2];
+      if (px * qx + py * qy + pz * qz > cd) { sx += qx; sy += qy; sz += qz; }
+    }
+    const l = Math.hypot(sx, sy, sz) || 1;
+    out[i * 3] = sx / l; out[i * 3 + 1] = sy / l; out[i * 3 + 2] = sz / l;
+  }
+  g.setAttribute('normal', new THREE.BufferAttribute(out, 3));
+  return g;
+}
 export const KIND_LABEL = { hull: '面で囲った形', extrude: '押し出し', lathe: '回転体', loft: '断面をつなぐ形', bellows: '蛇腹' };
 /** ブロックの設定の既定値（持っていない項目はこれ） */
 export const BLOCK0 = { op: 'add', mirror: false, arrayCount: 1, arrayStep: [0, 0.05, 0], bevel: 0, bevelSegs: 1, corner: 0, cornerSegs: 1, taper: 1, tiltY: 0, ridge: 0, depth: 0.1, segments: 24, steps: 4, side: null, top: null,
