@@ -135,7 +135,16 @@ export const PRIMS = {
   くさび: (c, [w, h, d]) => [...[-1, 1].flatMap(x => [-1, 1].map(z => [c[0] + x * w / 2, c[1] - h / 2, c[2] + z * d / 2])), ...[-1, 1].map(x => [c[0] + x * w / 2, c[1] + h / 2, c[2] - d / 2])],
   台形: (c, [w, h, d]) => [...[-1, 1].flatMap(x => [-1, 1].map(z => [c[0] + x * w / 2, c[1] - h / 2, c[2] + z * d / 2])), ...[-1, 1].flatMap(x => [-1, 1].map(z => [c[0] + x * w * 0.3, c[1] + h / 2, c[2] + z * d * 0.3]))],
   六角柱: (c, s) => prism(c, s, 6), 八角柱: (c, s) => prism(c, s, 8), 円柱: (c, s) => prism(c, s, 16),
+  // 球と正三角錐 [テスター Wijick さん 2026-11-25 #色々なツールへの要望「四角とかくさび型とか追加できるところに｢球体｣と｢正三角錐｣を」]：
+  // 球は緯度 8・経度 16 の点の囲い（凸）。正三角錐は底の正三角形と頂点の 4 点（大きさの箱に収める）
+  球: (c, s) => sphere(c, s, 8, 16),
+  正三角錐: (c, [w, h, d]) => [...[0, 1, 2].map(k => { const t = k / 3 * Math.PI * 2; return [c[0] + Math.sin(t) * w / 2, c[1] - h / 2, c[2] + Math.cos(t) * d / 2]; }), [c[0], c[1] + h / 2, c[2]]],
 };
+function sphere(c, [w, h, d], lat, lon) {
+  const out = [[c[0], c[1] - h / 2, c[2]], [c[0], c[1] + h / 2, c[2]]];
+  for (let i = 1; i < lat; i++) { const a = -Math.PI / 2 + i / lat * Math.PI, y = Math.sin(a), r = Math.cos(a); for (let j = 0; j < lon; j++) { const t = j / lon * Math.PI * 2; out.push([c[0] + Math.sin(t) * r * w / 2, c[1] + y * h / 2, c[2] + Math.cos(t) * r * d / 2]); } }
+  return out;
+}
 function prism(c, [w, h, d], n) {
   return Array.from({ length: n }, (_, k) => { const t = (k + 0.5) / n * Math.PI * 2; return [-1, 1].map(y => [c[0] + Math.sin(t) * w / 2, c[1] + y * h / 2, c[2] + Math.cos(t) * d / 2]); }).flat();
 }
