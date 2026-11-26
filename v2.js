@@ -120,6 +120,10 @@ let shipNow = '', viewDist = 5.6, kindSig = 'xs', XS_GAME_IDS = null;   // 艦�
 scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2d33, 0.9));
 const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(1.2, 2.6, 1.6); scene.add(key);
 const fill = new THREE.DirectionalLight(0x8fb3ff, 0.5); fill.position.set(-1.5, 1.2, -1); scene.add(fill);
+const hemi = scene.children.find(o => o.isHemisphereLight);
+// 「影を消す」の時だけ点ける、主の光の反対側と下からの光（issue 1204：反対側が暗くて作りづらい。エディタの見た目だけで、ゲームの中の見え方は変えない）
+const back = new THREE.DirectionalLight(0xffffff, 0); back.position.set(-1.2, 1.4, -1.6); scene.add(back);
+const under = new THREE.DirectionalLight(0xffffff, 0); under.position.set(0.4, -2, 0.6); scene.add(under);
 const grid = new THREE.GridHelper(2, 20, 0x2c3038, 0x22252b); scene.add(grid);
 const guideGroup = new THREE.Group(); scene.add(guideGroup);   // 艦のガイド（ゲームで決まっている大きさと場所。書き出さない）
 const root = new THREE.Group();
@@ -693,6 +697,19 @@ function drawEdges() {
 }
 $('#bEdges').classList.toggle('on', showEdges);
 $('#bEdges').onclick = () => { showEdges = !showEdges; $('#bEdges').classList.toggle('on', showEdges); try { localStorage.setItem('xsv2.edges', showEdges ? '1' : '0'); } catch { /* storage blocked */ } rebuild(); };
+
+// ---- 影を消す（issue 1204）：反対側と下からも光を当て、空の光を強めて、暗い側を無くす。エディタの見た目だけ（書き出す形・ゲームの光は変えない） ----
+let flatLight = false;
+try { flatLight = localStorage.getItem('xsv2.flatlight') === '1'; } catch { /* storage blocked */ }
+function applyLight() {
+  back.intensity = flatLight ? 1.1 : 0;
+  under.intensity = flatLight ? 0.5 : 0;
+  hemi.intensity = flatLight ? 1.3 : 0.9;
+  hemi.groundColor.setHex(flatLight ? 0x8a8f99 : 0x2a2d33);
+  $('#bLight').classList.toggle('on', flatLight);
+}
+applyLight();
+$('#bLight').onclick = () => { flatLight = !flatLight; try { localStorage.setItem('xsv2.flatlight', flatLight ? '1' : '0'); } catch { /* storage blocked */ } applyLight(); };
 
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -2911,7 +2928,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '1f813a6';
+const BUILD = '4890c78';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
