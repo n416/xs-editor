@@ -1385,7 +1385,7 @@ function buildGameModel(opt = {}) {
   const root = new THREE.Group(); root.name = 'xs';
   if (opt.height || opt.frame || whole.userData.top > whole.max.y + 1e-6) root.userData.height = Math.round(H * 1e4) / 1e4;   // wings above the head: the body's height
   if (frame.sole) root.userData.sole = 0;
-  if (typeof opt.formKind === 'string') root.userData.formKind = opt.formKind;   // (形態 2's kind: 'fly' | 'run' — Ver2's adj.formKind, v2-forms.js FORM_KIND, issue 1036; the game does not read it yet)
+  if (typeof opt.formKind === 'string') root.userData.formKind = opt.formKind;   // (形態 2's kind: 'fly' | 'flyUp' | 'run' — Ver2's adj.formKind, v2-forms.js FORM_KIND, issue 1036; the game reads it: 'flyUp' flies untilted, client/src/models.ts XsInstance.formKind, issue 1201)
   if (Array.isArray(opt.formWhen)) root.userData.formWhen = opt.formWhen.slice();   // (形態 2's model: when the game wears it — Ver2's adj.formWhen, v2-forms.js FORM_WHEN; client/src/models.ts reads it)   // (opt.body: the soles are y = 0 though parts hang lower; the game stands the model there, client/src/models.ts fromGltf)
   // skeleton: a tracked XS has no leg bones; the cannon mount only when barrels ride on it
   const gameBones = GAME_BONES.filter(([n]) => !(tracked && /^(leg|shin|foot)_/.test(n)) && (!OPTIONAL_BONES.has(n) || lods[0].some(pc => pc.bone === n || pc.part.rig?.[n] || (pc.part.blend && blendOfPiece(pc)?.to === n))));

@@ -231,16 +231,22 @@ export const formWhenOf = adj => (Array.isArray(adj?.formWhen) ? adj.formWhen.fi
 
 // 変形の種類（issue 1036、モデレーター Hotaru さん 2026-11-20 #要望用「変形機体がほしいです！地走でも空中でもいいです！」、
 // 依頼主「これは作るのであれば、まずXSエディタからです。」）：形態 n（2 から）に「空を飛ぶ形」「地上を走る形」の種類を付ける。
-//   adj.formKind = { [n]: 'fly' | 'run' }（書いていない形態は種類なし）。機体の文書の adj に持ち（みんなの機体の中央は adj の短い文字をそのまま通す）、
+//   adj.formKind = { [n]: 'fly' | 'flyUp' | 'run' }（書いていない形態は種類なし）。機体の文書の adj に持ち（みんなの機体の中央は adj の短い文字をそのまま通す）、
 //   ゲーム用に書き出す形態 2 の模型（<id>_form2.glb）の xs 節の extras に formKind として書く。ゲームはまだ読まない（後でゲームの動き方を作る時に読む）。
 //   今のゲームの可変機構（shared/data.ts TRANSFORM：人型 ⇔ 飛行形態）では、変形できる XS の自分のスキンの形態 2 が飛行形態の姿になる
 //   （client/src/world.ts、issue 932）。その時ゲームは模型ごと体の真ん中を軸に前へ倒す（client/src/models.ts tiltFly）ので、
 //   空を飛ぶ形は「立ったまま」作る：エディタの「ゲームの向きで見る」が、同じ倒し方（flyTilt）で見せる
+// 空を飛ぶ形・体を倒さない（issue 1201、Wijick さん 2026-11-26 #色々なツールへの要望）：'flyUp'。ゲームの飛行形態の姿になるのは 'fly' と同じだが、
+//   ゲームは模型を前へ倒さず（体の軸は立ったまま）、飛行形態の構え（脚をそろえる・腕を頭の上へ：models.ts poseFly）も付けない。作った形のまま飛ぶ。
+//   エディタの「ゲームの向きで見る」も倒さない。模型の xs 節の extras.formKind をゲームが読む（client/src/models.ts XsInstance.formKind、world.ts）
 export const FORM_KIND = {
   fly: '空を飛ぶ形（ゲームの飛行形態の姿）',
+  flyUp: '空を飛ぶ形・体を倒さない（ゲームの飛行形態の姿。立った軸のまま飛ぶ）',
   run: '地上を走る形（ゲームではまだ使わない）',
 };
-/** 機体の adj から、形態 n の変形の種類（'fly' | 'run'、無ければ null） */
+/** 空を飛ぶ形か（前へ倒す 'fly' と、倒さない 'flyUp'） */
+export const isFlyKind = k => k === 'fly' || k === 'flyUp';
+/** 機体の adj から、形態 n の変形の種類（'fly' | 'flyUp' | 'run'、無ければ null） */
 export const formKindOf = (adj, n) => { const k = adj?.formKind?.[n]; return k in FORM_KIND ? k : null; };
 /** 形態 n の変形の種類を書き換える（null で消す。どの形態にも無くなったら adj.formKind ごと消す） */
 export function setFormKind(adj, n, kind) {
