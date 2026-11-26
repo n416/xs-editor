@@ -217,7 +217,7 @@ export function purgedDoc(doc) {
 }
 
 // ゲームで形態 2 になる時（テスター ポッチャさん 2026-11-20 #色々なツールへの要望「形態変形状態をチャージ時、特殊システム発動、迫撃砲使用時などの条件が欲しい」）：
-//   adj.formWhen = ['sys', 'charge', 'mortar'] のうちの選んだ物（書いていなければ ['sys']：今までどおり AXIS の間・飛行形態の間だけ）。
+//   adj.formWhen = ['sys', 'charge', 'mortar', 'fwdBoost', 'backBoost', 'jump'] のうちの選んだ物（書いていなければ ['sys']：今までどおり AXIS の間・飛行形態の間だけ）。
 //   機体の文書の adj に持つ（みんなの機体の中央は adj の中の短い文字の並びをそのまま通す：server/central/models.ts cleanUnit）。
 //   ゲーム用に書き出す形態 2 の模型（<id>_form2.glb）の xs 節の extras に formWhen として書き、ゲームが自分のスキンで読む
 //   （client/src/models.ts createXsFromGltf → inst.formWhen、client/src/world.ts）。どれか 1 つでも当てはまる間、形態 2 になる
@@ -225,6 +225,11 @@ export const FORM_WHEN = {
   sys: '特殊システムの間（AXIS の発動中・飛行形態の間）',
   charge: 'チャージ武器を溜めている間',
   mortar: '迫撃砲を撃つ間（構えてから撃ち終えるまで。収束砲も）',
+  // （前ブースト中・後ろブースト中・ジャンプ中：ポッチャさん 2026-11-26 #色々なツールへの要望、issue 1211。ゲームの判定は client/src/world.ts の axisMorph の段。
+  //   当てはまらなくなっても 0.3 秒は形態 2 のまま：小刻みなブースト・着地の一コマで行ったり来たりしない）
+  fwdBoost: '前ブースト中（照準の前へダッシュしている間。地上も空中も）',
+  backBoost: '後ろブースト中（照準の後ろへダッシュしている間。地上も空中も）',
+  jump: 'ジャンプ中（足が地面を離れてから着地するまで）',
 };
 /** 機体の adj から、形態 2 になる時の並び（知らない物は除く。書いていなければ ['sys']） */
 export const formWhenOf = adj => (Array.isArray(adj?.formWhen) ? adj.formWhen.filter(k => k in FORM_WHEN) : ['sys']);
