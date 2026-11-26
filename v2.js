@@ -663,6 +663,7 @@ function rebuildMain() {
   applyKind();
   seatWeapons();
   refreshDecos();
+  multiAt = null;
   for (const g of groups) { g.parent?.remove(g); for (const e of g.userData.extra.values()) e.parent?.remove(e); }
   groups = items.map((it, i) => { const g = groupOf(it, i); holderOf(it).add(g); for (const [b, e] of g.userData.extra) holderFor(b, it).add(e); return g; });
   placeArmJoints();
@@ -725,7 +726,7 @@ function tick(now) {
   if (meshDirty) { meshDirty = false; rebuild(); }
   if (playing) moveFrame(now);
   flashTick(now);
-  if (formAnim) { showFormNow(); if (now - formAnim.t0 >= formSpanOf(items, it => byId[it.part])) { formAnim = null; showFormNow(); } }
+  if (formAnim) { showFormNow(); if (now - formAnim.t0 >= formSpanOf(items, it => byId[it.part])) { formAnim = null; showFormNow(); multiAt = null; fillMulti(); } }
   shotTick(now);
   flameTick(now);
   resize(); orbit.update(); if (PE.active()) PE.tick();
@@ -825,7 +826,7 @@ function pivotMove() {
     _m.decompose(g.position, g.quaternion, g.scale);
     readBackFromGroup(items[i], g); applyToGroup(items[i], g);
   });
-  placeArmJoints(); applyPose(); fillFields();
+  multiAt = null; placeArmJoints(); applyPose(); fillFields();
 }
 const newGrp = () => { for (let n = 1; ; n++) if (!items.some(it => it.grp === `g${n}`)) return `g${n}`; };
 /** 選んでいるもの（2 つ以上）を 1 つのグループに（中に別のグループがあれば、それも含めて 1 つに） */
@@ -951,6 +952,7 @@ function renderList() {
   $('#multiInfo').hidden = !many;
   if (many) $('#multiInfo').textContent = `${picked.length} 個を選んでいます${oneGroup ? `（${items[picked[0]].grp.replace(/^g/, 'グループ ')}）` : ''}。つまみ（移動・回転・拡大）でまとめて動く`;
   $('#bGroup').hidden = !many || oneGroup; $('#bUngroup').hidden = !grouped;
+  fillMulti();   // まとめて数値で動かす（issue 1190）
   showBoneBar();   // 骨ごとに選ぶ（issue #1008）
   renderJetShield();
   renderFx();
@@ -968,6 +970,7 @@ function fillFields() {
   for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).value = it[k][j];
   fillJetDir();
   fillItemForm();
+  fillMulti();
 }
 for (const [id, [k, j]] of Object.entries(FIELDS)) $('#' + id).oninput = () => {
   if (selected < 0) return;
@@ -995,6 +998,68 @@ $('#fRoman').onchange = () => {
   for (const i of set) { if (v) items[i].roman = { s: +v[0], m: v[1] }; else delete items[i].roman; }
   rebuild(); save(); note(v ? `${set.length} 個を、スロット ${v[0]} の武器を撃ち切ると${v[1] === 'd' ? '外れて落ちる' : '現れる'}部品にしました` : `${set.length} 個のロマン砲変形の印を外しました`);
 };
+// ---- まとめて数値で動かす（issue 1190、テスター Wijick さん 2026-11-25「形態を複数作る時、グループしたパーツは数値を入力したら一緒に動かせるように」）：
+// 2 つ以上を選んでいる時（グループを押すと全部が選ばれる）、右の「位置」は選んだもの全部の真ん中、「回転」はその真ん中を軸に回した量（選び直すと 0）。
+// 数を変えると全部が一緒に動く（部品どうしの位置・向きはそのまま）。形態 1 では置き方（mov・rot）を、形態 2 からはその形態のずらす・回す（item.forms[n] の p・r）を変える。
+// 軸は機体の 左右・上下・前後（root の座標。空を飛ぶ形を倒して見ている時も）
+let multiAt = null;   // { key, c: 真ん中（root の座標）, r: 回した量 [x, y, z]（度） }
+const multiKey = () => `${picked.join(',')}|${formNow}`;
+function multiCenter() {
+  scene.updateMatrixWorld(true);
+  const b = new THREE.Box3();
+  for (const i of picked) for (const t of groups[i] ? [groups[i], ...groups[i].userData.extra.values()] : []) b.expandByObject(t);
+  return root.worldToLocal(b.isEmpty() ? new THREE.Vector3() : b.getCenter(new THREE.Vector3()));
+}
+function fillMulti() {
+  const box = $('#multiMove'); if (!box) return;
+  box.hidden = picked.length < 2 || PE.active();
+  if (box.hidden) { multiAt = null; return; }
+  if (multiAt?.key !== multiKey()) multiAt = { key: multiKey(), c: multiCenter(), r: [0, 0, 0] };
+  [0, 1, 2].forEach(k => { $('#mm' + 'xyz'[k]).value = round(multiAt.c.getComponent(k), 3); $('#mr' + 'xyz'[k]).value = multiAt.r[k]; });
+  $('#multiHint').textContent = formNow === 1
+    ? '位置は選んだもの全部の真ん中、回転はその真ん中を軸に回す量（度）。数を変えると全部が一緒に動く（形態 1 の置き方）'
+    : `形態 ${formNow} での、選んだもの全部のずらし・回し（位置は全部の真ん中、回転はその真ん中を軸に回す量）。形態 1 の置き方はそのまま`;
+}
+/** 選んだもの全部に、root の座標での動き Dl（行列）を掛ける。形態 1 は置き方を、形態 2 からはその形態のずれを書き換える */
+function moveMulti(Dl) {
+  root.updateMatrixWorld(true);
+  const Rw = root.matrixWorld, Dw = Rw.clone().multiply(Dl).multiply(Rw.clone().invert()), n = formNow;
+  for (const i of picked) {
+    const it = items[i], g = groups[i]; if (!it || !g?.parent) continue;
+    g.parent.updateMatrixWorld(true);
+    const P = g.parent.matrixWorld, f = fitItem(it, adj), q0 = new THREE.Quaternion().setFromRotationMatrix(rotMatrix(it.rot));
+    const fv = n > 1 ? formOf(it, n) : null, p = fv?.p ?? [0, 0, 0], r = fv?.r ?? [0, 0, 0];
+    const qf = new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0] * D, r[1] * D, r[2] * D, 'XYZ'));
+    const L = new THREE.Matrix4().compose(new THREE.Vector3(...f.mov).add(new THREE.Vector3(...p)), q0.clone().multiply(qf), new THREE.Vector3(...f.scal));
+    const pos = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+    P.clone().invert().multiply(Dw).multiply(P).multiply(L).decompose(pos, q, s);
+    if (n === 1) { g.userData.fdelta = null; g.position.copy(pos); g.quaternion.copy(q); g.scale.copy(s); readBackFromGroup(it, g); applyToGroup(it, g); continue; }
+    const e = new THREE.Euler().setFromQuaternion(q0.invert().multiply(q), 'XYZ');
+    setForm(it, n, { p: pos.sub(new THREE.Vector3(...f.mov)).toArray().map(v => round(v, 4)), r: [e.x, e.y, e.z].map(v => round(v / D, 2)) });
+  }
+  if (n === 1) { placeArmJoints(); applyPose(); } else showFormNow();
+  attachGizmo(); save();
+}
+{
+  const vals = k => [0, 1, 2].map(a => parseFloat($('#' + k + 'xyz'[a]).value));
+  for (const a of 'xyz') {
+    $('#mm' + a).oninput = () => {
+      if (!multiAt) return;
+      const v = vals('mm'); if (!v.every(Number.isFinite)) return;
+      const d = new THREE.Vector3(...v).sub(multiAt.c); if (d.lengthSq() < 1e-12) return;
+      multiAt.c.add(d); moveMulti(new THREE.Matrix4().makeTranslation(d.x, d.y, d.z));
+    };
+    $('#mr' + a).oninput = () => {
+      if (!multiAt) return;
+      const v = vals('mr'); if (!v.every(Number.isFinite)) return;
+      const qa = new THREE.Quaternion().setFromEuler(new THREE.Euler(...multiAt.r.map(x => x * D), 'XYZ'));
+      const qb = new THREE.Quaternion().setFromEuler(new THREE.Euler(...v.map(x => x * D), 'XYZ'));
+      const R = new THREE.Matrix4().makeRotationFromQuaternion(qb.multiply(qa.invert())), c = multiAt.c;
+      multiAt.r = v;
+      moveMulti(new THREE.Matrix4().makeTranslation(c.x, c.y, c.z).multiply(R).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z)));
+    };
+  }
+}
 $('#bGroup').onclick = groupPicked;
 $('#bUngroup').onclick = ungroupPicked;
 $('#bPickBone').onclick = pickBone;
@@ -1617,6 +1682,7 @@ function fillItemForm() {
       + `<div class="bar"><button class="small" id="bIFReset">形態 ${fN} を形態 1 と同じに戻す</button></div>`);
   for (const b of box.querySelectorAll('[data-iform]')) b.onclick = () => switchForm(+b.dataset.iform);
   if ($('#bIFormAdd')) $('#bIFormAdd').onclick = addForm;
+  for (const r of box.querySelectorAll('.one')) r.hidden = picked.length > 1;   // （2 つ以上を選んでいる時は、上の「位置」「回転」でまとめて：issue 1190）
   if ($('#iFDelay')) $('#iFDelay').onchange = e => {
     const ms = formDelayOf({ formDelay: (+e.target.value || 0) * 1000 });
     if (ms) it.formDelay = ms; else delete it.formDelay;
@@ -2928,7 +2994,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'd6970aa';
+const BUILD = 'b66f066';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

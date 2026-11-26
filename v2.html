@@ -263,6 +263,7 @@
       <div class="bar"><button id="bGroup" class="small" title="選んでいるものを 1 つのグループにする（Ctrl+G）。押すと全部が選ばれ、まとめて動く・回る・大きさが変わる" hidden>グループにする</button><button id="bUngroup" class="small" title="選んでいるもののグループを解く（Ctrl+Shift+G）" hidden>グループを解く</button></div>
       <div class="bar" id="boneBar" hidden><select id="fPickBone" class="small" title="選んでいるパーツが 2 つ以上の骨にまたがる時、どの骨のパーツを選ぶか" hidden></select><button id="bPickBone" class="small" title="選んでいるパーツと同じ骨に付いたパーツを全部選ぶ（ほかの骨にもまたがるパーツも。動かすとまるごと動く）。選んだ後は、つまみでまとめて動かせる">この骨の部品を全部選ぶ</button><label class="chk" id="fBoneBothL" title="左右のある骨（上腕・前腕・太もも・すね・足など）で、反対側の同じ骨に付いたパーツも選ぶ"><input type="checkbox" id="fBoneBoth">左右の両側</label></div>
       <div id="multiInfo" class="hint" hidden></div>
+      <div id="multiMove" hidden><div class="row" title="選んでいる部品全部の真ん中の位置。数を変えると、全部が一緒に動く（部品どうしの位置はそのまま）"><label>位置</label><input type="number" step="0.01" id="mmx"><input type="number" step="0.01" id="mmy"><input type="number" step="0.01" id="mmz"></div><div class="row" title="選んでいる部品全部を、その真ん中を軸にまとめて回す（度）。選び直すと 0 に戻る"><label>回転</label><input type="number" step="5" id="mrx"><input type="number" step="5" id="mry"><input type="number" step="5" id="mrz"></div><div class="hint" id="multiHint"></div></div>
       <div class="row one"><label>名前</label><input type="text" id="fName"></div>
       <div class="row one"><label>位置</label><input type="number" step="0.01" id="mx"><input type="number" step="0.01" id="my"><input type="number" step="0.01" id="mz"></div>
       <div class="row one"><label>回転</label><input type="number" step="5" id="rx"><input type="number" step="5" id="ry"><input type="number" step="5" id="rz"></div>
@@ -393,6 +394,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=d6970aa"></script>
+<script type="module" src="./v2.js?v=b66f066"></script>
 </body>
 </html>
