@@ -1536,11 +1536,12 @@ function renderCatalog() {
         const s = document.createElement('span'); s.textContent = (def.user ? '★ ' : '') + def.name; b.appendChild(s);
         b.title = def.name + (placeOf(def).pair ? '（左右の対）' : '');
         b.onclick = () => place(def);
-        // 自分のパーツ（★）：カタログから直接、直す・消す（機体に置かなくてもできる）
+        // 自分のパーツ（★）：カタログから直接、直す・複製・消す（機体に置かなくてもできる）
         if (def.user && !def.deco) {   // （武器の飾りは、元の武器を直す・消すと一緒に変わる）
           const ops = document.createElement('span'); ops.className = 'ops';
-          ops.innerHTML = '<span class="edit" title="このパーツをパーツエディタで開いて直す">直す</span><span class="del" title="このパーツをカタログから消す">消す</span>';
+          ops.innerHTML = '<span class="edit" title="このパーツをパーツエディタで開いて直す">直す</span><span class="dup" title="このパーツの写しを、カタログの同じ部位に ★ 付きで作る（元のパーツは変わらない。写しを「直す」で派生品にする）">複製</span><span class="del" title="このパーツをカタログから消す">消す</span>';
           ops.querySelector('.edit').onclick = e => { e.stopPropagation(); if (busy()) return; selected = -1; gizmo.detach(); PE.startDef(def); };
+          ops.querySelector('.dup').onclick = e => { e.stopPropagation(); dupUserPart(def); };
           ops.querySelector('.del').onclick = e => { e.stopPropagation(); dropUserPart(def); };
           b.appendChild(ops);
         }
@@ -1936,6 +1937,17 @@ function dropUserPart(def) {
   if (!confirm(`自分のパーツ「${def.name}」をカタログから消します。${n ? `\n今の機体に置いてある ${n} 個も外れます。` : '\n今の機体には置いていません。'}`)) return;
   items = items.filter(it => it.part !== def.id); selected = -1; unregisterUser(def.id); delete userParts[def.id]; persistUser(); renderCatalog(); showTab(tab); rebuild(); save();
   note(`「${def.name}」をカタログから消しました`);
+}
+/** 自分のパーツを複製する（issue 1260）：写しを、カタログの同じ部位の新しい自分のパーツ（★）にする。元のパーツ・機体は変えない。
+ *  名前は「元の名前（写し）」、もうあれば「（写し 2）」…（makeUserCopy の「（改）」のままだと、（改）の物を写すと同じ名前が並ぶ） */
+function dupUserPart(def) {
+  if (busy() || !def?.user) return;
+  const c = makeUserCopy(def);
+  const head = def.name, names = new Set(Object.values(byId).map(d => d?.name));
+  c.name = `${head}（写し）`;
+  for (let n = 2; names.has(c.name); n++) c.name = `${head}（写し ${n}）`;
+  keepUser(c);
+  note(`「${def.name}」の写し「${c.name}」を、カタログの「${c.cat}」に ★ 付きで作りました。元のパーツと機体は変えていません（写しの「直す」でパーツエディタ）`);
 }
 $('#bDropPart').onclick = () => {
   if (selected < 0 || PE.active()) return;
@@ -3130,7 +3142,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '80ff70c';
+const BUILD = '2415815';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
