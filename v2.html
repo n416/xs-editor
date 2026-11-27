@@ -272,6 +272,7 @@
       <label class="chk" title="ゲームでパージした時に外れて落ちる部品にする（増加装甲を付けて出る XS のスキンで使う。ほかの XS では何も起きない）。左右の対の部品は、反対側にも同じ印が付く。外れた後の姿は 3D の上の「パージ後を見る」で見られる"><input type="checkbox" id="fPurge">パージで外れる</label>
       <div class="row one"><label>ロマン砲変形</label><select id="fRoman" title="ゲームでその武器を撃ち切った時（弾倉も予備も 0）に見た目が変わる部品にする。「外れる」部品は腕などから外れて落ち、「出る」部品はそれまで隠れていて撃ち切ると現れる。弾が戻れば元の姿に戻る。スロットは武器スロットの番号（1・2・3）。当たり判定・性能は変わらない。撃ち切った後の姿は 3D の上の「撃ち切り後を見る」で見られる"><option value="">なし</option><option value="1d">スロット 1 を撃ち切ると外れる</option><option value="2d">スロット 2 を撃ち切ると外れる</option><option value="3d">スロット 3 を撃ち切ると外れる</option><option value="1s">スロット 1 を撃ち切ると出る</option><option value="2s">スロット 2 を撃ち切ると出る</option><option value="3s">スロット 3 を撃ち切ると出る</option></select></div>
       <div id="itemForm"></div>
+      <div id="itemJoint"></div>
       <div class="hint one">3 つの欄は 左右・上下・前後。回転は度。3D のつまみ（右上の 移動・回転・拡大）でも動かせる</div>
       <div class="hint">Ctrl か Shift を押しながら押すと、いくつも選べる（もう一度押すと外れる）。選んだものは「グループにする」で 1 つにまとまる。グループの中の 1 つだけは、Alt を押して押すか、ダブルクリック。「この骨の部品を全部選ぶ」で、選んでいるパーツと同じ骨に付いたパーツが全部選ばれる（「左右の両側」で反対側の同じ骨も）</div>
       <div class="bar"><button id="bDropPart" class="small" title="★ の付いた自分のパーツを、カタログから消す（置いてあるものも外れる）">この自分のパーツをカタログから消す</button></div>
@@ -394,6 +395,6 @@
   <div class="step"><b>6</b><div>残す・出す</div><span class="hint">「保存」でこのブラウザに残す（「開く」→「ファイルに保存」でファイルにも）。「ゲーム用に書き出す」でゲームの .glb、「みんなの機体」で投稿</span></div>
 </div></div>
 <nav id="mnav"><button data-sheet="parts">パーツ</button><button data-sheet="adjust">調整</button><button data-sheet="">3D だけ</button></nav>
-<script type="module" src="./v2.js?v=b66f066"></script>
+<script type="module" src="./v2.js?v=8efc8d9"></script>
 </body>
 </html>
