@@ -937,6 +937,12 @@ export function initPartEdit(ctx) {
       const probe = k => { const q = { ...pc, [k]: 'auto' }; markTurret({ ...d, pieces: d.pieces.map(x => (x === pc ? q : x)) }); return q; };
       const tracked = isTrackedSet(d.pieces), autoB = BONE_CHOICES[groupOfPart(probe('bone'), tracked)], autoP = PIVOT_CHOICES[pivotOfPart(probe('pivot')) ?? 'none'];
       markTurret(d);
+      // 大砲のブロック（大砲の骨に付く・回転の中心が大砲の付け根）：砲がどこを中心に回るかの案内（issue 1246、Wijick さん 2026-11-27
+      // 「付け根と砲身の位置によっては、武器を選んだ時に砲身が前へ行ってしまう」）。砲は付け根の部品の形の真ん中を中心に回るので、
+      // 付け根が砲身の後ろの端に無いと、砲を上げた時に砲身が付け根から離れて前へずれ、後ろの端が体へ沈む（xsengine.js の at.cannon）
+      const turretHint = (groupOfPart(pc, tracked) === 'cannon' || pivotOfPart(pc) === 'cannon')
+        ? '<div class="hint">大砲：砲は「回転の中心：大砲（付け根）」の部品の形の真ん中（2 つ以上ならその平均）を中心に上下に回る（無ければ砲身の後ろの端）。付け根は砲身の後ろの端に、砲身の真ん中と同じ高さか少し下に置く。砲身の真ん中の下・前の端・上に置くと、砲を選んだ時や迫撃で砲身が付け根から離れて前へずれたり、後ろの端が体へ沈んだりする。右の「動かして確かめる」の「片膝（迫撃）」（キャタピラの機体は「迫撃」）で見られる</div>'
+        : '';
       bind('glow', () => !!isGlowPart(pc), v => { pc.glow = v; });
       bind('noHit', () => !!pc.noHit, v => { pc.noHit = v; });
       bind('noHeight', () => !!pc.noHeight, v => { pc.noHeight = v; });
@@ -950,7 +956,7 @@ export function initPartEdit(ctx) {
         `<div class="row"><label>付く骨</label><select id="peBone">${Object.entries(BONE_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.bone ?? 'auto') === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + autoB : ''}</option>`).join('')}</select></div>`,
         `<div class="row"><label>回転の中心</label><select id="pePivot">${Object.entries(PIVOT_CHOICES).map(([k, v]) => `<option value="${k}" ${(pc.pivot ?? 'auto') === k ? 'selected' : ''}>${v}${k === 'auto' ? ' → ' + autoP : ''}</option>`).join('')}</select></div>`,
         check('発光する（目・センサーなど）', 'glow'), check('当たり判定なし（関節チェックでめり込みを見ない）', 'noHit'), check('全高に数えない（頭より高い翼・背中の装備）', 'noHeight'), check('あたり（下書き。書き出さない）', 'blockout'), purgeRow(check), mouthRow(pc),
-        '<div class="hint">左右のある骨（腕・脚など）は、形の真ん中が機体のどちら側にあるかで左右が決まる</div>');
+        '<div class="hint">左右のある骨（腕・脚など）は、形の真ん中が機体のどちら側にあるかで左右が決まる</div>', turretHint);
     } else if (!sub) {
       bind('noHit', () => !!pc.noHit, v => { if (v) pc.noHit = true; else delete pc.noHit; });
       bind('purge', () => !!pc.purge, v => { if (v) pc.purge = true; else delete pc.purge; });
