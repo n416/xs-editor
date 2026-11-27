@@ -897,6 +897,9 @@ export function initPartEdit(ctx) {
         bind('bevelSegs', () => val(pc, 'bevelSegs'), v => { pc.bevelSegs = Math.max(1, Math.round(v)); });
         bind('tiltY', () => val(pc, 'tiltY'), v => { pc.tiltY = v; });
         bind('ridge', () => val(pc, 'ridge'), v => { pc.ridge = Math.max(0, v); });
+        // 円状に曲げる（partgeo.js の arc・arcC）[しゃりんさん 2026-11-27 #色々なツールへの要望「スリットを円状に曲げて調整できるスライダーと、円状に曲げる時の中心の位置を決めるスライダー」、issue 1234]
+        bind('arc', () => val(pc, 'arc'), v => { if (Number.isFinite(v)) pc.arc = Math.max(0, Math.min(1, v)); });
+        bind('arcC', () => val(pc, 'arcC'), v => { if (Number.isFinite(v)) pc.arcC = v; });
       } else bind('segments', () => val(pc, 'segments'), v => { pc.segments = Math.max(3, Math.min(64, Math.round(v))); });
       bind('corner', () => val(pc, 'corner'), v => { pc.corner = Math.max(0, v); });
       bind('cornerSegs', () => val(pc, 'cornerSegs'), v => { pc.cornerSegs = Math.max(1, Math.round(v)); });
@@ -915,6 +918,12 @@ export function initPartEdit(ctx) {
       else html.push('<h2>回転体</h2>', slider('分割数', 'segments', 3, 64, 1), '<div class="hint">分割数 4・6・8 で角柱になる</div>');
       html.push('<h2>断面の角</h2>', slider('面取り幅', 'corner', 0, +(P * 0.6).toFixed(4), st3), slider('段数', 'cornerSegs', 1, 8, 1));
       if (ex) html.push('<h2>正面を斜めにする</h2>', slider('厚みの傾き', 'tiltY', +(-1.5 / P).toFixed(2), +(1.5 / P).toFixed(2), +(0.02 / P).toPrecision(1)), slider('中央の盛り上がり', 'ridge', 0, +(2 / P).toFixed(2), +(0.02 / P).toPrecision(1)));
+      if (ex) {
+        // 曲げの中心の幅：断面の大きさの 4 倍か、繰り返しで並ぶ長さの 2 倍（打った値がはみ出す時はそれも入れる）
+        const aSt = val(pc, 'arrayStep'), aLen = Math.hypot(...aSt) * (Math.max(1, Math.round(val(pc, 'arrayCount'))) - 1), CR = +Math.max(P * 4, aLen * 2, Math.abs(val(pc, 'arcC')) * 1.2).toFixed(3);
+        html.push('<h2>円状に曲げる</h2>', slider('曲げ', 'arc', 0, 1, 0.01), slider('曲げの中心', 'arcC', -CR, CR, st3),
+          '<div class="hint">正面から見て、円の弧に沿って曲げる（繰り返しの写しもまとめて 1 つの円に沿う：縦に並べたスリットは同じ中心の弧になる）。曲げ 0 でまっすぐ、1 で端と端がつながって円。円の中心は下の側（向きを変えるには上の「回転」で）で、いちばん下の線が長さを変えない。曲げの中心：円の中心を上下にずらす。＋で中心が上へ寄って弧がきつく、−でゆるくなる（上へは、形が裏返らない所まで）</div>');
+      }
       html.push('<div class="pebar"><button id="peToHull" title="この形の外側を、角と面を動かせる形（凸）に変える。へこみは埋まり、断面の設定は使えなくなる">角と面を動かせる形に変える</button></div>');
     }
     // ミラー・繰り返し
@@ -1261,7 +1270,7 @@ export function initPartEdit(ctx) {
     if (pts.length > 140) { ctx.note(`角が ${pts.length} 個あって多すぎます。分割数・面取りの段数を減らしてから変えてください`, true); return; }
     const pl = planesOf(pts);
     if (!pl) { ctx.note('この形は変えられません', true); return; }
-    for (const k of ['pts', 'depth', 'corner', 'cornerSegs', 'taper', 'tiltY', 'ridge', 'segments', 'secs', 'steps', 'side', 'top', 'tf']) delete pc[k];
+    for (const k of ['pts', 'depth', 'corner', 'cornerSegs', 'taper', 'tiltY', 'ridge', 'arc', 'arcC', 'segments', 'secs', 'steps', 'side', 'top', 'tf']) delete pc[k];
     pc.kind = 'hull'; pc.planes = pl; pc.bevel = 0; pc.bevelSegs = 1;
     changed(false);
   }

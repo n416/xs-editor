@@ -3,6 +3,10 @@
 //   hull    面で囲った形（凸）：planes = [[nx, ny, nz, d], ...]。角を動かす・面を押す引くで直す。辺の面取り bevel・bevelSegs
 //   extrude 押し出し：正面の断面 pts を厚み depth だけ押し出す。taper（奥のすぼまり）・bevel（厚みの方向の面取り）・corner（断面の角の面取り）・
 //           tiltY（厚みの傾き）・ridge（中央の盛り上がり）・side / top（横・上から見た断面。3 つの形の重なりだけが残る）
+//           arc（円状に曲げる量：0 = まっすぐ、1 = 端と端がつながって円）・arcC（曲げの中心：円の中心を断面の上下（y）へずらす）。
+//           正面（断面の xy）から見て、ブロックを円の弧に沿って曲げる。繰り返しの写しもまとめて 1 つの円に沿わせる（縦に並べたスリットは同じ中心の弧、横に並べれば円の上に並ぶ）。
+//           円の中心は下（-y）の側。全体のいちばん下（円の内側）の線の横の長さ L が、角度 arc × 360 度の弧になる（半径 R = L ÷ 角度）。上の所ほど外の大きい弧になる。
+//           arcC：円の中心を上へずらす（＋で弧がきつく（小さく）、−でゆるく（大きく））。中心が形に入って裏返らないよう、上へは 0.9 R まで [しゃりんさん 2026-11-27 #色々なツールへの要望、issue 1234; 作り 独自]
 //   lathe   回転体：断面 pts（右半分）を縦の軸のまわりに回す。segments（分割数）・corner
 //   loft    断面をつなぐ形：高さごとの断面 secs = [{ y, w, f, b, n, x, z, hard }, ...] を下から上へなめらかにつなぐ（凸でなくてよい）。
 //           w = 横の半分の幅、f / b = 前 / 後ろへの奥行き（b を省くと f）、n = 角ばり（2 = 楕円、大きいほど四角、1 = ひし形）、
@@ -65,7 +69,7 @@ function toCreasedNormals(geo, crease) {
 }
 export const KIND_LABEL = { hull: '面で囲った形', extrude: '押し出し', lathe: '回転体', loft: '断面をつなぐ形', bellows: '蛇腹' };
 /** ブロックの設定の既定値（持っていない項目はこれ） */
-export const BLOCK0 = { op: 'add', mirror: false, arrayCount: 1, arrayStep: [0, 0.05, 0], bevel: 0, bevelSegs: 1, corner: 0, cornerSegs: 1, taper: 1, tiltY: 0, ridge: 0, depth: 0.1, segments: 24, steps: 4, side: null, top: null,
+export const BLOCK0 = { op: 'add', mirror: false, arrayCount: 1, arrayStep: [0, 0.05, 0], bevel: 0, bevelSegs: 1, corner: 0, cornerSegs: 1, taper: 1, tiltY: 0, ridge: 0, arc: 0, arcC: 0, depth: 0.1, segments: 24, steps: 4, side: null, top: null,
   rings: 10, rOut: 0.05, rIn: 0.04, len: 0.15, bend: 0, bendDir: 0, ringN: 2, ringSteps: 3, capA: 0, capB: 0, capR: 1.12, blendTo: null };
 const val = (pc, k) => pc[k] ?? BLOCK0[k];
 export const kindOf = pc => pc.kind ?? 'hull';
@@ -261,8 +265,18 @@ export function tfMatrix(tf) {
   const r = tf.r ?? [0, 0, 0];
   return new THREE.Matrix4().compose(new THREE.Vector3(...(tf.p ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0] * D, r[1] * D, r[2] * D, 'XYZ')), new THREE.Vector3(...(tf.s ?? [1, 1, 1])));
 }
-/** ブロックの形（置き方 tf まで掛けたもの。繰り返し・ミラー・引くはまだ）。lod 1：面取りなし・粗い回転体（遠くの LOD 用） */
-function baseGeo(pc, lod = 0) {
+/** 断面の辺を、横（x）の幅 dx ごとに点を足して分ける（円状に曲げる時、長い辺も弧に沿って曲がるように） */
+function splitX(pts, dx) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], n = Math.max(1, Math.min(400, Math.ceil(Math.abs(b[0] - a[0]) / dx)));
+    for (let k = 0; k < n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+  }
+  return out;
+}
+/** ブロックの形（置き方 tf まで掛けたもの。繰り返し・ミラー・引くはまだ）。lod 1：面取りなし・粗い回転体（遠くの LOD 用）。
+ *  raw：置き方 tf を掛けない、dx：押し出しの断面の辺を横の幅 dx ごとに分ける（どちらも円状に曲げる時。bentCopies） */
+function baseGeo(pc, lod = 0, { raw = false, dx = 0 } = {}) {
   const kind = kindOf(pc);
   let g;
   if (kind === 'mesh') {   // 取り込んだ形：まだ Ver2 では形を持たない
@@ -279,8 +293,9 @@ function baseGeo(pc, lod = 0) {
     if (!lod && pc.smooth > 0) g = toCreasedNormals(g, pc.smooth * D);
   } else if (kind === 'extrude') {
     const depth = Math.max(0.002, val(pc, 'depth'));
-    const pts = roundCorners(pc.pts, lod ? 0 : val(pc, 'corner'), val(pc, 'cornerSegs'), true);
+    let pts = roundCorners(pc.pts, lod ? 0 : val(pc, 'corner'), val(pc, 'cornerSegs'), true);
     if (signedArea(pts) < 0) pts.reverse();
+    if (dx > 0) pts = splitX(pts, dx);
     const b = lod ? 0 : Math.min(val(pc, 'bevel'), depth * 0.45), inner = Math.max(0.001, depth - 2 * b);
     g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))), { depth: inner, curveSegments: 1, bevelEnabled: b > 0.0002, bevelThickness: b, bevelSize: b, bevelOffset: -b, bevelSegments: val(pc, 'bevelSegs') });
     g.translate(0, 0, -inner / 2);
@@ -300,16 +315,45 @@ function baseGeo(pc, lod = 0) {
     g = toCreasedNormals(g, 35 * D);
   }
   if (g.index) g = g.toNonIndexed();
-  if (pc.tf) { const m = tfMatrix(pc.tf); g.applyMatrix4(m); if (m.determinant() < 0) flipWinding(g); }
+  if (pc.tf && !raw) { const m = tfMatrix(pc.tf); g.applyMatrix4(m); if (m.determinant() < 0) flipWinding(g); }
   return g;
+}
+/** 円状に曲げる押し出しか（arc。上の説明） */
+const bent = pc => kindOf(pc) === 'extrude' && val(pc, 'arc') > 1e-4;
+/**
+ * 円状に曲げた押し出しの、繰り返しの写しごとの形（置き方 tf まで掛けたもの。ミラーはまだ）。
+ * 写しを置き方の前の座標（断面の xy）に並べてから、まとめて 1 つの円の弧に沿わせる（写しの間隔 arrayStep はパーツの座標なので、置き方の向き・大きさを戻して並べる）
+ */
+function bentCopies(pc, lod, n, step) {
+  const m = tfMatrix(pc.tf), back = new THREE.Matrix3().setFromMatrix4(m).invert(), s = new THREE.Vector3(...step).applyMatrix3(back);
+  const arc = Math.min(1, val(pc, 'arc')), xs = pc.pts.map(q => q[0]);
+  const span = (Math.max(...xs) - Math.min(...xs)) * Math.max(1, val(pc, 'taper')) + Math.abs(s.x) * (n - 1);
+  const segs = lod ? Math.max(6, Math.ceil(arc * 24)) : Math.max(12, Math.ceil(arc * 64));   // 全体の横の長さを分ける数（弧の滑らかさ。円で 64：1 つの角が 5.6 度）
+  const base = baseGeo(pc, lod, { raw: true, dx: Math.max(1e-4, span / segs) });
+  const copies = Array.from({ length: n }, (_, k) => (k ? base.clone().translate(s.x * k, s.y * k, s.z * k) : base));
+  const box = new THREE.Box3();
+  for (const g of copies) { g.computeBoundingBox(); box.union(g.boundingBox); }
+  const L = Math.max(1e-4, box.max.x - box.min.x), th = arc * Math.PI * 2, R = L / th, xm = (box.min.x + box.max.x) / 2, yN = box.min.y + Math.min(val(pc, 'arcC'), R * 0.9);   // 長さを変えない線（中心から R）：いちばん下に、曲げの中心のずれを足す
+  // （初めは真ん中の高さにしていたが、4 本のスリットは縦の幅が半径より大きく、曲げ 0.5 で内側のスリットが中心を越えて裏返った）
+  return copies.map(g => {
+    const a = g.attributes.position;
+    for (let i = 0; i < a.count; i++) {   // 中心 (xm, yN − R) の円：横の位置は角度へ、高さ yN からのずれは半径のずれへ
+      const f = (a.getX(i) - xm) / R, r = R + (a.getY(i) - yN);
+      a.setXY(i, xm + r * Math.sin(f), yN - R + r * Math.cos(f));
+    }
+    g = toCreasedNormals(g, 35 * D);
+    if (pc.tf) { g.applyMatrix4(m); if (m.determinant() < 0) flipWinding(g); }
+    return g;
+  });
 }
 /** 繰り返し・ミラーで並ぶ 1 個ずつの形（パーツの座標から pos を引いたもの） */
 function instances(pc, lod = 0) {
-  const base = baseGeo(pc, lod), n = Math.max(1, Math.round(val(pc, 'arrayCount'))), st = val(pc, 'arrayStep'), p = pc.pos ?? [0, 0, 0];
-  if (n === 1 && !pc.mirror) return [base];
+  const n = Math.max(1, Math.round(val(pc, 'arrayCount'))), st = val(pc, 'arrayStep'), p = pc.pos ?? [0, 0, 0];
+  const bentGs = bent(pc) ? bentCopies(pc, lod, n, st) : null, base = bentGs ? null : baseGeo(pc, lod);
+  if (n === 1 && !pc.mirror) return bentGs ?? [base];
   const out = [];
   for (let k = 0; k < n; k++) {
-    const g = k ? base.clone().translate(st[0] * k, st[1] * k, st[2] * k) : base;
+    const g = bentGs ? bentGs[k] : k ? base.clone().translate(st[0] * k, st[1] * k, st[2] * k) : base;
     out.push(g);
     if (pc.mirror) {   // パーツの x = 0 で反転（pos の分を戻してから）
       const m = g.clone().translate(p[0], p[1], p[2]).scale(-1, 1, 1).translate(-p[0], -p[1], -p[2]);
@@ -331,7 +375,7 @@ function merge(geos, keep = false) {
 }
 
 // ---- できあがりの形（削った後）。ブロックごとに覚えておき、設定が変わったら作り直す ----
-const shapeKey = pc => JSON.stringify([kindOf(pc), pc.planes, pc.pts, pc.depth, pc.bevel, pc.bevelSegs, pc.corner, pc.cornerSegs, pc.taper, pc.tiltY, pc.ridge, pc.segments, pc.secs, pc.steps, pc.rings, pc.rOut, pc.rIn, pc.len, pc.bend, pc.bendDir, pc.ringN, pc.ringSteps, pc.capA, pc.capB, pc.capR, pc.side, pc.top, pc.tf, pc.mirror, pc.arrayCount, pc.arrayStep, pc.pos]);
+const shapeKey = pc => JSON.stringify([kindOf(pc), pc.planes, pc.pts, pc.depth, pc.bevel, pc.bevelSegs, pc.corner, pc.cornerSegs, pc.taper, pc.tiltY, pc.ridge, pc.arc, pc.arcC, pc.segments, pc.secs, pc.steps, pc.rings, pc.rOut, pc.rIn, pc.len, pc.bend, pc.bendDir, pc.ringN, pc.ringSteps, pc.capA, pc.capB, pc.capR, pc.side, pc.top, pc.tf, pc.mirror, pc.arrayCount, pc.arrayStep, pc.pos]);
 const FINAL = new WeakMap();   // ブロック → { key, geo }
 const STALE = new Set();       // 作り直して要らなくなった形（画面が付け替えた後で捨てる）
 /** 作り直す前の形を捨てる（置いてあるメッシュを新しい形に付け替えた後で呼ぶ） */
@@ -341,7 +385,8 @@ function cutterOf(pc) {
   const key = shapeKey(pc), c = CUT.get(pc);
   if (c?.key === key) return c;
   const p = pc.pos ?? [0, 0, 0];
-  const geos = instances(pc).map(g => { g.translate(p[0], p[1], p[2]); g.computeBoundingBox(); return g; });
+  // 円状に曲げた写しは 1 つの形にまとめて 1 回で削る（写しごとに続けて削ると、前に削った細い三角形をまた割って三角形の数が膨らみ、4 本のスリットで終わらなかった）
+  const geos = (bent(pc) ? [merge(instances(pc))] : instances(pc)).map(g => { g.translate(p[0], p[1], p[2]); g.computeBoundingBox(); return g; });
   for (const g of c?.geos ?? []) g.dispose();
   const out = { key, geos }; CUT.set(pc, out);
   return out;
@@ -386,9 +431,16 @@ export function geoOf(def, pc) { const f = finalOf(def, pc); return (f.geo ??= m
 export const instGeosOf = (def, pc) => finalOf(def, pc).insts;
 /** ブロックそのものの形（削る前。引くブロックを薄く見せる・大きさを測る） */
 export const soloGeo = pc => merge(instances(pc));
+/** ブロックの 1 個めの形（繰り返し・ミラーの写しは入れない。円状に曲げた形は、写しといっしょに曲げた 1 個め） */
+function firstGeo(pc) {
+  if (!bent(pc)) return baseGeo(pc);
+  const gs = bentCopies(pc, 0, Math.max(1, Math.round(val(pc, 'arrayCount'))), val(pc, 'arrayStep'));
+  for (const g of gs.slice(1)) g.dispose();
+  return gs[0];
+}
 /** ブロックの範囲（パーツの座標。繰り返し・ミラーの写しは入れない） */
 export function boxOf(pc) {
-  const g = baseGeo(pc), p = pc.pos ?? [0, 0, 0];
+  const g = firstGeo(pc), p = pc.pos ?? [0, 0, 0];
   g.computeBoundingBox();
   const b = g.boundingBox.clone().translate(new THREE.Vector3(p[0], p[1], p[2]));
   g.dispose();
@@ -396,7 +448,7 @@ export function boxOf(pc) {
 }
 /** ブロックの頂点（パーツの座標。同じ点は 1 つに。面で囲った形へ変えるとき用） */
 export function pointsOf(pc) {
-  const g = baseGeo(pc), a = g.attributes.position, p = pc.pos ?? [0, 0, 0], seen = new Map();
+  const g = firstGeo(pc), a = g.attributes.position, p = pc.pos ?? [0, 0, 0], seen = new Map();
   for (let i = 0; i < a.count; i++) { const q = [a.getX(i) + p[0], a.getY(i) + p[1], a.getZ(i) + p[2]]; seen.set(q.map(v => Math.round(v * 1e4)).join(','), q); }
   g.dispose();
   return [...seen.values()];
