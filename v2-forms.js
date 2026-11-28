@@ -214,6 +214,27 @@ export function bakeForm(doc, n, boxOf, opt = {}) {
       }
     }
   }
+  // 置いたパーツ 1 つごとの形態（item.forms、issue #810）も焼き込む（issue 1311、テスター Wijick さん 2026-11-28「「置いたパーツ」で形態２を作るために
+  // パーツをずらす、回すを行っても反映されていない」：前はブロックの形態 pc.forms だけを焼き、書き出した形態 2 の模型・みんなの機体のスキンには
+  // 置いたパーツのずらす・回す・出さない（ジョイントで決まる分も、item.forms に入る）が入らなかった）。
+  // 画面と同じ置き方（v2.js applyToGroup）：位置に p を足し、向き（Ry·Rx·Rz）の後ろに r（XYZ）を掛け、出さない時は除く（shrinkHidden の時は縮める）
+  if (Array.isArray(out.items)) {
+    if (!opt.shrinkHidden) out.items = out.items.filter(it => !formOf(it, n)?.hide);
+    for (const it of out.items) {
+      const f = formOf(it, n);
+      delete it.forms;
+      if (!f) continue;
+      const p = f.p ?? [0, 0, 0], r = f.r ?? [0, 0, 0], s = opt.shrinkHidden && f.hide ? HIDE_S : 1;
+      if (p.some(v => v)) it.mov = (it.mov ?? [0, 0, 0]).map((v, i) => v + p[i]);
+      if (r.some(v => v)) {
+        const r0 = it.rot ?? [0, 0, 0];
+        q.setFromEuler(_e.set(r0[0] * D, r0[1] * D, r0[2] * D, 'YXZ')).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0] * D, r[1] * D, r[2] * D, 'XYZ')));
+        const e = new THREE.Euler().setFromQuaternion(q, 'YXZ');
+        it.rot = [e.x / D, e.y / D, e.z / D];
+      }
+      if (s !== 1) it.scal = (it.scal ?? [1, 1, 1]).map(v => v * s);
+    }
+  }
   return out;
 }
 
