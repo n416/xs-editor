@@ -16,7 +16,7 @@ import { planesFromPoints } from './xsasm-lib.js';
 import { ROLE_LABEL, ROLE_COLOR, GLOW_ROLES, roleOf } from './paint.js';
 import { KIND_LABEL, BLOCK0, kindOf, isSub, soloGeo, boxOf, pointsOf, roundCorners, latheLoop, tfMatrix, loftSecs } from './partgeo.js';
 import { BONE_CHOICES, PIVOT_CHOICES, groupOfPart, pivotOfPart, isGlowPart, isTrackedSet, markTurret } from './freeparts.js';
-import { profileEditor } from './v2-profile.js';
+import { profileEditor, symOk, symTwin, symInsert, symRemove, mirrorRight } from './v2-profile.js';
 import { FORM_DELAY_MAX, FORM_MAX, formDelayOf, formOf, setForm } from './v2-forms.js';
 import { JOINT_KIND, isSlide, jointsOn, putJoints, jointById, jointRoot, jointKids, jointParent, jointCycle, makeJoint, clampJoint, jointValue, setJointType, syncBlockJoints } from './v2-joints.js';
 
@@ -1036,6 +1036,7 @@ export function initPartEdit(ctx) {
         <div class="hint">${face === 'front' ? '正面から見た形を押し出す。「側面」「上面」も描くと、3 つの形が重なる所だけが残る' : face === 'side' ? `横から見た形（右が前、上が上）。${pc.side ? '' : '点を動かすと使い始める。'}点線はブロックの範囲` : `上から見た形（下が前）。${pc.top ? '' : '点を動かすと使い始める。'}点線はブロックの範囲`}</div>` : ''}
         <canvas id="peProfile"></canvas>
         <div class="hint">点をドラッグ ・ 辺を押して点を足す ・ 点をダブルクリックで消す ・ 何もない所をドラッグで動かす ・ ホイールで拡大縮小</div>
+        ${ex ? `<div class="pebar"><label class="chk" style="flex:1" title="点を動かす・足す・消すと、図の真ん中の縦の線をはさんだ反対側の点も同じように変わる"><input type="checkbox" id="peProfSym" ${st.profSym ? 'checked' : ''}><span>左右対称に描く</span></label><button id="peProfMirror" title="右半分（縦の線より右）を左へ写して、左右対称の形にする">右半分を左へ写す</button></div><div class="hint" id="peSymNote"></div>` : ''}
         <div id="pePts"></div>
         <div class="hint">点の数値（単位：1 cm = 0.01。ブロックの位置・大きさと同じ）。番号は図の点の順。＋：次の点との間に点を足す ・ ↑↓：並べ替える ・ ×：消す${ex ? '' : '。半径は 0 以上（両端は回転軸へつながる）'}</div>
         <div class="pebar"><label class="chk" style="flex:1"><input type="checkbox" id="peSnap" ${st.snap ? 'checked' : ''}><span id="peSnapLabel">グリッドに合わせる</span></label>${ex && face !== 'front' && pc[face] ? '<button id="peFaceClear">この向きの形を消す</button>' : ''}<button id="peFit">全体を見る</button></div>`);
@@ -1142,11 +1143,11 @@ export function initPartEdit(ctx) {
     const pts = () => pc[key] ?? draft;
     let created = false;
     prof = profileEditor($('#peProfile'), {
-      pts, closed: ex, flipY: face === 'top', sub: isSub(pc), dim: !!draft && !pc[key], snap: () => st.snap,
+      pts, closed: ex, flipY: face === 'top', sym: () => st.profSym, sub: isSub(pc), dim: !!draft && !pc[key], snap: () => st.snap,
       outline: () => (ex ? roundCorners(pts(), val(pc, 'corner'), val(pc, 'cornerSegs'), true) : latheLoop(pc)),
       box: face === 'front' ? null : faceBox,
       marks: face === 'side' ? [['前 →', 'tr'], ['← 後', 'tl']] : face === 'top' ? [['↓ 前', 'bl'], ['↑ 後', 'tl']] : [],
-      onChange: () => { use(); live(); syncPts(); },
+      onChange: () => { use(); live(); syncPts(); symNote(); },
       onCommit: () => { commit(); if (created) renderRight(); },
       onGrid: (snap, major) => { const el = $('#peSnapLabel'); if (el) el.textContent = `グリッドに合わせる（${snap}）・太線の間隔 ${major}`; },
       onSelect: i => { for (const r of box.querySelectorAll('[data-pi]')) r.classList.toggle('on', +r.dataset.pi === i); box.querySelector(`[data-pi="${i}"]`)?.scrollIntoView({ block: 'nearest' }); },
@@ -1173,9 +1174,12 @@ export function initPartEdit(ctx) {
     const setPt = el => {
       const v = parseFloat(el.value); if (!Number.isFinite(v)) return false;
       use();
-      const i = rowOf(el), a = +el.dataset.pa, q = pts()[i].slice();
+      const i = rowOf(el), a = +el.dataset.pa, q = pts()[i].slice(), mate = symOn2d() ? symTwin(pts(), i) : -1;
       q[a] = r5(a === 0 && !ex ? Math.max(0, v) : v);
+      if (mate === i) q[0] = 0;   // （左右対称：縦の線の上の点は線の上のまま）
       pts()[i] = q;
+      if (mate >= 0 && mate !== i) pts()[mate] = [r5(-q[0]), q[1]];
+      if (mate >= 0) syncPts();
       return true;
     };
     box.oninput = e => { if (e.target.dataset.pa !== undefined && setPt(e.target)) { live(); prof.draw(); } };
@@ -1191,19 +1195,36 @@ export function initPartEdit(ctx) {
       let to = i;
       if (el.dataset.padd !== undefined) {
         const a = list()[i], n = list().length, b = ex ? list()[(i + 1) % n] : list()[i + 1] ?? [0, a[1]];
-        use(); list().splice(i + 1, 0, [r5((a[0] + b[0]) / 2), r5((a[1] + b[1]) / 2)]); to = i + 1;
+        use(); const p = [r5((a[0] + b[0]) / 2), r5((a[1] + b[1]) / 2)];
+        to = ex ? symInsert(list(), i, p, st.profSym) : (list().splice(i + 1, 0, p), i + 1);
       } else if (el.dataset.pup !== undefined || el.dataset.pdown !== undefined) {
         const j = el.dataset.pup !== undefined ? i - 1 : i + 1;
         if (j < 0 || j >= list().length) return;
         use(); const L = list(); [L[i], L[j]] = [L[j], L[i]]; to = j;
       } else if (el.dataset.pdel !== undefined) {
         if (list().length <= minPts) { ctx.note(`${ex ? '押し出しの断面は 3 点' : '回転体の断面は 1 点'}より少なくできません`, true); return; }
-        use(); list().splice(i, 1); to = Math.min(i, list().length - 1);
+        use(); if (!symRemove(list(), i, minPts, ex && st.profSym)) { ctx.note('左右の 2 点を消すと 3 点より少なくなるので消せません', true); return; }
+        to = Math.min(i, list().length - 1);
       } else return;
       prof.select(to); live(); prof.draw(); commit();
       if (created) renderRight(); else renderPts();
     };
     renderPts();
+    // ---- 左右対称に描く（issue 1310）：図・数値の欄の ＋・×・打った値で、反対側の点も一緒に変わる。右半分を左へ写して形をそろえる ----
+    function symOn2d() { return ex && st.profSym && symOk(pts()); }
+    function symNote() {
+      const el = $('#peSymNote'); if (!el) return;
+      el.textContent = !st.profSym ? '' : symOk(pts()) ? '左右対称：反対側の点も一緒に動く（水色の線が真ん中、だいだいが選んだ点の相手）' : 'この形は左右対称でないので、点は 1 つずつ動く。「右半分を左へ写す」でそろえる';
+    }
+    symNote();
+    if ($('#peProfSym')) $('#peProfSym').onchange = e => { st.profSym = e.target.checked; symNote(); prof.draw(); };
+    if ($('#peProfMirror')) $('#peProfMirror').onclick = () => {
+      const m = mirrorRight(pts());
+      if (!m) { ctx.note('右半分を写せません：形が真ん中の縦の線を 2 か所でまたぐようにしてください', true); return; }
+      use(); pts().splice(0, pts().length, ...m);
+      prof.select(-1); live(); prof.draw(); commit(); symNote();
+      if (created) renderRight(); else renderPts();
+    };
     $('#peSnap').onchange = e => { st.snap = e.target.checked; };
     $('#peFit').onclick = () => prof.fit();
     if ($('#peFaceClear')) $('#peFaceClear').onclick = () => { pc[key] = null; changed(false); };
@@ -1445,7 +1466,7 @@ export function initPartEdit(ctx) {
     for (const pc of def.pieces) { if (pc.pos && pc.pos.some(v => v)) { if (kindOf(pc) === 'hull') pc.planes = movePlanes(pc.planes, pc.pos).map(p => p.map(r5)); else if (pc.tf) pc.tf.p = pc.tf.p.map((v, k) => r5(v + pc.pos[k])); } pc.pos = [0, 0, 0]; }
     const seen = new Set();
     for (const pc of def.pieces) { let n = pc.name; for (let k = 2; seen.has(n); k++) n = `${pc.name} ${k}`; pc.name = n; seen.add(n); }
-    st = { def, replaced, isNew, sel: 0, mode: 'block', corner: -1, edge: -1, face: -1, more: [], blocks: [], handles: [], helper: null, ghosts: new Map(), others: 'faint', showSubs: true, showBlock: true, sym: true, snap: true, face2d: 'front',
+    st = { def, replaced, isNew, sel: 0, mode: 'block', corner: -1, edge: -1, face: -1, more: [], blocks: [], handles: [], helper: null, ghosts: new Map(), others: 'faint', showSubs: true, showBlock: true, sym: true, profSym: false, snap: true, face2d: 'front',
       hist: [], hpos: -1, cam: { pos: camera.position.clone(), target: orbit.target.clone() } };
     st.backup = structuredClone({ name: def.name, pieces: def.pieces });
     st.hist.push({ s: snapshot(), sel: 0 }); st.hpos = 0;
