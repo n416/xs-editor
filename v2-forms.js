@@ -40,6 +40,27 @@ export function setForm(pc, n, change) {
   if (Object.keys(all).length) pc.forms = all; else delete pc.forms;
 }
 
+// 形態を消す（issue 1277、Wijick さん 2026-11-28 #色々なツールへの要望「形態を減らす」）：形態 n（2 から）の値を消し、n より後ろの形態を 1 つずつ前へ詰める
+//   （形態 3 が形態 2 に）。形態の番号を鍵に持つ物（pc.forms・item.forms・ジョイントの v・塗りの formAlpha・adj.formKind・武器の点 def.wpts）に使う
+/** 形態の番号を鍵にした map から形態 n を消して詰めた写し（空になったら undefined）。1 と数でない鍵はそのまま */
+export function dropFormKey(map, n) {
+  if (!map || n < 2) return map;
+  const out = {};
+  for (const [k, v] of Object.entries(map)) {
+    const f = +k;
+    if (!Number.isFinite(f) || f < n) out[k] = v;
+    else if (f > n) out[f - 1] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+/** obj[key]（形態の番号を鍵にした map）から形態 n を消して詰める（空になったら obj[key] ごと消す）。変わった時 true */
+export function dropFormIn(obj, key, n) {
+  if (!obj?.[key]) return false;
+  const before = JSON.stringify(obj[key]), m = dropFormKey(obj[key], n);
+  if (m) obj[key] = m; else delete obj[key];
+  return JSON.stringify(obj[key] ?? null) !== before;
+}
+
 const ease = t => t * t * (3 - 2 * t);
 const _q = new THREE.Quaternion(), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _e = new THREE.Euler();
 const _c = new THREE.Vector3(), _mid = new THREE.Vector3(), _v = new THREE.Vector3(), _w = new THREE.Vector3(), _col = new THREE.Color(), _cb = new THREE.Color();

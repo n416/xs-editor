@@ -27,7 +27,7 @@ import { initShare } from './v2-share.js';
 import { PART_RECIPES, keptPieces, recipeText, canAsk } from './airecipes.js';
 import { initPartEdit } from './v2-partedit.js';
 import { makeWeaponBench } from './v2-weapon.js';
-import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, formDelayOf, formSpanOf, hasPurge, purgedDoc, FORM_WHEN, formWhenOf, FORM_KIND, formKindOf, setFormKind, isFlyKind, flyTilt, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
+import { FORM_DELAY_MAX, FORM_MAX, FORM_MS, bakeForm, dropFormIn, formDelayOf, formSpanOf, hasPurge, purgedDoc, FORM_WHEN, formWhenOf, FORM_KIND, formKindOf, setFormKind, isFlyKind, flyTilt, formOf, formsUsed, itemFlame, itemFormDelta, itemFormsUsed, keepBase, mirrorForms, setForm, showForms } from './v2-forms.js';
 import { geoOf, isSub, disposeStale, instGeosOf, drawn, boxOf as blockBox, tfMatrix } from './partgeo.js';
 import { freeDef, blockOf, headOf, groupOfPart, isTrackedSet, holderKey, isHeldPart, isGlowPart, sidedName, freeJoints, atRest, markTurret } from './freeparts.js';
 import { MESHES, ensureMeshes, importModel, applyJoints, ensureJoints, meshToBlocks, openJoints, meshReady, setMeshHost, IMPORT_BONES, rigRequest, installPack, GW_PREFIX } from './meshparts.js';
@@ -1761,15 +1761,48 @@ function switchForm(n) {
   if (!PE.active()) bench?.afterRebuild();
 }
 function addForm() { if (formCount() >= FORM_MAX) return; formAdded = formCount() + 1; switchForm(formAdded); }
+// 形態を消す（issue 1277、Wijick さん 2026-11-28 #色々なツールへの要望「使わない形態・間違って増やした形態を消せるようにしたい」）：
+// 今見ている形態 n（2 から。形態 1 はゲームに書き出す形なので消せない）を消し、後ろの形態を 1 つずつ前へ詰める（形態 3 が形態 2 に）。
+// 消す物：置いたパーツの形態（item.forms）・ジョイントの値（joint.v）・この機体で使っている自分のパーツのブロックの形態（pc.forms）と
+// 武器の点（def.wpts）・塗りの形態ごとの透明度（paint.formAlpha）・変形の種類（adj.formKind）。「ゲームで形態 2 になる時」（adj.formWhen）は
+// 形態の番号でなく「形態 2」の決まりなので、そのまま（詰めて形態 2 になった物に効く）。自分のパーツはカタログの物を書き換えるので、
+// ほかの機体でも同じパーツを使っていれば、その形態も消える（パーツエディタでブロックの形態を変えた時と同じ）
+function removeForm(n = formNow) {
+  const N = formCount();
+  if (n < 2 || n > N) return false;
+  if (PE.active()) { note('パーツエディタを閉じてから、形態を消してください', true); return false; }
+  const list = kept(), defs = new Set();
+  for (const it of list) for (const d of [byId[it.part], byId[byId[it.part]?.src]]) if (d && userParts[d.id] === d) defs.add(d);
+  const shared = [...defs].filter(d => d.pieces?.some(pc => pc.forms?.[n]));
+  if (!confirm(`形態 ${n} を消します。${n < N ? `\n形態 ${n + 1}${n + 1 < N ? `〜${N}` : ''} は 1 つずつ前へ詰まります（形態 ${n + 1} が形態 ${n} に）。` : ''}`
+    + (shared.length ? `\n自分のパーツ ${shared.map(d => `「${d.name}」`).join('')} のブロックの形態 ${n} も消えます（ほかの機体で同じパーツを使っていれば、そちらからも消えます）。` : '')
+    + '\n（↶ 戻すで取り戻せます。自分のパーツのブロックの形態は戻りません）')) return false;
+  for (const it of list) { dropFormIn(it, 'forms', n); if (it.joint) dropFormIn(it.joint, 'v', n); }
+  let userTouched = false;
+  for (const d of defs) {
+    for (const pc of d.pieces ?? []) if (dropFormIn(pc, 'forms', n)) userTouched = true;
+    if (dropFormIn(d, 'wpts', n)) userTouched = true;
+  }
+  if (paint) dropFormIn(paint, 'formAlpha', n);
+  dropFormIn(adj, 'formKind', n);
+  if (userTouched) persistUser();
+  formAdded = Math.max(1, Math.min(formAdded, N - 1));
+  formNow = n - 1; formAnim = null; formScrub = null; tiltMid = 0;
+  save(); rebuild(); renderForms(); showPaint(); showFormNow();
+  note(`形態 ${n} を消しました（形態は ${formCount()} つ）`);
+  return true;
+}
 function resetForms() { formNow = 1; formAdded = 1; formAnim = null; formScrub = null; tiltMid = 0; renderForms(); showPaint(); }
 function renderForms() {
   const bar = $('#formBar'); if (!bar) return;
   const n = formCount();
   if (formNow > n) { formNow = n; formAnim = null; }   // （その形態を使うブロックが無くなった）
   bar.innerHTML = Array.from({ length: n }, (_, i) => `<button class="small ${i + 1 === formNow ? 'acc' : ''}" data-form="${i + 1}">形態 ${i + 1}</button>`).join('')
-    + (n < FORM_MAX ? '<button class="small" id="bFormAdd" title="形態を 1 つ足す（パーツエディタでブロックを選び、右の「形態」で、この形態での見た目を決める）">＋ 形態を足す</button>' : '');
+    + (n < FORM_MAX ? '<button class="small" id="bFormAdd" title="形態を 1 つ足す（パーツエディタでブロックを選び、右の「形態」で、この形態での見た目を決める）">＋ 形態を足す</button>' : '')
+    + (formNow > 1 ? `<button class="small" id="bFormDel" title="今見ている形態 ${formNow} を消す（後ろの形態は 1 つずつ前へ詰まる。形態 1 は消せない）">− 形態 ${formNow} を消す</button>` : '');
   for (const b of bar.querySelectorAll('[data-form]')) b.onclick = () => switchForm(+b.dataset.form);
   if ($('#bFormAdd')) $('#bFormAdd').onclick = addForm;
+  if ($('#bFormDel')) $('#bFormDel').onclick = () => removeForm(formNow);
   fillFormWhen(n);
   fillFormKind(n);
   fillItemForm();
@@ -3142,7 +3175,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '767d67a';
+const BUILD = '2f2799a';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
