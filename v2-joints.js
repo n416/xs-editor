@@ -2,10 +2,14 @@
 // 「形態 1・形態 2 の変形で部品を 1 つずつ動かす手間を、ジョイントでつないでまとめて動かせるようにしたい」）。
 // エディタの中の道具だけで、ゲーム・中央・UE は変えない：ジョイントは、つないだパーツの形態 2 からの「ずらす・回す」（item.forms[n] の p・r）をまとめて書く。
 //   付け根のパーツ：item.joint = { id: 'j1', type: 'hinge' | 'spin' | 'slide', at: [x, y, z]（軸の点。付け根の原点からの、付け根の向きの座標。拡大は掛けない）,
-//                                 axis: 'x' | 'y' | 'z'（付け根の向きの軸）, min, max, v: { 形態の番号: 角度（度）か距離 } }
-//   つながるパーツ：item.jt = 'j1'
+//                                 axis: 'x' | 'y' | 'z'（付け根の向きの軸）, min, max, v: { 形態の番号: 角度（度）か距離 },
+//                                 rev?: true（逆向き：値の向きを返す。issue 1293）, delay?: ミリ秒（付け根が動き出してから、つないだパーツが動き出すまで。issue 1293） }
+//   つながるパーツ：item.jt = 'j1'（付け根でもあってよい：ジョイントの先にジョイント。issue 1293）
 // 形態 n のつながるパーツの置き方 ＝ 付け根の形態 n の置き方 × ジョイントの動き（軸の回りに v[n] 度、スライダーは軸の向きに v[n]）× 付け根の形態 1 の置き方の逆 × そのパーツの形態 1 の置き方。
-// 付け根・つながるパーツの形態 1 の置き方を直しても、計算し直すと付いてくる（v2.js syncJoints）。連鎖（つながるパーツをさらに付け根にする）は作らない。
+// 付け根・つながるパーツの形態 1 の置き方を直しても、計算し直すと付いてくる（v2.js syncJoints）。
+// 連鎖（issue 1293、ポッチャさん 2026-11-28「親が回ったら、子のパーツ・ブロック（ジョイントの軸）も一緒に付いて回るように」）：
+//   つながるパーツをさらに付け根にしてよい。親のジョイントから先に計算する（jointOrder）ので、子の付け根の形態 n の置き方に親の動きが入り、子の軸もその先も付いて回る。
+//   輪になるつながり（自分の先祖につなぐ）は作らせず、あれば外す（jointCycle）。
 // 形態の間の動きは今までどおり、パーツごとに真っ直ぐ（v2-forms.js itemFormDelta）
 import * as THREE from 'three';
 
@@ -21,7 +25,26 @@ export function jointRoot(items, it) {
   return it.jt ? items.find(o => o.joint?.id === it.jt) ?? null : null;
 }
 /** ジョイントにつながるパーツの並び */
-export const jointKids = (items, root) => (root?.joint ? items.filter(o => o !== root && o.jt === root.joint.id && !o.joint) : []);
+export const jointKids = (items, root) => (root?.joint ? items.filter(o => o !== root && o.jt === root.joint.id) : []);
+/** it がつながっているジョイントの付け根（親）。無ければ null（it 自身が付け根でも、親を返す） */
+export const jointParent = (items, it) => (it?.jt ? items.find(o => o !== it && o.joint?.id === it.jt) ?? null : null);
+/** it から親へたどった付け根の並び（近い順）。輪になっていたら null */
+export function jointAncestors(items, it) {
+  const seen = new Set([it]), out = [];
+  for (let p = jointParent(items, it); p; p = jointParent(items, p)) { if (seen.has(p)) return null; seen.add(p); out.push(p); }
+  return out;
+}
+/** kid を root のジョイントにつなぐと輪になるか（root が kid 自身か、kid の子孫） */
+export function jointCycle(items, root, kid) {
+  if (root === kid) return true;
+  const up = jointAncestors(items, root);
+  return up == null || up.includes(kid);
+}
+/** 付け根を、親のジョイントが先に来る順に並べる（輪になっている物は入れない） */
+export function jointOrder(items) {
+  const roots = items.filter(it => it.joint).map(it => ({ it, d: jointAncestors(items, it) }));
+  return roots.filter(r => r.d).sort((a, b) => a.d.length - b.d.length).map(r => r.it);
+}
 /** 新しいジョイントの id（今の items に無い物） */
 export const newJointId = items => { for (let n = 1; ; n++) if (!items.some(it => it.joint?.id === `j${n}`)) return `j${n}`; };
 /** 新しいジョイント（ヒンジ、付け根の原点に x の軸） */
@@ -43,6 +66,7 @@ const AX = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: ne
 /** ジョイントの値 v の動き（付け根の座標の行列）：軸の点 at を通る軸の回りに v 度。スライダーは軸の向きに v */
 export function jointMotion(j, v) {
   const a = AX[j.axis] ?? AX.x;
+  if (j.rev) v = -v;   // （逆向き：issue 1293）
   if (isSlide(j)) return new THREE.Matrix4().makeTranslation(a.x * v, a.y * v, a.z * v);
   const at = new THREE.Vector3(...(j.at ?? [0, 0, 0]));
   return new THREE.Matrix4().makeTranslation(at.x, at.y, at.z)
@@ -63,5 +87,7 @@ export function kidForm({ Pr, Lr1, Lrn, J, Pc, Lc1, mov, q0 }) {
   const r4 = v => Math.round(v * 1e4) / 1e4, r2 = v => Math.round(v * 100) / 100;
   return { p: pos.sub(mov).toArray().map(r4), r: [e.x, e.y, e.z].map(v => r2(v / D)) };
 }
+/** つないだパーツの遅れ（ミリ秒）：付け根の遅れ ＋ ジョイントの遅れ。ジョイントに遅れを決めていなければ null（パーツの遅れのまま） */
+export const jointDelayOf = (j, rootDelay) => (j && j.delay != null ? Math.max(0, Math.round(rootDelay + (+j.delay || 0))) : null);
 /** 写し（反対側にも・貼り付け）では、ジョイントを外して、値（forms）だけ残す */
 export function dropJoint(it) { delete it.joint; delete it.jt; return it; }
