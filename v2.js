@@ -39,7 +39,7 @@ import { fitTiltBoth, tilted, TILT_GRID } from './kneetilt.js';
 import { autoFix } from './v2-autofix.js';
 import { P, XH, XL, YH, YL, ZH, ZL, box } from './xsasm-lib.js';
 import { JET_R, JET, FX_KINDS, FX_WHEN, FX_N, FX_S, fxOf } from './parts/back/jetshield.js';
-import { JOINT_KIND, JOINT_RANGE, isSlide, jointRoot, jointKids, jointParent, jointAncestors, jointCycle, jointOrder, jointDelayOf, makeJoint, clampJoint, jointValue, setJointType, jointMotion, kidForm, dropJoint } from './v2-joints.js';
+import { JOINT_KIND, JOINT_RANGE, isSlide, jointsOn, putJoints, jointById, jointRoot, jointKids, jointParent, jointAncestors, jointCycle, jointOrder, jointDelayOf, makeJoint, clampJoint, jointValue, setJointType, jointMotion, kidForm, dropJoint } from './v2-joints.js';
 import { byId, register, boneOf as boneOf0, SIDED, sideOf, hasLink as hasLinkIn, bodyParts, fitItem, jointsOf, kneeAxesOf, SEG, ADJ0 } from './bodyparts.js';
 
 const $ = s => document.querySelector(s);
@@ -943,7 +943,7 @@ function renderList() {
     d.className = picked.includes(i) ? 'sel' : '';
     // 1 か所に 1 つの部位（スカート・太もも・すね・足）が同じ側に 2 つ以上あれば、重なっていると知らせる（別々に動くので、板が 2 枚に見える）
     const cat = byId[it.part]?.cat, dup = ONE_EACH.has(cat) ? items.findIndex((o, j) => j !== i && byId[o.part]?.cat === cat && sideOf(o) === sideOf(it)) : -1;
-    d.innerHTML = `<span>${i + 1}. ${labelOf(it)}${it.grp ? ` <b class="grp" title="グループ（押すと全部が選ばれる。1 つだけはダブルクリック）">［${it.grp.replace(/^g/, 'グループ ')}］</b>` : ''}${it.bone ? ` <i class="bone">骨：${BONE_PICK.find(([b]) => b === it.bone)?.[1] ?? it.bone}</i>` : ''}${it.purge ? ' <i class="bone" title="パージで外れる">パージ</i>' : ''}${it.joint ? ` <i class="bone" title="ジョイントの付け根（issue 1225）">ジョイント ${it.joint.id}</i>` : ''}${it.jt ? ` <i class="bone" title="ジョイントにつながっている（形態 2 からのずらす・回すはジョイントで決まる）">→${it.jt}</i>` : ''}${it.roman ? ` <i class="bone" title="ロマン砲変形：スロット ${it.roman.s} を撃ち切ると${it.roman.m === 'd' ? '外れる' : '出る'}">撃切${it.roman.s}${it.roman.m === 'd' ? '外' : '出'}</i>` : ''}${dup >= 0 ? ` <b style="color:#e8a33d">⚠ ${dup + 1} 番と同じ部位（重なっている）</b>` : ''}</span>`;
+    d.innerHTML = `<span>${i + 1}. ${labelOf(it)}${it.grp ? ` <b class="grp" title="グループ（押すと全部が選ばれる。1 つだけはダブルクリック）">［${it.grp.replace(/^g/, 'グループ ')}］</b>` : ''}${it.bone ? ` <i class="bone">骨：${BONE_PICK.find(([b]) => b === it.bone)?.[1] ?? it.bone}</i>` : ''}${it.purge ? ' <i class="bone" title="パージで外れる">パージ</i>' : ''}${jointsOn(it).length ? ` <i class="bone" title="ジョイントの付け根（issue 1225）">ジョイント ${jointsOn(it).map(j => j.id).join('・')}</i>` : ''}${it.jt ? ` <i class="bone" title="ジョイントにつながっている（形態 2 からのずらす・回すはジョイントで決まる）">→${it.jt}</i>` : ''}${it.roman ? ` <i class="bone" title="ロマン砲変形：スロット ${it.roman.s} を撃ち切ると${it.roman.m === 'd' ? '外れる' : '出る'}">撃切${it.roman.s}${it.roman.m === 'd' ? '外' : '出'}</i>` : ''}${dup >= 0 ? ` <b style="color:#e8a33d">⚠ ${dup + 1} 番と同じ部位（重なっている）</b>` : ''}</span>`;
     d.onclick = e => (e.detail >= 2 && !(e.ctrlKey || e.shiftKey || e.metaKey) ? selectOne(i) : select(i, e.ctrlKey || e.shiftKey || e.metaKey));   // 2 度目の押し（ダブルクリック）はグループの中の 1 つだけ（行は押すたびに作り直すので dblclick は届かない）
     el.appendChild(d);
   });
@@ -1088,9 +1088,9 @@ function syncJoints() {
   let changed = false;
   for (const it of items) if (it.jt && (!jointParent(items, it) || jointAncestors(items, it) == null)) { delete it.jt; changed = true; }
   const roots = jointOrder(items);
-  const top = Math.min(FORM_MAX, Math.max(formCount(), ...roots.flatMap(rt => Object.keys(rt.joint.v ?? {}).map(Number).filter(Number.isFinite))));   // （連鎖の先まで同じ形態の数で）
-  for (const rt of roots) {
-    const ri = items.indexOf(rt), j = rt.joint, Pr = parentWorld(ri); if (!Pr) continue;
+  const top = Math.min(FORM_MAX, Math.max(formCount(), ...roots.flatMap(rt => jointsOn(rt).flatMap(j => Object.keys(j.v ?? {}).map(Number).filter(Number.isFinite)))));   // （連鎖の先まで同じ形態の数で）
+  for (const rt of roots) for (const j of jointsOn(rt)) {   // （1 つの付け根に 2 つ以上のジョイント：それぞれのつながるパーツを、そのジョイントで：issue 1293）
+    const ri = items.indexOf(rt), Pr = parentWorld(ri); if (!Pr) continue;
     const Lr1 = formPlace(rt, 1, false).L, dl = jointDelayOf(j, formDelayOf(rt));
     items.forEach((ct, ci) => {
       if (ct === rt || ct.jt !== j.id) return;
@@ -1121,14 +1121,22 @@ const jointMark = new THREE.Group();
 }
 jointMark.visible = false; jointMark.matrixAutoUpdate = false; scene.add(jointMark);
 const AXQ = { x: new THREE.Quaternion(), y: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.PI / 2)), z: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -Math.PI / 2, 0)) };
+/** 欄と軸の印に出すジョイント：つながっているだけのパーツなら、そのジョイント。付け根なら、選んでいる物（jointCur）か最初の物（issue 1293） */
+let jointCur = null;
+function shownJoint(it, rt) {
+  if (!rt) return null;
+  if (rt !== it) return jointById(items, it.jt)?.j ?? null;
+  const list = jointsOn(rt);
+  return list.find(j => j.id === jointCur) ?? list[0] ?? null;
+}
 function jointMarkTick() {
-  const it = selected >= 0 && !PE.active() ? items[selected] : null, rt = jointRoot(items, it), ri = rt ? items.indexOf(rt) : -1, g = groups[ri];
-  jointMark.visible = !!g?.parent && !!g.visible;
+  const it = selected >= 0 && !PE.active() ? items[selected] : null, rt = jointRoot(items, it), ri = rt ? items.indexOf(rt) : -1, g = groups[ri], j = shownJoint(it, rt);
+  jointMark.visible = !!j && !!g?.parent && !!g.visible;
   if (!jointMark.visible) return;
   g.updateWorldMatrix(true, false);
   const pos = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
   g.matrixWorld.decompose(pos, q, s);   // （拡大は掛けない：軸の点は付け根の原点からの、拡大の無い座標）
-  const j = rt.joint, at = isSlide(j) ? [0, 0, 0] : j.at ?? [0, 0, 0];
+  const at = isSlide(j) ? [0, 0, 0] : j.at ?? [0, 0, 0];
   jointMark.matrix.compose(pos, q, new THREE.Vector3(1, 1, 1)).multiply(new THREE.Matrix4().compose(new THREE.Vector3(...at), AXQ[j.axis] ?? AXQ.x, new THREE.Vector3(1, 1, 1)));
   jointMark.matrixWorldNeedsUpdate = true;
   jointMark.getObjectByName('dot').visible = !isSlide(j);
@@ -1146,25 +1154,30 @@ function fillJoint() {
   const rt = jointRoot(items, it), others = picked.filter(i => i !== selected && items[i]);
   const head = '<div class="bar" style="margin-top:6px"><b style="font-size:12px;align-self:center">ジョイント</b></div>';
   // 作る（付け根：このパーツ）。ほかのジョイントにつながっているパーツも付け根にできる（ジョイントの先のジョイント、issue 1293）
-  const makeBtn = !it.joint && others.length ? `<div class="bar"><button class="small" id="bJointMake" title="今のパーツ（最後に選んだ物）が付け根、ほかに選んだ物がつながるパーツ">ジョイントを作る（付け根：このパーツ、つなぐ：ほかの ${others.length} 個）</button></div>` : '';
+  // 付け根に、もうジョイントがあれば「足す」（1 つの付け根に 2 つ目からの軸：issue 1293）
+  const has = jointsOn(it).length > 0;
+  const makeBtn = others.length ? `<div class="bar"><button class="small" id="bJointMake" title="今のパーツ（最後に選んだ物）が付け根、ほかに選んだ物がつながるパーツ${has ? '。このパーツの今のジョイントはそのままで、別の軸を足す' : ''}">ジョイントを${has ? '足す' : '作る'}（付け根：このパーツ、つなぐ：ほかの ${others.length} 個）</button></div>` : '';
   const makeOn = () => { if ($('#bJointMake')) $('#bJointMake').onclick = () => {
     const kids = others.filter(i => !jointCycle(items, it, items[i]));
     if (!kids.length) { note('つなぐパーツが、どれもこのパーツの親のジョイントの付け根です（輪になるつなぎ方はできません）', true); return; }
-    it.joint = makeJoint(items);
-    for (const i of kids) items[i].jt = it.joint.id;
+    const nj = makeJoint(items);
+    putJoints(it, [...jointsOn(it), nj]); jointCur = nj.id;
+    for (const i of kids) items[i].jt = nj.id;
     save(); renderList(); fillFields();
-    note(`ジョイント ${it.joint.id} を作りました（付け根：${labelOf(it)}、つなぐ：${kids.length} 個${kids.length < others.length ? '。親のジョイントの付け根は外しました' : ''}）。形態 2 からで角度を決めます`);
+    note(`ジョイント ${nj.id} を${has ? '足しました' : '作りました'}（付け根：${labelOf(it)}、つなぐ：${kids.length} 個${kids.length < others.length ? '。親のジョイントの付け根は外しました' : ''}）。形態 2 からで角度を決めます`);
   }; };
-  const about = '<div class="hint">ジョイント：付け根のパーツに軸（ヒンジ・回転・スライダー）を置き、ほかのパーツをつなぐ。形態 2 からで角度（スライダーは距離）を決めると、つないだパーツの、その形態のずらす・回すがまとめて入る（付け根を形態で動かすと、つないだパーツも付いて行く）。作るには、つなぐパーツを選び、最後に付け根を Ctrl を押しながら選んで「ジョイントを作る」。エディタの中の道具で、ゲームには形態のずれとして入る</div>';
+  const about = '<div class="hint">ジョイント：付け根のパーツに軸（ヒンジ・回転・スライダー）を置き、ほかのパーツをつなぐ。形態 2 からで角度（スライダーは距離）を決めると、つないだパーツの、その形態のずらす・回すがまとめて入る（付け根を形態で動かすと、つないだパーツも付いて行く）。作るには、つなぐパーツを選び、最後に付け根を Ctrl を押しながら選んで「ジョイントを作る」。もうジョイントのある付け根で同じようにすると、別の軸を足せる（「ジョイントを足す」）。エディタの中の道具で、ゲームには形態のずれとして入る</div>';
   if (!rt) { box.innerHTML = head + makeBtn + about; makeOn(); return; }
-  const j = rt.joint, ri = items.indexOf(rt), kid = rt !== it, kids = jointKids(items, rt), fN = formNow, slide = isSlide(j);
+  const j = shownJoint(it, rt); if (!j) { box.innerHTML = head + makeBtn + about; makeOn(); return; }
+  const ri = items.indexOf(rt), kid = rt !== it, kids = jointKids(items, rt, j), fN = formNow, slide = isSlide(j), all = jointsOn(rt);
   const unit = slide ? '' : '°', step = slide ? 0.01 : 5, v = jointValue(j, fN);
   const addable = others.filter(i => items[i].jt !== j.id && !jointCycle(items, rt, items[i]));
   const up = !kid && jointParent(items, rt);   // （この付け根が、さらに親のジョイントにつながっている：issue 1293）
   box.innerHTML = head
-    + `<div class="hint">${kid ? `このパーツは、ジョイント ${j.id}（付け根：${labelOf(rt)}）につながっています。形態 2 からのずらす・回すは、ジョイントで決まります` : `このパーツは、ジョイント ${j.id} の付け根です。つながっているパーツ：${kids.length} 個`}</div>`
+    + `<div class="hint">${kid ? `このパーツは、ジョイント ${j.id}（付け根：${labelOf(rt)}）につながっています。形態 2 からのずらす・回すは、ジョイントで決まります` : all.length > 1 ? `このパーツは、ジョイント ${all.map(x => x.id).join('・')} の付け根です（${all.length} 個の軸）。下で選んだジョイント ${j.id} につながっているパーツ：${kids.length} 個` : `このパーツは、ジョイント ${j.id} の付け根です。つながっているパーツ：${kids.length} 個`}</div>`
+    + (!kid && all.length > 1 ? `<div class="row"><label>ジョイント</label><select id="jPick" title="この付け根の、どのジョイントを見るか（軸ごとに、つながるパーツ・種類・値が別）">${all.map(x => `<option value="${x.id}" ${x === j ? 'selected' : ''}>${x.id}（${JOINT_KIND[x.type] ?? x.type}・${x.axis}、${jointKids(items, rt, x).length} 個）</option>`).join('')}</select></div>` : '')
     + (up ? `<div class="hint">この付け根も、ジョイント ${rt.jt}（付け根：${labelOf(up)}）につながっています。親のジョイントが回ると、このジョイントの軸とつないだパーツも一緒に付いて回ります</div><div class="bar"><button class="small" id="bJointUp">親の付け根を選ぶ</button></div>` : '')
-    + (kid ? makeBtn : '')
+    + makeBtn
     + `<div class="row"><label>種類</label><select id="jType">${Object.entries(JOINT_KIND).map(([k, t]) => `<option value="${k}" ${j.type === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`
     + `<div class="row"><label>${slide ? '向き' : '軸'}</label><select id="jAxis">${['x', 'y', 'z'].map(a => `<option value="${a}" ${j.axis === a ? 'selected' : ''}>付け根の ${a}</option>`).join('')}</select></div>`
     + (slide ? '' : `<div class="row"><label>軸の点</label>${[0, 1, 2].map(a => `<input type="number" step="0.01" data-jat="${a}" value="${j.at?.[a] ?? 0}">`).join('')}</div>`
@@ -1179,8 +1192,9 @@ function fillJoint() {
     + `<div class="bar">${addable.length ? `<button class="small" id="bJointAdd" title="ほかに選んでいるパーツを、このジョイントにつなぐ">選んでいる ${addable.length} 個をつなぐ</button>` : ''}${kid ? '<button class="small" id="bJointOff" title="このパーツをジョイントから外す（今の形態のずれはそのまま残る）">このパーツを外す</button><button class="small" id="bJointRoot">付け根を選ぶ</button>' : ''}<button class="small" id="bJointDel" title="ジョイントを消す（つながっていたパーツの形態のずれはそのまま残る）">ジョイントを消す</button></div>`
     + about;
   const redo = () => { jointsNow(); save(); };
+  if ($('#jPick')) $('#jPick').onchange = e => { jointCur = e.target.value; fillJoint(); };
   $('#jType').onchange = e => { setJointType(j, e.target.value); redo(); fillJoint(); };
-  $('#jAxis').onchange = e => { j.axis = e.target.value; redo(); };
+  $('#jAxis').onchange = e => { j.axis = e.target.value; redo(); if (all.length > 1) fillJoint(); };   // （ジョイントを選ぶ欄の「軸」の字も直す）
   $('#jRev').onchange = e => { if (e.target.checked) j.rev = true; else delete j.rev; redo(); };
   if ($('#jDelay')) $('#jDelay').onchange = e => { j.delay = formDelayOf({ formDelay: (+e.target.value || 0) * 1000 }); e.target.value = j.delay / 1000; redo(); fillItemForm(); };
   if ($('#bJointUp')) $('#bJointUp').onclick = () => select(items.indexOf(up));
@@ -1207,7 +1221,7 @@ function fillJoint() {
   if ($('#bJointAdd')) $('#bJointAdd').onclick = () => { for (const i of addable) items[i].jt = j.id; redo(); renderList(); fillFields(); note(`${addable.length} 個をジョイント ${j.id} につなぎました`); };
   if ($('#bJointOff')) $('#bJointOff').onclick = () => { delete it.jt; save(); renderList(); fillFields(); note(`ジョイント ${j.id} から外しました（形態のずれはそのまま）`); };
   if ($('#bJointRoot')) $('#bJointRoot').onclick = () => select(ri);
-  $('#bJointDel').onclick = () => { for (const k of kids) delete k.jt; delete rt.joint; save(); renderList(); fillFields(); note(`ジョイント ${j.id} を消しました（形態のずれはそのまま）`); };
+  $('#bJointDel').onclick = () => { for (const k of kids) delete k.jt; putJoints(rt, all.filter(x => x !== j)); save(); renderList(); fillFields(); note(`ジョイント ${j.id} を消しました（形態のずれはそのまま）`); };
 }
 
 function addItems(list) { items.push(...list); selected = items.length - 1; rebuild(); save(); if (!PE.active() && !addOnly) flash(list.map((_, k) => items.length - list.length + k)); }
@@ -1790,7 +1804,7 @@ function removeForm(n = formNow) {
   if (!confirm(`形態 ${n} を消します。${n < N ? `\n形態 ${n + 1}${n + 1 < N ? `〜${N}` : ''} は 1 つずつ前へ詰まります（形態 ${n + 1} が形態 ${n} に）。` : ''}`
     + (shared.length ? `\n自分のパーツ ${shared.map(d => `「${d.name}」`).join('')} のブロックの形態 ${n} も消えます（ほかの機体で同じパーツを使っていれば、そちらからも消えます）。` : '')
     + '\n（↶ 戻すで取り戻せます。自分のパーツのブロックの形態は戻りません）')) return false;
-  for (const it of list) { dropFormIn(it, 'forms', n); if (it.joint) dropFormIn(it.joint, 'v', n); }
+  for (const it of list) { dropFormIn(it, 'forms', n); for (const j of jointsOn(it)) dropFormIn(j, 'v', n); }
   let userTouched = false;
   for (const d of defs) {
     for (const pc of d.pieces ?? []) if (dropFormIn(pc, 'forms', n)) userTouched = true;
@@ -1846,7 +1860,7 @@ function fillItemForm() {
   if (!it) { box.innerHTML = ''; return; }
   const n = formCount(), fN = formNow, fv = formOf(it, fN) ?? {}, p = fv.p ?? [0, 0, 0], r = fv.r ?? [0, 0, 0];
   const jointKid = jointParent(items, it) != null;   // （ジョイントにつながったパーツ：ずらす・回すはジョイントで決まる、issue 1225。付け根でもある時も：issue 1293）
-  const jDelay = jointKid && jointParent(items, it).joint?.delay != null;   // （遅れもジョイントで決まる：issue 1293）
+  const jDelay = jointKid && jointById(items, it.jt)?.j?.delay != null;   // （遅れもジョイントで決まる：issue 1293）
   const seg = Array.from({ length: n }, (_, i) => `<button class="small ${i + 1 === fN ? 'acc' : ''}" data-iform="${i + 1}">形態 ${i + 1}</button>`).join('')
     + (n < FORM_MAX ? '<button class="small" id="bIFormAdd" title="形態を 1 つ足す">＋</button>' : '');
   // 移る時の遅れ（issue #813）：形態が 2 つからの時に出す。秒で見せ、ミリ秒で持つ（item.formDelay）
@@ -3189,7 +3203,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = 'd6a49dc';
+const BUILD = '805cbc5';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {
