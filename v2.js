@@ -1807,7 +1807,7 @@ function removeForm(n = formNow) {
   for (const it of list) { dropFormIn(it, 'forms', n); for (const j of jointsOn(it)) dropFormIn(j, 'v', n); }
   let userTouched = false;
   for (const d of defs) {
-    for (const pc of d.pieces ?? []) if (dropFormIn(pc, 'forms', n)) userTouched = true;
+    for (const pc of d.pieces ?? []) { if (dropFormIn(pc, 'forms', n)) userTouched = true; for (const j of jointsOn(pc)) if (dropFormIn(j, 'v', n)) userTouched = true; }   // （ブロックのジョイントの値も：issue 1293）
     if (dropFormIn(d, 'wpts', n)) userTouched = true;
   }
   if (paint) dropFormIn(paint, 'formAlpha', n);
@@ -3203,7 +3203,7 @@ $('#howBox').addEventListener('pointerdown', e => { if (e.target === $('#howBox'
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#howBox').hidden) $('#howBox').hidden = true; });
 $('#howCheck').onclick = () => { $('#howBox').hidden = true; const d = $('#bCheck').closest('details'); if (d) d.open = true; $('#bCheck').click(); $('#bCheck').scrollIntoView({ block: 'center' }); };
 // ---- 新しい版の知らせ：公開のとき BUILD がコミットの番号に書き換わる（.github/workflows/xs-editor-publish.yml）。version.json と違えば、読み直しをすすめる ----
-const BUILD = '805cbc5';
+const BUILD = '5ee8415';
 let newBuild = null;
 $('#appTitle').title = `版: ${BUILD}`;
 async function checkUpdate() {

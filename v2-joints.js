@@ -109,3 +109,56 @@ export function kidForm({ Pr, Lr1, Lrn, J, Pc, Lc1, mov, q0 }) {
 export const jointDelayOf = (j, rootDelay) => (j && j.delay != null ? Math.max(0, Math.round(rootDelay + (+j.delay || 0))) : null);
 /** 写し（反対側にも・貼り付け）では、ジョイントを外して、値（forms）だけ残す */
 export function dropJoint(it) { delete it.joint; delete it.jt; return it; }
+
+// ---- パーツエディタのジョイント（issue 1293 の 1、ポッチャさん 2026-11-28「パーツエディタの方でもジョイントを足せるように」）----
+// 置いたパーツのジョイントと同じ形（pc.joint・pc.jt。jointsOn・jointOrder などはそのまま使える）を、パーツの中のブロックに持たせる。
+// 違うのは置き方だけ：ブロックは向きを持たず、形態 n の見た目は「ブロックの真ん中 C で r 回し、p ずらす」（v2-forms.js showForms・bakeForm）。
+//   付け根の軸の点 at は、付け根のブロックの真ん中からの、パーツの座標（向きもパーツの x・y・z）。
+//   形態 n のつながるブロックの置き方 ＝ 付け根の形態 n の置き方 × ジョイントの動き（真ん中から at の点を通る軸）。形態 1 は動かない（付け根もつながるブロックも元の所）。
+//   それを、つながるブロックの真ん中 Ck で回す形に直す：r ＝ 置き方の向き、p ＝ 置き方で Ck が行く所 − Ck。
+// ブロックの真ん中は bakeForm と同じ boxOf の真ん中（削る前の形、繰り返し・ミラーの写しは入れない）。ミラーの写しは形態のずれが左右に返るので、写しも鏡に写した所で回る。
+// 繰り返しの写しは、写しごとに自分の真ん中で回るので、回るジョイントではずれる（スライダーはずれない）
+const D = Math.PI / 180;
+/** ブロック pc の形態 n の置き方（パーツの座標の行列）。C：ブロックの真ん中 */
+export function blockPlace(pc, n, C) {
+  const f = n > 1 ? pc?.forms?.[n] : null, p = f?.p ?? [0, 0, 0], r = f?.r ?? [0, 0, 0];
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0] * D, r[1] * D, r[2] * D, 'XYZ'));
+  return new THREE.Matrix4().makeTranslation(C.x + p[0], C.y + p[1], C.z + p[2]).multiply(new THREE.Matrix4().makeRotationFromQuaternion(q)).multiply(new THREE.Matrix4().makeTranslation(-C.x, -C.y, -C.z));
+}
+/** 付け根の真ん中 C を原点にしたジョイントの動き（パーツの座標の行列） */
+export const blockMotion = (j, v, C) => new THREE.Matrix4().makeTranslation(C.x, C.y, C.z).multiply(jointMotion(j, v)).multiply(new THREE.Matrix4().makeTranslation(-C.x, -C.y, -C.z));
+/** 置き方 T（パーツの座標）を、真ん中 Ck のブロックの形態のずれ { p, r } に */
+export function blockForm(T, Ck) {
+  const pos = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  T.decompose(pos, q, s);
+  const e = new THREE.Euler().setFromQuaternion(q, 'XYZ'), c = Ck.clone().applyMatrix4(T).sub(Ck);
+  const r4 = v => Math.round(v * 1e4) / 1e4 || 0, r2 = v => Math.round(v * 100) / 100 || 0;
+  return { p: c.toArray().map(r4), r: [e.x, e.y, e.z].map(v => r2(v / D)) };
+}
+/**
+ * パーツのブロック pieces のつながるブロックの形態のずれ（とジョイントの遅れ）を、ジョイントから計算し直す（変わった物があれば true）。
+ * top：形態の数、centerOf(pc)：ブロックの真ん中（THREE.Vector3、パーツの座標）、delayOf(pc)：ブロックの遅れ（ミリ秒）、maxDelay：遅れの上限。
+ * 付け根の無いつながり・輪になるつながりは外す。親のジョイントから先に計算する（jointOrder）ので、ジョイントの先のジョイントも付いて回る
+ */
+export function syncBlockJoints(pieces, top, centerOf, delayOf, maxDelay) {
+  let changed = false;
+  for (const pc of pieces) if (pc.jt && (!jointParent(pieces, pc) || jointAncestors(pieces, pc) == null)) { delete pc.jt; changed = true; }
+  const C = new Map(), cen = pc => { if (!C.has(pc)) C.set(pc, centerOf(pc)); return C.get(pc); };
+  for (const rt of jointOrder(pieces)) for (const j of jointsOn(rt)) {
+    const dl = jointDelayOf(j, delayOf(rt));
+    for (const ct of pieces) {
+      if (ct === rt || ct.jt !== j.id) continue;
+      for (let n = 2; n <= top; n++) {
+        const T = blockPlace(rt, n, cen(rt)).multiply(blockMotion(j, jointValue(j, n), cen(rt)));
+        const before = JSON.stringify(ct.forms?.[n] ?? null);
+        const all = { ...(ct.forms ?? {}) }, f = { ...(all[n] ?? {}), ...blockForm(T, cen(ct)) };
+        for (const k of ['p', 'r']) if (f[k].every(v => !v)) delete f[k];
+        if (Object.keys(f).length) all[n] = f; else delete all[n];
+        if (Object.keys(all).length) ct.forms = all; else delete ct.forms;
+        if (JSON.stringify(ct.forms?.[n] ?? null) !== before) changed = true;
+      }
+      if (dl != null) { const ms = Math.max(0, Math.min(maxDelay, dl)); if (ms !== delayOf(ct)) { if (ms) ct.formDelay = ms; else delete ct.formDelay; changed = true; } }
+    }
+  }
+  return changed;
+}

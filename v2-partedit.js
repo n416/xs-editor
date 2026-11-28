@@ -18,6 +18,7 @@ import { KIND_LABEL, BLOCK0, kindOf, isSub, soloGeo, boxOf, pointsOf, roundCorne
 import { BONE_CHOICES, PIVOT_CHOICES, groupOfPart, pivotOfPart, isGlowPart, isTrackedSet, markTurret } from './freeparts.js';
 import { profileEditor } from './v2-profile.js';
 import { FORM_DELAY_MAX, FORM_MAX, formDelayOf, formOf, setForm } from './v2-forms.js';
+import { JOINT_KIND, isSlide, jointsOn, putJoints, jointById, jointRoot, jointKids, jointParent, jointCycle, makeJoint, clampJoint, jointValue, setJointType, syncBlockJoints } from './v2-joints.js';
 
 /** 「武器の口」（issue #144）：その武器の弾・ビームが、このブロックの真ん中から出る（ゲーム用に書き出した形で。xsengine.js MOUTH_NODE）。武器の種類と強さは機体の種別で決まる */
 export const MOUTH_CHOICES = { '': 'なし（名前に「銃口」「ビームの口」があればそこ）', muzzle: '手に持つ武器の銃口', arm: '腕の武器の口（ビーム・腕の銃）', head: '頭の機関砲の口', chest: '胸の武器の口', belly: '腹の武器の口', shoulder: '肩の砲・ロケットの口', back: 'ミサイルの発射口（背中・肩当て）', shield: '盾の武器の口' };
@@ -559,6 +560,7 @@ export function initPartEdit(ctx) {
   const snapshot = () => JSON.stringify({ name: st.def.name, pieces: st.def.pieces });
   /** 操作が 1 つ終わった：元に戻すの 1 区切りにして、このブラウザにも保存する（閉じても、直したところまで残る） */
   function commit() {
+    jointsSync();
     const s = snapshot();
     if (st.hist[st.hpos]?.s === s) { st.hist[st.hpos].sel = st.sel; return; }
     st.hist.length = st.hpos + 1; st.hist.push({ s, sel: st.sel });
@@ -601,7 +603,7 @@ export function initPartEdit(ctx) {
     const d = st.def;
     E.left.innerHTML = `
       <h2>ブロック <i style="font-style:normal;font-weight:400">${d.pieces.length} 個</i></h2>
-      <div class="pelist">${d.pieces.map((p, i) => `<div data-i="${i}" class="${blocksOf().includes(i) ? 'sel' : ''}"><span class="bd ${isSub(p) ? 'sub' : ''}" ${p.blockout ? 'style="background:#7fbfff" title="あたり（下書き）"' : ''}>${p.blockout ? 'あ' : isSub(p) ? '−' : '+'}</span>${isSub(p) ? '' : `<span class="sw" style="background:${ctx.colorOf(p, d)}"></span>`}<span class="nm">${esc(p.name)}</span><span class="mk">${p.mirror ? '⇋' : ''}${val(p, 'arrayCount') > 1 ? ` ×${val(p, 'arrayCount')}` : ''}</span></div>`).join('')}</div>
+      <div class="pelist">${d.pieces.map((p, i) => `<div data-i="${i}" class="${blocksOf().includes(i) ? 'sel' : ''}"><span class="bd ${isSub(p) ? 'sub' : ''}" ${p.blockout ? 'style="background:#7fbfff" title="あたり（下書き）"' : ''}>${p.blockout ? 'あ' : isSub(p) ? '−' : '+'}</span>${isSub(p) ? '' : `<span class="sw" style="background:${ctx.colorOf(p, d)}"></span>`}<span class="nm">${esc(p.name)}</span><span class="mk">${p.mirror ? '⇋' : ''}${val(p, 'arrayCount') > 1 ? ` ×${val(p, 'arrayCount')}` : ''}${jointsOn(p).length ? ` ⚙${jointsOn(p).map(j => esc(j.id)).join('・')}` : ''}${p.jt ? ` ↳${esc(p.jt)}` : ''}</span></div>`).join('')}</div>
       <div class="pebar"><button id="peUp" title="一覧の上へ">↑</button><button id="peDown" title="一覧の下へ">↓</button><button id="peDup" title="同じブロックをもう 1 つ（Ctrl+D）">複製</button><button id="peMir" title="左右（x）を反転した写しを足す">反転の複製</button><button id="peDel" title="選んだブロックを消す（Delete）">消す</button></div>
       <div class="hint">「−」は引くブロック：自分より上に並ぶブロックを削る。Ctrl か Shift を押しながら押すと、いくつも選べる</div>
       <h2>ブロックを足す</h2>
@@ -695,12 +697,132 @@ export function initPartEdit(ctx) {
     if (pl) pc.planes = pl;
     return !!pl;
   }
+  // ---- ジョイント（issue 1293 の 1、テスター ポッチャさん 2026-11-28 #色々なツールへの要望「パーツエディタの方でもジョイントを足せるように」）：
+  // 機体の画面のジョイント（置いたパーツどうし、v2.js fillJoint）と同じ形（pc.joint・pc.jt）を、パーツの中のブロックに持たせる。計算は v2-joints.js syncBlockJoints。
+  // 操作が 1 つ終わるたび（commit）に計算し直すので、形態 1 でブロックを動かしても付いてくる。引くブロック・取り込んだ形はつながない
+  const jointable = p => !!p && !isSub(p) && kindOf(p) !== 'mesh';
+  const centerOf = p => boxOf(p).getCenter(new THREE.Vector3());
+  /** つながるブロックの形態のずれを計算し直す（変わった物があれば見た目も直して true） */
+  function jointsSync() {
+    if (!st) return false;
+    const d = st.def, ps = d.pieces;
+    if (!ps.some(p => p.joint || p.jt)) return false;
+    const had = ps.map(p => !!p.forms);
+    const top = Math.min(FORM_MAX, Math.max(ctx.forms(), ...ps.flatMap(p => jointsOn(p).flatMap(j => Object.keys(j.v ?? {}).map(Number).filter(Number.isFinite)))));
+    if (!syncBlockJoints(ps, top, centerOf, formDelayOf, FORM_DELAY_MAX)) return false;
+    // （カタログ型のパーツは、形態を持つブロックだけ写しを 1 つずつのメッシュにするので、持つ・持たないが変わったら作り直す：wireForms と同じ）
+    if (!d.free && ps.some((p, i) => had[i] !== !!p.forms)) ctx.rebuild(); else ctx.showForms();
+    return true;
+  }
+  /** 欄に出すジョイント：つながっているだけのブロックなら、そのジョイント。付け根なら、選んでいる物（jCur）か最初の物 */
+  let jCur = null;
+  function shownJ(pc, rt) {
+    if (!rt) return null;
+    if (rt !== pc) return jointById(st.def.pieces, pc.jt)?.j ?? null;
+    const l = jointsOn(rt);
+    return l.find(j => j.id === jCur) ?? l[0] ?? null;
+  }
+  const JABOUT = '<div class="hint">ジョイント：付け根のブロックに軸（ヒンジ・回転・スライダー）を置き、ほかのブロックをつなぐ。形態 2 からで角度（スライダーは距離）を決めると、つないだブロックの、その形態のずらす・回すがまとめて入る（付け根を形態で動かすと、つないだブロックも付いて行く）。作るには、つなぐブロックを選び、最後に付け根を Ctrl か Shift を押しながら選んで「ジョイントを作る」。もうジョイントのある付け根で同じようにすると、別の軸を足せる。軸の点は付け根のブロックの真ん中から、向きはパーツの左右（x）・上下（y）・前後（z）。機体の画面のジョイントと同じ使い方で、ゲームには形態のずれとして入る。繰り返しの写しは写しごとに自分の真ん中で回るので、回るジョイントではずれる</div>';
+  /** いくつも選んだ時の「ジョイントを作る・足す」（付け根：最後に選んだブロック） */
+  function jointMakeHtml() {
+    const ps = st.def.pieces, rt = block(), others = blocksOf().map(i => ps[i]).filter(p => p !== rt && jointable(p));
+    if (!jointable(rt) || !others.length) return '';
+    const has = jointsOn(rt).length > 0, cur = has ? shownJ(rt, rt) : null;
+    const addable = cur ? others.filter(p => p.jt !== cur.id && !jointCycle(ps, rt, p)) : [];
+    return '<h2>ジョイント</h2>'
+      + `<div class="pebar"><button id="peJMake" title="最後に選んだブロックが付け根、ほかに選んだ物がつながるブロック${has ? '。今のジョイントはそのままで、別の軸を足す' : ''}">ジョイントを${has ? '足す' : '作る'}（付け根：${esc(rt.name)}、つなぐ：ほかの ${others.length} 個）</button>${addable.length ? `<button id="peJAdd" title="ほかに選んでいるブロックを、付け根の今のジョイントにつなぐ">${addable.length} 個を ${esc(cur.id)} につなぐ</button>` : ''}</div>`
+      + JABOUT;
+  }
+  function wireJointMake() {
+    const ps = st.def.pieces, rt = block(), others = blocksOf().map(i => ps[i]).filter(p => p !== rt && jointable(p));
+    if ($('#peJMake')) $('#peJMake').onclick = () => {
+      const kids = others.filter(p => !jointCycle(ps, rt, p));
+      if (!kids.length) { ctx.note('つなぐブロックが、どれもこのブロックの親のジョイントの付け根です（輪になるつなぎ方はできません）', true); return; }
+      const has = jointsOn(rt).length > 0, nj = makeJoint(ps);
+      putJoints(rt, [...jointsOn(rt), nj]); jCur = nj.id;
+      for (const p of kids) p.jt = nj.id;
+      commit(); selectBlock(ps.indexOf(rt)); renderLeft();
+      ctx.note(`ジョイント ${nj.id} を${has ? '足しました' : '作りました'}（付け根：${rt.name}、つなぐ：${kids.length} 個${kids.length < others.length ? '。親のジョイントの付け根は外しました' : ''}）。形態 2 からで角度を決めます`);
+    };
+    if ($('#peJAdd')) $('#peJAdd').onclick = () => {
+      const cur = shownJ(rt, rt), add = others.filter(p => p.jt !== cur.id && !jointCycle(ps, rt, p));
+      for (const p of add) p.jt = cur.id;
+      commit(); selectBlock(ps.indexOf(rt)); renderLeft();
+      ctx.note(`${add.length} 個をジョイント ${cur.id} につなぎました`);
+    };
+  }
+  /** 1 つ選んだブロックの「ジョイント」の節 */
+  function jointHtml(pc) {
+    if (!jointable(pc)) return '';
+    const ps = st.def.pieces, rt = jointRoot(ps, pc), j = shownJ(pc, rt);
+    if (!j) return '<h2>ジョイント</h2>' + JABOUT;
+    const kid = rt !== pc, kids = jointKids(ps, rt, j), all = jointsOn(rt), fN = ctx.form(), slide = isSlide(j), step = slide ? 0.01 : 5, v = jointValue(j, fN), up = !kid && jointParent(ps, rt);
+    const at = j.at ?? [0, 0, 0];
+    return ['<h2>ジョイント</h2>',
+      `<div class="hint">${kid ? `このブロックは、ジョイント ${esc(j.id)}（付け根：${esc(rt.name)}）につながっています。形態 2 からのずらす・回すは、ジョイントで決まります` : `このブロックは、ジョイント ${all.map(x => esc(x.id)).join('・')} の付け根です${all.length > 1 ? `（${all.length} 個の軸）。下で選んだジョイント ${esc(j.id)} に` : '。'}つながっているブロック：${kids.length} 個`}</div>`,
+      !kid && all.length > 1 ? `<div class="row"><label>ジョイント</label><select id="peJPick">${all.map(x => `<option value="${esc(x.id)}" ${x === j ? 'selected' : ''}>${esc(x.id)}（${JOINT_KIND[x.type] ?? esc(x.type)}・${esc(x.axis)}、${jointKids(ps, rt, x).length} 個）</option>`).join('')}</select></div>` : '',
+      up ? `<div class="hint">この付け根も、ジョイント ${esc(rt.jt)}（付け根：${esc(up.name)}）につながっています。親のジョイントが回ると、このジョイントの軸とつないだブロックも一緒に付いて回ります</div><div class="pebar"><button id="peJUp" class="small">親の付け根を選ぶ</button></div>` : '',
+      `<div class="row"><label>種類</label><select id="peJType">${Object.entries(JOINT_KIND).map(([k, t]) => `<option value="${k}" ${j.type === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`,
+      `<div class="row"><label>${slide ? '向き' : '軸'}</label><select id="peJAxis">${[['x', '左右（x）'], ['y', '上下（y）'], ['z', '前後（z）']].map(([a, t]) => `<option value="${a}" ${j.axis === a ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`,
+      slide ? '' : `<div class="row"><label>軸の点</label>${[0, 1, 2].map(a => `<input type="number" step="0.01" data-pejat="${a}" value="${at[a] ?? 0}">`).join('')}</div>
+        <div class="pebar"><button id="peJAt0" class="small" title="軸の点を、付け根のブロックの真ん中に">付け根の真ん中に</button>${kid ? '<button id="peJAtKid" class="small" title="軸の点を、このブロック（つながっている方）の真ん中に">このブロックの真ん中に</button>' : ''}</div>
+        <div class="hint">軸の点：付け根のブロックの真ん中からの 左右・上下・前後</div>`,
+      `<label class="chk" title="値の向きを返す（ヒンジ・回転は回る向き、スライダーはずれる向き）"><input type="checkbox" id="peJRev" ${j.rev ? 'checked' : ''}>逆向きに${slide ? 'ずらす' : '回す'}</label>`,
+      ctx.forms() > 1 ? `<div class="row"><label>遅れ（秒）</label><input type="number" id="peJDelay" min="0" max="${FORM_DELAY_MAX / 1000}" step="0.05" value="${(j.delay ?? 0) / 1000}" title="形態を切り替えた時、付け根が動き出してから、つないだブロックが動き出すまでの秒（0〜${FORM_DELAY_MAX / 1000}）"></div>
+        <div class="hint">遅れ：付け根が動き出してから、つないだブロックが動き出すまでの秒。決めると、つないだブロックの「遅れ」はこれで決まる（付け根の遅れ ＋ この遅れ）</div>` : '',
+      `<div class="row"><label>下限・上限</label><input type="number" step="${step}" id="peJMin" value="${j.min}"><input type="number" step="${step}" id="peJMax" value="${j.max}"></div>`,
+      fN > 1
+        ? `<div class="sl"><label>形態 ${fN}</label><input type="range" id="peJValR" min="${Math.min(j.min, j.max)}" max="${Math.max(j.min, j.max)}" step="${slide ? 0.005 : 1}" value="${v}"><input type="number" id="peJVal" step="${step}" value="${v}"></div><div class="hint">${slide ? '距離' : '角度（度）'}。下の「形態」で形態を選ぶと、その形態の値を決められる</div>`
+        : '<div class="hint">形態 1 はいつもの形（ジョイントは 0）。下の「形態」で形態 2 からを選ぶと、その形態での角度（スライダーは距離）を決められる</div>',
+      `<div class="pebar">${kid ? '<button id="peJOff" class="small" title="このブロックをジョイントから外す（今の形態のずれはそのまま残る）">このブロックを外す</button><button id="peJRoot" class="small">付け根を選ぶ</button>' : ''}<button id="peJDel" class="small" title="ジョイントを消す（つながっていたブロックの形態のずれはそのまま残る）">ジョイントを消す</button></div>`,
+      JABOUT].join('');
+  }
+  function wireJoint(pc) {
+    if (!jointable(pc)) return;
+    const ps = st.def.pieces, rt = jointRoot(ps, pc), j = shownJ(pc, rt);
+    if (!j) return;
+    const all = jointsOn(rt), kids = jointKids(ps, rt, j), fN = ctx.form(), up = jointParent(ps, rt);
+    const redo = () => { commit(); renderRight(); };
+    const on = (id, ev, fn) => { const el = $(id); if (el) el[ev] = fn; };
+    on('#peJPick', 'onchange', e => { jCur = e.target.value; renderRight(); });
+    on('#peJUp', 'onclick', () => selectBlock(ps.indexOf(up)));
+    on('#peJType', 'onchange', e => { setJointType(j, e.target.value); redo(); });
+    on('#peJAxis', 'onchange', e => { j.axis = e.target.value; redo(); });
+    on('#peJRev', 'onchange', e => { if (e.target.checked) j.rev = true; else delete j.rev; commit(); });
+    on('#peJDelay', 'onchange', e => { j.delay = formDelayOf({ formDelay: (+e.target.value || 0) * 1000 }); redo(); });
+    for (const el of E.right.querySelectorAll('[data-pejat]')) {
+      el.oninput = () => { j.at = [0, 1, 2].map(a => +E.right.querySelector(`[data-pejat="${a}"]`).value || 0); jointsSync(); };
+      el.onchange = () => commit();
+    }
+    on('#peJAt0', 'onclick', () => { j.at = [0, 0, 0]; redo(); });
+    on('#peJAtKid', 'onclick', () => { j.at = centerOf(pc).sub(centerOf(rt)).toArray().map(r4); redo(); });
+    const lim = () => {
+      const a = +$('#peJMin').value, b = +$('#peJMax').value;
+      if (Number.isFinite(a)) j.min = a; if (Number.isFinite(b)) j.max = b;
+      for (const n of Object.keys(j.v ?? {})) j.v[n] = clampJoint(j, j.v[n]);
+      redo();
+    };
+    on('#peJMin', 'onchange', lim); on('#peJMax', 'onchange', lim);
+    if (fN > 1 && $('#peJVal')) {
+      const setV = (x, from) => {
+        const c = clampJoint(j, +x); j.v = { ...(j.v ?? {}), [fN]: c }; if (!c) delete j.v[fN];
+        if (from !== 'r') $('#peJValR').value = c; if (from !== 'n') $('#peJVal').value = c;
+        jointsSync();
+      };
+      $('#peJValR').oninput = e => setV(e.target.value, 'r'); $('#peJValR').onchange = () => commit();
+      $('#peJVal').oninput = e => setV(e.target.value, 'n'); $('#peJVal').onchange = e => { setV(e.target.value); commit(); };
+    }
+    on('#peJOff', 'onclick', () => { delete pc.jt; commit(); renderLeft(); renderRight(); ctx.note(`ジョイント ${j.id} から外しました（形態のずれはそのまま）`); });
+    on('#peJRoot', 'onclick', () => selectBlock(ps.indexOf(rt)));
+    on('#peJDel', 'onclick', () => { for (const k of kids) delete k.jt; putJoints(rt, all.filter(x => x !== j)); commit(); renderLeft(); renderRight(); ctx.note(`ジョイント ${j.id} を消しました（形態のずれはそのまま）`); });
+  }
   /** 右の欄の「形態」の節。pc：値を見せるブロック、n：掛けるブロックの数（2 以上ならまとめて掛ける） */
   function formsHtml(pc, n) {
     const fN = ctx.form(), fAll = ctx.forms(), fv = formOf(pc, fN) ?? {}, many = n > 1;
+    const tie = !many && pc.jt ? jointById(st.def.pieces, pc.jt) : null, tieDelay = !!tie && tie.j.delay != null;   // （ジョイントにつながったブロック：issue 1293）
     const html = ['<h2>形態（変形の見た目）</h2>', `<div class="seg">${Array.from({ length: fAll }, (_, i) => `<button data-form="${i + 1}" class="${i + 1 === fN ? 'on' : ''}">形態 ${i + 1}</button>`).join('')}${fAll < FORM_MAX ? '<button id="peFormAdd" title="形態を 1 つ足す">＋</button>' : ''}</div>`];
     // 移る時の遅れ（pc.formDelay）：形態が 2 つからの時に出す。秒で見せ、ミリ秒で持つ。置いたパーツの「遅れ」の後に、さらにこの分待つ
-    if (fAll > 1) html.push(`<div class="row"><label>遅れ（秒）</label><input type="number" id="peFDelay" min="0" max="${FORM_DELAY_MAX / 1000}" step="0.05" value="${formDelayOf(pc) / 1000}" title="形態を切り替えた時、${many ? 'このブロックたち' : 'このブロック'}が動き出すまでの秒（0〜${FORM_DELAY_MAX / 1000}）"></div>`,
+    if (fAll > 1) html.push(`<div class="row"><label>遅れ（秒）</label><input type="number" id="peFDelay" ${tieDelay ? 'disabled' : ''} min="0" max="${FORM_DELAY_MAX / 1000}" step="0.05" value="${formDelayOf(pc) / 1000}" title="形態を切り替えた時、${many ? 'このブロックたち' : 'このブロック'}が動き出すまでの秒（0〜${FORM_DELAY_MAX / 1000}）"></div>`,
       `<div class="hint">遅れ：形態を切り替えた時、${many ? `選んだ ${n} 個のブロック` : 'このブロック'}がこの秒数だけ待ってから動く。ブロックごとに変えると、順に変形して見える。行きも帰りも同じ。置いたパーツの「遅れ」があれば、その後にさらに待つ</div>`);
     if (fN === 1) html.push(`<div class="hint">形態 1 はいつもの形（ゲーム用に書き出す形）。形態 2 からを選ぶと、その形態での${many ? `選んだ ${n} 個のブロック` : 'このブロック'}の見た目（出す・消す、色、位置と向き）を決められる。戦場では、自分のスキンが機体の「形態」の「ゲームで形態 2 になる時」の間だけ形態 2 になる</div>`);
     else {
@@ -708,10 +830,11 @@ export function initPartEdit(ctx) {
       if (many) html.push(`<div class="hint">選んだ ${n} 個のブロック（引くブロックは除く）に、まとめて掛ける。数字は「${esc(pc.name)}」の値。ずらす・回すは、変えた分だけどのブロックにも足す（ブロックどうしの違いはそのまま）</div>`);
       html.push(`<label class="chk"><input type="checkbox" id="peFHide" ${fv.hide ? 'checked' : ''}>形態 ${fN} では出さない</label>`,
         `<div class="row"><label class="chk" style="flex:1"><input type="checkbox" id="peFColorOn" ${fv.color ? 'checked' : ''}>色を変える</label><input type="color" id="peFColor" value="${esc(fv.color ?? ctx.colorOf(pc, st.def))}" style="width:48px"></div>`,
+        ...(tie ? [`<div class="hint">このブロックは、ジョイント ${esc(tie.j.id)}（付け根：${esc(tie.it.name)}）につながっています。形態 ${fN} のずらす・回すは、ジョイントで決まります${tieDelay ? '。遅れも、付け根の遅れ ＋ ジョイントの遅れで決まります' : ''}</div>`] : [
         `<div class="row"><label>ずらす</label>${[0, 1, 2].map(a => `<input type="number" step="0.01" data-fp="${a}" value="${p[a]}">`).join('')}</div>`,
         `<div class="row"><label>回す（度）</label>${[0, 1, 2].map(a => `<input type="number" step="5" data-fr="${a}" value="${r[a]}">`).join('')}</div>`,
         '<div class="hint">ずらす：左右・上下・前後（パーツの向きで。左右ミラーの写しは逆へ）。回す：ブロックの真ん中で、x・y・z の軸の回り。枠線と角のつまみは形態 1 の所に出る</div>',
-        `<div class="pebar"><button id="peFReset">${many ? `${n} 個とも` : ''}形態 1 と同じに戻す</button></div>`);
+        `<div class="pebar"><button id="peFReset">${many ? `${n} 個とも` : ''}形態 1 と同じに戻す</button></div>`]));
     }
     return html.join('');
   }
@@ -735,11 +858,13 @@ export function initPartEdit(ctx) {
       e.target.value = ms / 1000; commit();
     };
     if (!$('#peFHide')) return;
+    if ($('#peFReset')) $('#peFReset').onclick = () => { apply(() => null); commit(); renderRight(); };
     $('#peFHide').onchange = e => { apply(() => ({ hide: e.target.checked || null })); commit(); };
     $('#peFColorOn').onchange = e => { apply(() => ({ color: e.target.checked ? $('#peFColor').value : null })); commit(); };
     $('#peFColor').oninput = e => { if ($('#peFColorOn').checked) apply(() => ({ color: e.target.value })); };
     $('#peFColor').onchange = () => commit();
     // ずらす・回す：欄の値の変わった分を、どのブロックの値にも足す（1 個だけなら、欄の値そのものになる）
+    if (!E.right.querySelector('[data-fp]')) return;   // （ジョイントにつながったブロックは欄が無い：issue 1293）
     const vec = k => [0, 1, 2].map(a => +E.right.querySelector(`[data-${k}="${a}"]`).value || 0);
     let was = { p: vec('fp'), r: vec('fr') };
     for (const el of E.right.querySelectorAll('[data-fp],[data-fr]')) {
@@ -751,7 +876,6 @@ export function initPartEdit(ctx) {
       };
       el.onchange = () => commit();
     }
-    $('#peFReset').onclick = () => { apply(() => null); commit(); renderRight(); };
   }
   function renderRight() {
     prof?.dispose(); prof = null; binds = {};
@@ -763,6 +887,8 @@ export function initPartEdit(ctx) {
         <div class="hint">選んだブロック（青い枠）を、まとめてつまみで動かす（W）・回す（E）・大きさを変える（R）。つまみは選んだブロックぜんぶの真ん中、向きは左右・上下・前後。Ctrl か Shift を押しながら押す（3D でも左の一覧でも）と、選び足す・外す。1 つだけ押すと、そのブロックだけを選ぶ</div>
         <div class="pebar"><button id="peBlocksDel" title="選んだブロックをぜんぶ消す（Delete）">選んだ ${nBlocks} 個を消す</button></div>`;
       $('#peBlocksDel').onclick = removeBlock;
+      // ジョイントを作る・足す（issue 1293）：最後に選んだブロックが付け根
+      E.right.insertAdjacentHTML('beforeend', jointMakeHtml()); wireJointMake();
       // 形態：選んだブロック（足す物だけ）に、まとめて同じように掛ける（issue #811）
       const pcs = blocksOf().map(i => st.def.pieces[i]).filter(p => !isSub(p));
       if (pcs.length) {
@@ -963,7 +1089,7 @@ export function initPartEdit(ctx) {
       html.push('<h2>ゲーム用</h2>', check('当たり判定なし（関節チェックでめり込みを見ない。動力パイプ・光）', 'noHit'), purgeRow(check), mouthRow(pc), `<div class="hint">付く骨：${pc.bone ?? '（部位の既定）'}${pc.hinge ? '・蝶番あり' : ''}。光らせるには、色の役を「発光」に</div>`);
     }
     // 形態（変形の見た目、v2-forms.js）：形態 2 からの、このブロックの見た目
-    if (!sub) html.push(formsHtml(pc, 1));
+    if (!sub) html.push(jointHtml(pc), formsHtml(pc, 1));
     E.right.innerHTML = html.join('');
 
     // ---- つなぐ ----
@@ -975,7 +1101,7 @@ export function initPartEdit(ctx) {
     if ($('#peBone')) { $('#peBone').onchange = e => { pc.bone = e.target.value; changed(true); }; $('#pePivot').onchange = e => { pc.pivot = e.target.value; changed(true); }; }
     if ($('#peMouth')) { $('#peMouth').onchange = e => { if (e.target.value) pc.mouth = e.target.value; else delete pc.mouth; commit(); }; $('#peFire').onclick = () => ctx.testFire(pc); }
     if ($('#peBake')) $('#peBake').onclick = bakeTf;
-    if (!sub) wireForms([pc], pc);
+    if (!sub) { wireForms([pc], pc); wireJoint(pc); }
     if ($('#peBlend')) $('#peBlend').onchange = e => { if (e.target.value) pc.blendTo = e.target.value; else delete pc.blendTo; commit(); };
     // （役の決め方は applyRole：武器の飾りの役・issue #949 の扱いもそこ）
     if ($('#peRole')) $('#peRole').onchange = e => {
@@ -1174,6 +1300,7 @@ export function initPartEdit(ctx) {
   function copyBlock(mirror) {
     const pc = block(); if (!pc) return;
     const c = structuredClone(pc), s = boxOf(pc).getSize(new THREE.Vector3()), off = [r5(Math.max(s.x, s.y) * 0.15), r5(Math.max(s.x, s.y) * 0.15), 0];
+    delete c.joint; delete c.jt;   // （写しはジョイントを外し、形態のずれだけ残す：issue 1293。機体の「反対側にも」と同じ）
     c.name = uniqueName(pc.name + (mirror ? '（反転）' : '（写し）'));
     if (hullEdit(pc)) c.planes = mirror ? pc.planes.map(p => [-p[0], p[1], p[2], p[3]]) : movePlanes(pc.planes, off).map(p => p.map(r5));
     else if (mirror) c.tf = { p: [-pc.tf.p[0], pc.tf.p[1], pc.tf.p[2]], r: [pc.tf.r[0], -pc.tf.r[1], -pc.tf.r[2]], s: [-pc.tf.s[0], pc.tf.s[1], pc.tf.s[2]] };
